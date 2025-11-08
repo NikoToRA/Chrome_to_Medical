@@ -5,19 +5,25 @@ const addAgentBtn = document.getElementById('addAgentBtn');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const agentsList = document.getElementById('agentsList');
 const toastContainer = document.getElementById('toastContainer');
+const modelSelector = document.getElementById('modelSelector');
+
+const SUPPORTED_MODELS = ['claude-sonnet-4-5', 'claude-haiku-4-5'];
+const DEFAULT_MODEL = SUPPORTED_MODELS[0];
 
 const state = {
   defaultAgents: (window.AiAgentUtils && window.AiAgentUtils.getDefaultAgents()) || [],
   agents: [],
   isSavingApiKey: false,
-  isSavingAgents: false
+  isSavingAgents: false,
+  selectedModel: DEFAULT_MODEL,
+  isSavingModel: false
 };
 
 document.addEventListener('DOMContentLoaded', initOptions);
 
 async function initOptions() {
   bindEvents();
-  await Promise.all([loadApiKey(), loadAgents()]);
+  await Promise.all([loadApiKey(), loadAgents(), loadSelectedModel()]);
   setupStorageWatchers();
 }
 
@@ -43,6 +49,24 @@ async function loadAgents() {
   }
 }
 
+async function loadSelectedModel() {
+  try {
+    const storedModel = await StorageManager.getSelectedModel(DEFAULT_MODEL);
+    const isValid = SUPPORTED_MODELS.includes(storedModel);
+    const resolvedModel = isValid ? storedModel : DEFAULT_MODEL;
+    state.selectedModel = resolvedModel;
+    if (modelSelector) {
+      modelSelector.value = resolvedModel;
+    }
+    if (!isValid) {
+      await StorageManager.saveSelectedModel(resolvedModel);
+    }
+  } catch (error) {
+    console.error('[Options] モデル設定の読み込みに失敗しました', error);
+    showToast('モデル設定の読み込みに失敗しました', 'warning');
+  }
+}
+
 function bindEvents() {
   if (toggleApiKeyVisibilityBtn) {
     toggleApiKeyVisibilityBtn.addEventListener('click', toggleApiKeyVisibility);
@@ -54,6 +78,10 @@ function bindEvents() {
 
   if (addAgentBtn) {
     addAgentBtn.addEventListener('click', handleAddAgent);
+  }
+
+  if (modelSelector) {
+    modelSelector.addEventListener('change', handleModelChange);
   }
 
   if (closeSettingsBtn) {
@@ -90,6 +118,21 @@ function setupStorageWatchers() {
       renderAgents();
       if (!state.isSavingAgents) {
         showToast('エージェント設定を同期しました', 'info');
+      }
+    }
+
+    if (changes[StorageManager.STORAGE_KEYS.AI_SELECTED_MODEL]) {
+      const rawModel = changes[StorageManager.STORAGE_KEYS.AI_SELECTED_MODEL].newValue || DEFAULT_MODEL;
+      const resolvedModel = SUPPORTED_MODELS.includes(rawModel) ? rawModel : DEFAULT_MODEL;
+      state.selectedModel = resolvedModel;
+      if (modelSelector && modelSelector.value !== resolvedModel) {
+        modelSelector.value = resolvedModel;
+      }
+      if (!state.isSavingModel) {
+        showToast('モデル設定を同期しました', 'info');
+      }
+      if (!SUPPORTED_MODELS.includes(rawModel)) {
+        StorageManager.saveSelectedModel(resolvedModel);
       }
     }
   });
@@ -144,6 +187,26 @@ function handleAddAgent() {
   state.agents = [...state.agents, newAgent];
   renderAgents();
   showToast('新しいエージェントを追加しました', 'info');
+}
+
+async function handleModelChange(event) {
+  const newModel = event.target.value;
+  if (!SUPPORTED_MODELS.includes(newModel)) {
+    showToast('選択したモデルは利用できません', 'warning');
+    modelSelector.value = state.selectedModel;
+    return;
+  }
+  state.selectedModel = newModel;
+  try {
+    state.isSavingModel = true;
+    await StorageManager.saveSelectedModel(newModel);
+    showToast('モデル設定を保存しました', 'info');
+  } catch (error) {
+    console.error('[Options] モデル設定の保存に失敗しました', error);
+    showToast('モデル設定の保存に失敗しました', 'warning');
+  } finally {
+    state.isSavingModel = false;
+  }
 }
 
 async function handleAgentAction(event) {

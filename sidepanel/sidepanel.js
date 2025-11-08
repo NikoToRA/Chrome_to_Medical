@@ -31,15 +31,18 @@ const aiChatInput = document.getElementById('aiChatInput');
 const aiChatSendBtn = document.getElementById('aiChatSendBtn');
 const aiChatForm = document.getElementById('aiChatForm');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
-
 // 状態管理
 let currentImages = [];
 let hashtags = [];
 let currentPlatform = null;
+const SUPPORTED_MODELS = ['claude-sonnet-4-5', 'claude-haiku-4-5'];
+const DEFAULT_MODEL = SUPPORTED_MODELS[0];
+
 const aiState = {
   apiKey: '',
   agents: [],
-  selectedAgentId: ''
+  selectedAgentId: '',
+  selectedModel: DEFAULT_MODEL
 };
 let isAgentSelectionUpdateSilent = false;
 
@@ -111,18 +114,25 @@ async function loadEditorState() {
 async function loadAiState() {
   try {
     const defaults = getDefaultAgents();
-    const [storedAgents, storedSelectedId, apiKey] = await Promise.all([
+    const [storedAgents, storedSelectedId, apiKey, storedModel] = await Promise.all([
       StorageManager.getAgents(defaults),
       StorageManager.getSelectedAgentId(),
-      StorageManager.getApiKey()
+      StorageManager.getApiKey(),
+      StorageManager.getSelectedModel('claude-4.5-sonnet')
     ]);
 
     aiState.apiKey = apiKey || '';
     aiState.agents = normalizeAgents(storedAgents, defaults);
     aiState.selectedAgentId = resolveSelectedAgentId(aiState.agents, storedSelectedId);
+    const resolvedModel = SUPPORTED_MODELS.includes(storedModel) ? storedModel : DEFAULT_MODEL;
+    aiState.selectedModel = resolvedModel;
 
     if (aiState.selectedAgentId !== storedSelectedId) {
       await StorageManager.saveSelectedAgentId(aiState.selectedAgentId);
+    }
+
+    if (!SUPPORTED_MODELS.includes(storedModel)) {
+      await StorageManager.saveSelectedModel(resolvedModel);
     }
 
     renderAgentSelector();
@@ -878,6 +888,8 @@ function handleAiChatSend() {
     return;
   }
 
+  const selectedModel = SUPPORTED_MODELS.includes(aiState.selectedModel) ? aiState.selectedModel : DEFAULT_MODEL;
+
   ensureChatSession(selectedAgent);
 
   const now = new Date().toISOString();
@@ -916,6 +928,7 @@ function handleAiChatSend() {
     agentId: selectedAgent.id,
     agentName: selectedAgent.name || selectedAgent.label || '',
     instructions: selectedAgent.instructions || '',
+    model: selectedModel,
     messages: buildConversationPayload()
   };
 
@@ -1083,6 +1096,16 @@ function setupStorageObservers() {
       aiState.selectedAgentId = changes[StorageManager.STORAGE_KEYS.AI_SELECTED_AGENT_ID].newValue || '';
       renderAgentSelector();
       loadChatHistory();
+    }
+
+    if (changes[StorageManager.STORAGE_KEYS.AI_SELECTED_MODEL]) {
+      const rawModel = changes[StorageManager.STORAGE_KEYS.AI_SELECTED_MODEL].newValue || DEFAULT_MODEL;
+      const resolvedModel = SUPPORTED_MODELS.includes(rawModel) ? rawModel : DEFAULT_MODEL;
+      aiState.selectedModel = resolvedModel;
+      showNotification('モデル設定を更新しました');
+      if (!SUPPORTED_MODELS.includes(rawModel)) {
+        StorageManager.saveSelectedModel(resolvedModel);
+      }
     }
 
     if (changes[StorageManager.STORAGE_KEYS.CLAUDE_API_KEY]) {

@@ -9,7 +9,8 @@ class StorageManager {
     CLAUDE_API_KEY: 'claudeApiKey',
     AI_AGENTS: 'aiAgents',
     AI_SELECTED_AGENT_ID: 'aiSelectedAgentId',
-    AI_CHAT_SESSIONS: 'aiChatSessions'
+    AI_CHAT_SESSIONS: 'aiChatSessions',
+    AI_SELECTED_MODEL: 'aiSelectedModel'
   };
 
   static STORAGE_SOFT_LIMIT_BYTES = 4 * 1024 * 1024; // 4MB
@@ -284,6 +285,23 @@ class StorageManager {
   static async getChatSessions() {
     const sessions = await this.get(this.STORAGE_KEYS.AI_CHAT_SESSIONS, []);
     return Array.isArray(sessions) ? sessions : [];
+  }
+
+  /**
+   * 選択中のAIモデルを保存
+   * @param {string} modelId
+   */
+  static async saveSelectedModel(modelId) {
+    return this.set(this.STORAGE_KEYS.AI_SELECTED_MODEL, modelId || '');
+  }
+
+  /**
+   * 選択中のAIモデルを取得
+   * @param {string} defaultModel
+   * @returns {Promise<string>}
+   */
+  static async getSelectedModel(defaultModel = '') {
+    return this.get(this.STORAGE_KEYS.AI_SELECTED_MODEL, defaultModel);
   }
 }
 

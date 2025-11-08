@@ -280,8 +280,9 @@ function arrayBufferToBase64(buffer) {
 
 const CLAUDE_API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const CLAUDE_API_VERSION = '2023-06-01';
-const CLAUDE_DEFAULT_MODEL = 'claude-3-7-sonnet-20250219';
+const CLAUDE_DEFAULT_MODEL = 'claude-sonnet-4-5';
 const CLAUDE_MAX_TOKENS = 1024;
+const SUPPORTED_MODELS = new Set(['claude-sonnet-4-5', 'claude-haiku-4-5']);
 
 async function handleClaudeChat(payload) {
   if (!payload || !Array.isArray(payload.messages)) {
@@ -303,7 +304,8 @@ async function handleClaudeChat(payload) {
     const response = await callClaudeApi({
       apiKey,
       instructions: payload.instructions,
-      messages: payload.messages
+      messages: payload.messages,
+      model: SUPPORTED_MODELS.has(payload.model) ? payload.model : CLAUDE_DEFAULT_MODEL
     });
 
     return {
@@ -316,8 +318,8 @@ async function handleClaudeChat(payload) {
   }
 }
 
-async function callClaudeApi({ apiKey, instructions, messages }) {
-  const requestBody = buildClaudeRequestBody({ instructions, messages });
+async function callClaudeApi({ apiKey, instructions, messages, model }) {
+  const requestBody = buildClaudeRequestBody({ instructions, messages, model });
 
   const response = await fetch(CLAUDE_API_ENDPOINT, {
     method: 'POST',
@@ -359,7 +361,7 @@ async function callClaudeApi({ apiKey, instructions, messages }) {
   };
 }
 
-function buildClaudeRequestBody({ instructions, messages }) {
+function buildClaudeRequestBody({ instructions, messages, model }) {
   const formattedMessages = messages
     .filter((message) => message?.role && message?.content)
     .map((message) => ({
@@ -373,7 +375,7 @@ function buildClaudeRequestBody({ instructions, messages }) {
     }));
 
   const body = {
-    model: CLAUDE_DEFAULT_MODEL,
+    model: SUPPORTED_MODELS.has(model) ? model : CLAUDE_DEFAULT_MODEL,
     max_tokens: CLAUDE_MAX_TOKENS,
     messages: formattedMessages
   };
