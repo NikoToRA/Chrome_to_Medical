@@ -130,6 +130,20 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 8px;
+  min-height: 100px;
+  padding: 8px;
+  border: 2px dashed transparent;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.image-preview.drop-zone {
+  border-color: transparent;
+}
+
+.image-preview.drop-zone.drag-over {
+  border-color: #1da1f2;
+  background-color: rgba(29, 161, 242, 0.05);
 }
 
 .image-item {

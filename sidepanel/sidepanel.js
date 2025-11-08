@@ -34,6 +34,7 @@ async function init() {
   await detectPlatform();
   setupEventListeners();
   setupPlatformDetection();
+  setupDragAndDrop();
   updateCharCount();
   renderHashtags();
   renderImages();
@@ -164,6 +165,123 @@ function setupEventListeners() {
   pasteToPageBtn.addEventListener('click', async () => {
     await pasteToPage();
   });
+}
+
+// ドラッグ&ドロップ機能の設定
+function setupDragAndDrop() {
+  const dropZone = imagePreview;
+  
+  if (!dropZone) {
+    console.error('[SidePanel] imagePreview要素が見つかりません');
+    return;
+  }
+  
+  // ドラッグオーバー時の処理
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.add('drag-over');
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  
+  // ドラッグリーブ時の処理
+  dropZone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove('drag-over');
+  });
+  
+  // ドロップ時の処理
+  dropZone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove('drag-over');
+    
+    try {
+      // DataTransferからデータを取得
+      const data = e.dataTransfer.getData('text/plain');
+      
+      if (data) {
+        try {
+          const parsedData = JSON.parse(data);
+          
+          if (parsedData.type === 'chrome-to-x-image') {
+            // Base64データが含まれている場合
+            const imageData = parsedData.imageData;
+            await addImageFromData(imageData);
+          } else if (parsedData.type === 'chrome-to-x-image-url') {
+            // URLのみの場合（クロスオリジン）
+            await addImageFromUrl(parsedData.url, parsedData.alt);
+          }
+        } catch (error) {
+          console.log('[SidePanel] JSON解析エラー、通常のテキストとして処理:', error);
+        }
+      }
+      
+      // ファイルがドロップされた場合（ローカルファイル）
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) {
+        const imageFiles = files.filter(file => file.type.startsWith('image/'));
+        if (imageFiles.length > 0) {
+          await addImages(imageFiles);
+        }
+      }
+    } catch (error) {
+      console.error('[SidePanel] ドロップ処理エラー:', error);
+      showNotification('画像の追加に失敗しました');
+    }
+  });
+  
+  console.log('[SidePanel] ドラッグ&ドロップ機能を有効化');
+}
+
+// URLから画像を追加
+async function addImageFromUrl(url, alt) {
+  try {
+    showNotification('画像を取得中...');
+    
+    // background script経由で画像を取得（CORS回避）
+    chrome.runtime.sendMessage({
+      action: 'fetchImage',
+      url: url
+    }, async (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[SidePanel] 画像取得エラー:', chrome.runtime.lastError);
+        showNotification('画像の取得に失敗しました: ' + chrome.runtime.lastError.message);
+        return;
+      }
+      
+      if (response && response.success && response.base64) {
+        const imageData = {
+          id: Date.now() + Math.random(),
+          base64: response.base64,
+          name: alt || `image_${Date.now()}.png`,
+          url: url
+        };
+        
+        await addImageFromData(imageData);
+      } else {
+        showNotification('画像の取得に失敗しました');
+      }
+    });
+  } catch (error) {
+    console.error('[SidePanel] URLからの画像追加エラー:', error);
+    showNotification('画像の追加に失敗しました');
+  }
+}
+
+// 画像データを追加
+async function addImageFromData(imageData) {
+  // Xの画像制限（4枚まで）
+  if (currentImages.length >= 4) {
+    showNotification('画像は最大4枚まで追加できます');
+    return;
+  }
+  
+  currentImages.push(imageData);
+  await saveData();
+  renderImages();
+  showNotification('画像を追加しました');
 }
 
 // 文字数カウントの更新
@@ -598,4 +716,8 @@ window.insertHashtag = insertHashtag;
 window.deleteHashtag = deleteHashtag;
 
 // 初期化実行
-init();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

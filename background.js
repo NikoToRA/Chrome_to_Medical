@@ -217,4 +217,46 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
+  
+  if (request.action === 'fetchImage') {
+    console.log('[Background] 画像取得開始:', request.url);
+    
+    (async () => {
+      try {
+        // クロスオリジンの画像を取得（background scriptはCORS制限を受けない）
+        const response = await fetch(request.url);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        
+        // Service WorkerではFileReaderが使えないため、ArrayBuffer経由でBase64に変換
+        const arrayBuffer = await blob.arrayBuffer();
+        const base64 = arrayBufferToBase64(arrayBuffer);
+        const dataUrl = `data:${blob.type || 'image/png'};base64,${base64}`;
+        
+        console.log('[Background] 画像取得成功');
+        sendResponse({ success: true, base64: dataUrl });
+      } catch (error) {
+        console.error('[Background] 画像取得エラー:', error);
+        sendResponse({ 
+          success: false, 
+          error: error.message || '画像の取得に失敗しました'
+        });
+      }
+    })();
+    return true; // 非同期レスポンス用
+  }
 });
+
+// ArrayBufferをBase64に変換
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}

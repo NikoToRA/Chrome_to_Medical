@@ -1120,10 +1120,122 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 // 初期化
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setupTextInputDetection);
-} else {
+function initializeContentScript() {
   setupTextInputDetection();
+  
+  // document.bodyが存在するまで待機してからドラッグ&ドロップ機能を設定
+  if (document.body) {
+    setupImageDragAndDrop();
+  } else {
+    // document.bodyが存在しない場合は、DOMContentLoadedを待つ
+    const checkBody = setInterval(() => {
+      if (document.body) {
+        clearInterval(checkBody);
+        setupImageDragAndDrop();
+      }
+    }, 100);
+    
+    // タイムアウト（10秒後）
+    setTimeout(() => {
+      clearInterval(checkBody);
+    }, 10000);
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeContentScript);
+} else {
+  initializeContentScript();
+}
+
+/**
+ * 画像のドラッグ&ドロップ機能を設定
+ */
+function setupImageDragAndDrop() {
+  // document.bodyが存在しない場合は待機
+  if (!document.body) {
+    console.log('[Chrome to X] document.bodyが存在しないため、ドラッグ&ドロップ機能の設定をスキップ');
+    return;
+  }
+  
+  // ページ内の画像にドラッグ可能な属性を追加
+  function makeImagesDraggable() {
+    try {
+      const images = document.querySelectorAll('img:not([data-chrome-to-x-draggable])');
+      images.forEach(img => {
+        // 既に処理済みの画像をスキップ
+        if (img.hasAttribute('data-chrome-to-x-draggable')) {
+          return;
+        }
+        
+        img.setAttribute('data-chrome-to-x-draggable', 'true');
+        img.draggable = true;
+        
+        // ドラッグ開始時に画像データを保存
+        img.addEventListener('dragstart', (e) => {
+          try {
+            const imageUrl = img.src;
+            const imageAlt = img.alt || '画像';
+            
+            // データURL（base64）の場合はそのまま使用
+            if (imageUrl.startsWith('data:')) {
+              e.dataTransfer.setData('text/plain', JSON.stringify({
+                type: 'chrome-to-x-image',
+                imageData: {
+                  base64: imageUrl,
+                  name: imageAlt || `image_${Date.now()}.png`,
+                  url: imageUrl
+                }
+              }));
+              e.dataTransfer.effectAllowed = 'copy';
+              return;
+            }
+            
+            // 通常のURLの場合は、URLを保存（sidepanel側でbackground script経由で取得）
+            // クロスオリジン対応のため、常にURLを保存する方式に変更
+            e.dataTransfer.setData('text/plain', JSON.stringify({
+              type: 'chrome-to-x-image-url',
+              url: imageUrl,
+              alt: imageAlt
+            }));
+            e.dataTransfer.effectAllowed = 'copy';
+          } catch (error) {
+            console.error('[Chrome to X] ドラッグ開始時のエラー:', error);
+          }
+        });
+        
+        // ドラッグ中の視覚的フィードバック
+        img.addEventListener('drag', (e) => {
+          img.style.opacity = '0.5';
+        });
+        
+        img.addEventListener('dragend', (e) => {
+          img.style.opacity = '1';
+        });
+      });
+    } catch (error) {
+      console.error('[Chrome to X] 画像ドラッグ設定エラー:', error);
+    }
+  }
+  
+  // 初期実行
+  makeImagesDraggable();
+  
+  // 動的に追加される画像にも対応（MutationObserver）
+  try {
+    const observer = new MutationObserver(() => {
+      makeImagesDraggable();
+    });
+    
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    
+    console.log('[Chrome to X] 画像ドラッグ&ドロップ機能を有効化');
+  } catch (error) {
+    console.error('[Chrome to X] MutationObserver設定エラー:', error);
+  }
 }
 
 console.log('[Chrome to X] content script loaded v1.0.1');
