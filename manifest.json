@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Chrome to X",
+  "version": "1.0.1",
+  "description": "サイドバーでテキストと画像を編集し、XやFacebook、MicroCMSなどに投稿するためのコンテンツを作成するツール",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs",
+    "clipboardWrite",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Chrome to X を開く"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_page": "options/options.html"
+}

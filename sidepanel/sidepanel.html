@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chrome to X</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Chrome to X</h1>
+      <div class="platform-indicator" id="platformIndicator"></div>
+    </header>
+
+    <main class="main-content">
+      <!-- テキスト編集エリア -->
+      <section class="text-editor-section">
+        <div class="section-header">
+          <h2>テキスト編集</h2>
+          <div class="char-count" id="charCount">0文字</div>
+        </div>
+        <textarea 
+          id="textEditor" 
+          class="text-editor" 
+          placeholder="テキストを入力してください..."
+          rows="8"
+        ></textarea>
+      </section>
+
+      <!-- 画像追加エリア -->
+      <section class="image-section">
+        <div class="section-header">
+          <h2>画像</h2>
+          <span class="image-count" id="imageCount">0枚</span>
+        </div>
+        <div class="image-controls">
+          <button id="addImageBtn" class="btn btn-primary">画像を追加</button>
+          <input type="file" id="imageInput" accept="image/*" multiple style="display: none;">
+        </div>
+        <div id="imagePreview" class="image-preview"></div>
+      </section>
+
+      <!-- ハッシュタグ管理エリア -->
+      <section class="hashtag-section">
+        <div class="section-header">
+          <h2>ハッシュタグ</h2>
+          <button id="manageHashtagsBtn" class="btn btn-small">管理</button>
+        </div>
+        <div id="hashtagList" class="hashtag-list"></div>
+      </section>
+
+      <!-- アクションボタン -->
+      <section class="action-section">
+        <button id="pasteToPageBtn" class="btn btn-primary btn-large">📋 ページに貼り付ける</button>
+        <button id="copyTextBtn" class="btn btn-secondary btn-large">テキストをコピー</button>
+        <button id="copyAllBtn" class="btn btn-secondary btn-large">すべてをコピー</button>
+      </section>
+    </main>
+  </div>
+
+  <!-- ハッシュタグ管理モーダル -->
+  <div id="hashtagModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>ハッシュタグ管理</h2>
+        <button class="modal-close" id="closeHashtagModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="hashtag-input-group">
+          <input type="text" id="newHashtagInput" class="input" placeholder="#ハッシュタグを入力">
+          <button id="addHashtagBtn" class="btn btn-primary">追加</button>
+        </div>
+        <div id="hashtagManageList" class="hashtag-manage-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/utils/storage.js"></script>
+  <script src="/utils/image.js"></script>
+  <script src="/utils/detector.js"></script>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

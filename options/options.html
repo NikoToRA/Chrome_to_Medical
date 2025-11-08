@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chrome to X - 設定</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>Chrome to X - 設定</h1>
+    </header>
+
+    <main class="main-content">
+      <section class="settings-section">
+        <h2>Claude API設定</h2>
+        <div class="form-group">
+          <label for="claudeApiKey">APIキー</label>
+          <input type="password" id="claudeApiKey" class="input" placeholder="sk-...">
+          <p class="help-text">Claude APIキーを入力してください（フェーズ5で使用）</p>
+        </div>
+        <button id="saveApiKeyBtn" class="btn btn-primary">保存</button>
+      </section>
+    </main>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
+
