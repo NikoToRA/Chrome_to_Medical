@@ -9,11 +9,24 @@
 <body>
   <div class="container">
     <header class="header">
-      <h1>Chrome to X</h1>
-      <div class="platform-indicator" id="platformIndicator"></div>
+      <div class="header-left">
+        <h1>Chrome to X</h1>
+        <div class="platform-indicator" id="platformIndicator"></div>
+      </div>
+      <div class="header-actions">
+        <button id="openSettingsBtn" class="header-icon-btn" title="設定を開く" aria-label="設定を開く">
+          ⚙️
+        </button>
+      </div>
     </header>
 
     <main class="main-content">
+      <nav class="tab-bar" role="tablist">
+        <button class="tab-button active" data-tab-target="textTab" role="tab" aria-selected="true">テキスト編集</button>
+        <button class="tab-button" data-tab-target="aiTab" role="tab" aria-selected="false">AIチャット</button>
+      </nav>
+
+      <section class="tab-content active" data-tab="textTab" role="tabpanel" aria-labelledby="textTab">
       <!-- テキスト編集エリア -->
       <section class="text-editor-section">
         <div class="section-header">
@@ -61,6 +74,37 @@
           <button id="manageHashtagsBtn" class="btn btn-small">管理</button>
         </div>
         <div id="hashtagList" class="hashtag-list"></div>
+      </section>
+      </section>
+
+      <section class="tab-content" data-tab="aiTab" role="tabpanel" aria-labelledby="aiTab">
+        <div class="ai-panel" role="application">
+          <div class="ai-chat-wrapper">
+            <div class="ai-chat-overlay">
+              <div class="ai-agent-select">
+                <select id="agentSelector" class="ai-agent-select-input" aria-label="エージェント選択">
+                  <option value="" selected>エージェントを選択...</option>
+                  <option value="buzz">バズ投稿エージェント</option>
+                  <option value="reply">返信サポートエージェント</option>
+                  <option value="editor">文章リライトエージェント</option>
+                </select>
+              </div>
+            </div>
+            <div id="aiChatMessages" class="ai-chat-messages" aria-live="polite"></div>
+          </div>
+          <div class="ai-actions">
+            <button id="sendAiToTextBtn" class="btn btn-primary btn-send-to-text">➡️ テキストに送る</button>
+          </div>
+          <form class="ai-chat-input" id="aiChatForm">
+            <textarea
+              id="aiChatInput"
+              class="ai-input"
+              rows="3"
+              placeholder="Shift+Enterで改行、Enterで送信。"
+            ></textarea>
+            <button id="aiChatSendBtn" type="submit" class="btn btn-primary">送信</button>
+          </form>
+        </div>
       </section>
     </main>
   </div>

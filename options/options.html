@@ -3,28 +3,60 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chrome to X - 設定</title>
+  <title>Chrome to X - AI設定</title>
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
-  <div class="container">
-    <header class="header">
-      <h1>Chrome to X - 設定</h1>
+  <div class="options-page">
+    <header class="options-header">
+      <div class="header-brand">
+        <span class="logo">Chrome to X</span>
+        <h1>AI 設定センター</h1>
+        <p class="header-subtitle">APIキーとエージェントを管理し、最適な生成結果を得ましょう。</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="btn btn-ghost" id="openDocsBtn" disabled>ドキュメント</button>
+        <button type="button" class="btn btn-ghost btn-icon" id="closeSettingsBtn" aria-label="設定を閉じる">✖️</button>
+      </div>
     </header>
 
-    <main class="main-content">
-      <section class="settings-section">
-        <h2>Claude API設定</h2>
-        <div class="form-group">
-          <label for="claudeApiKey">APIキー</label>
-          <input type="password" id="claudeApiKey" class="input" placeholder="sk-...">
-          <p class="help-text">Claude APIキーを入力してください（フェーズ5で使用）</p>
+    <main class="options-main">
+      <section class="card card-api">
+        <div class="card-header">
+          <div>
+            <h2>Claude API キー</h2>
+            <p class="card-subtitle">Anthropic Claude API キーを入力してください。</p>
+          </div>
         </div>
-        <button id="saveApiKeyBtn" class="btn btn-primary">保存</button>
+        <div class="card-body">
+          <label for="claudeApiKey" class="field-label">APIキー</label>
+          <div class="field-with-control">
+            <input type="password" id="claudeApiKey" class="input input-large" placeholder="sk-ant-..." autocomplete="off">
+            <button type="button" id="toggleApiKeyVisibility" class="btn btn-ghost btn-icon" aria-label="APIキーの表示切替">👁️</button>
+          </div>
+          <p class="help-text">APIキーはローカルストレージに安全に保存され、Chrome to X のサイドパネルから参照されます。</p>
+        </div>
+        <div class="card-footer">
+          <button type="button" id="saveApiKeyBtn" class="btn btn-primary">保存する</button>
+        </div>
+      </section>
+
+      <section class="card card-agents">
+        <div class="card-header">
+          <div>
+            <h2>AI エージェント</h2>
+            <p class="card-subtitle">用途に合わせてエージェント（プロンプトプリセット）を作成・編集できます。</p>
+          </div>
+          <button type="button" id="addAgentBtn" class="btn btn-secondary">＋ 新規エージェント</button>
+        </div>
+        <div id="agentsList" class="agent-list"></div>
       </section>
     </main>
   </div>
 
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="/utils/storage.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

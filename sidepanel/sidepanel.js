@@ -22,6 +22,15 @@ const newHashtagInput = document.getElementById('newHashtagInput');
 const addHashtagBtn = document.getElementById('addHashtagBtn');
 const hashtagManageList = document.getElementById('hashtagManageList');
 const platformIndicator = document.getElementById('platformIndicator');
+const tabButtons = document.querySelectorAll('.tab-button');
+const tabPanels = document.querySelectorAll('.tab-content[role="tabpanel"]');
+const sendAiToTextBtn = document.getElementById('sendAiToTextBtn');
+const agentSelector = document.getElementById('agentSelector');
+const aiChatMessages = document.getElementById('aiChatMessages');
+const aiChatInput = document.getElementById('aiChatInput');
+const aiChatSendBtn = document.getElementById('aiChatSendBtn');
+const aiChatForm = document.getElementById('aiChatForm');
+const openSettingsBtn = document.getElementById('openSettingsBtn');
 
 // 状態管理
 let currentImages = [];
@@ -32,6 +41,7 @@ let currentPlatform = null;
 async function init() {
   await loadData();
   await detectPlatform();
+  setupTabNavigation();
   setupEventListeners();
   setupPlatformDetection();
   setupDragAndDrop();
@@ -95,6 +105,43 @@ async function saveData() {
   await StorageManager.saveText(textEditor.value);
   await StorageManager.saveImages(currentImages);
   await StorageManager.saveHashtags(hashtags);
+}
+
+// タブ切り替えを設定
+function setupTabNavigation() {
+  if (!tabButtons.length || !tabPanels.length) {
+    return;
+  }
+
+  const activateTab = (targetId) => {
+    tabButtons.forEach((btn) => {
+      const isActive = btn.getAttribute('data-tab-target') === targetId;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    tabPanels.forEach((panel) => {
+      const isActive = panel.getAttribute('data-tab') === targetId;
+      panel.classList.toggle('active', isActive);
+      if (isActive) {
+        panel.removeAttribute('hidden');
+      } else {
+        panel.setAttribute('hidden', 'true');
+      }
+    });
+  };
+
+  tabButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const target = button.getAttribute('data-tab-target');
+      if (!target) return;
+      activateTab(target);
+    });
+  });
+
+  // 初期タブ設定
+  const defaultTab = Array.from(tabButtons).find((btn) => btn.classList.contains('active'))?.getAttribute('data-tab-target') || tabButtons[0].getAttribute('data-tab-target');
+  activateTab(defaultTab);
 }
 
 // イベントリスナーの設定
@@ -165,6 +212,54 @@ function setupEventListeners() {
   pasteToPageBtn.addEventListener('click', async () => {
     await pasteToPage();
   });
+
+  if (sendAiToTextBtn) {
+    sendAiToTextBtn.addEventListener('click', () => {
+      showNotification('生成したテキストをテキスト編集に送る機能は準備中です');
+    });
+  }
+
+  if (agentSelector) {
+    agentSelector.addEventListener('change', () => {
+      const selectedValue = agentSelector.value;
+      if (!selectedValue) {
+        showNotification('エージェントを選択してください');
+        return;
+      }
+      const selectedLabel = agentSelector.options[agentSelector.selectedIndex].text.trim();
+      showNotification(`「${selectedLabel}」と会話を開始します`);
+    });
+  }
+
+  if (openSettingsBtn) {
+    openSettingsBtn.addEventListener('click', () => {
+      if (chrome.runtime?.openOptionsPage) {
+        chrome.runtime.openOptionsPage();
+      } else {
+        window.open(chrome.runtime.getURL('options/options.html'));
+      }
+    });
+  }
+
+  if (aiChatForm) {
+    aiChatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      handleAiChatSend();
+    });
+  } else if (aiChatSendBtn) {
+    aiChatSendBtn.addEventListener('click', () => {
+      handleAiChatSend();
+    });
+  }
+
+  if (aiChatInput) {
+    aiChatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleAiChatSend();
+      }
+    });
+  }
 }
 
 // ドラッグ&ドロップ機能の設定
@@ -714,6 +809,56 @@ function showNotification(message) {
 window.removeImage = removeImage;
 window.insertHashtag = insertHashtag;
 window.deleteHashtag = deleteHashtag;
+
+// AIチャット送信（プレースホルダー）
+function handleAiChatSend() {
+  const message = aiChatInput?.value.trim();
+  if (!message) {
+    return;
+  }
+
+  if (!agentSelector || !agentSelector.value) {
+    showNotification('先にエージェントを選択してください');
+    return;
+  }
+
+  if (aiChatMessages) {
+    const userMessage = document.createElement('div');
+    userMessage.classList.add('ai-message', 'ai-message-user');
+    userMessage.innerHTML = `<strong>あなた</strong><span>${formatMessageText(message)}</span>`;
+    aiChatMessages.appendChild(userMessage);
+    aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+  }
+
+  if (aiChatInput) {
+    aiChatInput.value = '';
+  }
+
+  if (aiChatMessages && agentSelector) {
+    const agentLabel = agentSelector.options[agentSelector.selectedIndex].text.trim();
+    const assistantMessage = document.createElement('div');
+    assistantMessage.classList.add('ai-message', 'ai-message-assistant');
+    assistantMessage.innerHTML = `<strong>${escapeHtml(agentLabel)}</strong><span>AIチャット機能は準備中です。まもなく応答が表示される予定です。</span>`;
+    aiChatMessages.appendChild(assistantMessage);
+    aiChatMessages.scrollTop = aiChatMessages.scrollHeight;
+  }
+
+  showNotification('AIチャット機能は準備中です');
+}
+
+// シンプルなHTMLエスケープ
+function escapeHtml(unsafe) {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function formatMessageText(text) {
+  return escapeHtml(text).replace(/\n/g, '<br>');
+}
 
 // 初期化実行
 if (document.readyState === 'loading') {
