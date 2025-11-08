@@ -346,10 +346,21 @@ async function pasteContent(text, images) {
       }
     }
     
-    // 画像の処理（将来的に実装）
+    // 画像の処理
     if (images && images.length > 0) {
-      console.log('[Chrome to X] 画像の貼り付け:', images.length, '枚');
-      showNotification(`テキストと画像${images.length}枚を貼り付けました`);
+      console.log('[Chrome to X] 画像の貼り付け開始:', images.length, '枚');
+      
+      // Xの画像アップロード機能を使用
+      const uploadSuccess = await uploadImagesToX(images);
+      
+      if (uploadSuccess) {
+        showNotification(`テキストと画像${images.length}枚を貼り付けました`);
+      } else {
+        // フォールバック: クリップボード経由で貼り付けを試行
+        console.log('[Chrome to X] Xの画像アップロードに失敗、クリップボード経由で試行');
+        await pasteImagesViaClipboard(element, images);
+        showNotification(`テキストと画像${images.length}枚を貼り付けました`);
+      }
     } else if (text) {
       showNotification('テキストを貼り付けました');
     }
@@ -442,6 +453,203 @@ function normalizeContentText(element) {
   return (element.textContent || element.innerText || '')
     .replace(/\u200B/g, '')  // zero-width space
     .replace(/\n$/, '');     // trailing newline from <br>
+}
+
+/**
+ * Xの画像アップロード機能を使用して画像をアップロード
+ */
+async function uploadImagesToX(images) {
+  try {
+    // Xの投稿フォーム全体を探す
+    const composer = document.querySelector('[data-testid="tweetTextarea_0"]')?.closest('div[role="textbox"]')?.closest('div')?.closest('div');
+    
+    // ファイル入力要素を探す（ページ全体から）
+    let fileInput = document.querySelector('input[type="file"][accept*="image"]') ||
+                   document.querySelector('input[type="file"]');
+    
+    // 見つからない場合は、画像ボタンをクリックしてファイル入力を表示
+    if (!fileInput) {
+      // ツールバー内の画像ボタンを探す
+      const toolbar = document.querySelector('[data-testid="toolBar"]');
+      if (toolbar) {
+        const mediaButton = toolbar.querySelector('[data-testid="attach"]') || 
+                           toolbar.querySelector('button[aria-label*="画像"]') ||
+                           toolbar.querySelector('button[aria-label*="メディア"]') ||
+                           toolbar.querySelector('button[aria-label*="画像を追加"]');
+        
+        if (mediaButton) {
+          console.log('[Chrome to X] 画像ボタンをクリック');
+          mediaButton.click();
+          // ファイル入力が表示されるまで待つ
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // 再度ファイル入力を探す
+          fileInput = document.querySelector('input[type="file"][accept*="image"]') ||
+                     document.querySelector('input[type="file"]');
+        }
+      }
+    }
+    
+    if (!fileInput) {
+      console.log('[Chrome to X] ファイル入力要素が見つかりません');
+      return false;
+    }
+    
+    console.log('[Chrome to X] ファイル入力要素を発見:', fileInput);
+    
+    // Base64データURLからFileオブジェクトを作成
+    const files = [];
+    for (const image of images) {
+      const base64Data = image.base64;
+      const response = await fetch(base64Data);
+      const blob = await response.blob();
+      
+      // Fileオブジェクトを作成
+      const fileName = image.name || `image_${Date.now()}.png`;
+      const file = new File([blob], fileName, { type: blob.type });
+      files.push(file);
+    }
+    
+    // DataTransferオブジェクトを作成してファイルを設定
+    const dataTransfer = new DataTransfer();
+    files.forEach(file => dataTransfer.items.add(file));
+    
+    // ファイル入力にファイルを設定
+    fileInput.files = dataTransfer.files;
+    
+    // changeイベントを発火
+    const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+    fileInput.dispatchEvent(changeEvent);
+    
+    // inputイベントも発火（Xがリッスンしている可能性がある）
+    const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+    fileInput.dispatchEvent(inputEvent);
+    
+    console.log('[Chrome to X] Xの画像アップロード成功:', files.length, '枚');
+    
+    // 画像がアップロードされるまで少し待つ
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    return true;
+  } catch (error) {
+    console.error('[Chrome to X] Xの画像アップロードに失敗:', error);
+    return false;
+  }
+}
+
+/**
+ * クリップボード経由で画像を貼り付ける（フォールバック）
+ */
+async function pasteImagesViaClipboard(element, images) {
+  try {
+    // 要素にフォーカス
+    element.focus({ preventScroll: true });
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // 画像を1枚ずつクリップボード経由で貼り付ける
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      try {
+        // Base64データURLからBlobを作成
+        const base64Data = image.base64;
+        const response = await fetch(base64Data);
+        const blob = await response.blob();
+        
+        // クリップボードに画像をコピー
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type]: blob })
+        ]);
+        
+        // 少し待ってからキーボードショートカットをシミュレート
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        // Ctrl+V (Mac: Cmd+V) をシミュレート
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        
+        const keyDownModifier = new KeyboardEvent('keydown', {
+          key: isMac ? 'Meta' : 'Control',
+          code: isMac ? 'MetaLeft' : 'ControlLeft',
+          keyCode: isMac ? 91 : 17,
+          which: isMac ? 91 : 17,
+          ctrlKey: !isMac,
+          metaKey: isMac,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        const keyDownV = new KeyboardEvent('keydown', {
+          key: 'v',
+          code: 'KeyV',
+          keyCode: 86,
+          which: 86,
+          ctrlKey: !isMac,
+          metaKey: isMac,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        // pasteイベントを発火
+        const pasteEvent = new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: new DataTransfer()
+        });
+        
+        Object.defineProperty(pasteEvent.clipboardData, 'items', {
+          value: [{
+            kind: 'file',
+            type: blob.type,
+            getAsFile: () => blob
+          }],
+          writable: false
+        });
+        
+        Object.defineProperty(pasteEvent.clipboardData, 'files', {
+          value: [blob],
+          writable: false
+        });
+        
+        element.dispatchEvent(keyDownModifier);
+        element.dispatchEvent(keyDownV);
+        element.dispatchEvent(pasteEvent);
+        
+        // keyupイベント
+        const keyUpV = new KeyboardEvent('keyup', {
+          key: 'v',
+          code: 'KeyV',
+          keyCode: 86,
+          which: 86,
+          ctrlKey: !isMac,
+          metaKey: isMac,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        const keyUpModifier = new KeyboardEvent('keyup', {
+          key: isMac ? 'Meta' : 'Control',
+          code: isMac ? 'MetaLeft' : 'ControlLeft',
+          keyCode: isMac ? 91 : 17,
+          which: isMac ? 91 : 17,
+          ctrlKey: !isMac,
+          metaKey: isMac,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        element.dispatchEvent(keyUpV);
+        element.dispatchEvent(keyUpModifier);
+        
+        // 次の画像の前に少し待つ
+        if (i < images.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      } catch (error) {
+        console.error(`[Chrome to X] 画像${i + 1}枚目の貼り付けに失敗:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('[Chrome to X] クリップボード経由の画像貼り付けに失敗:', error);
+  }
 }
 
 /**

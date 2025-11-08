@@ -26,6 +26,9 @@
           placeholder="テキストを入力してください..."
           rows="8"
         ></textarea>
+        <div class="text-editor-controls">
+          <button id="clearTextBtn" class="btn btn-small btn-ghost">クリア</button>
+        </div>
       </section>
 
       <!-- 画像追加エリア -->
@@ -36,6 +39,7 @@
         </div>
         <div class="image-controls">
           <button id="addImageBtn" class="btn btn-primary">画像を追加</button>
+          <button id="captureScreenshotBtn" class="btn btn-secondary">📷 スクリーンショット</button>
           <input type="file" id="imageInput" accept="image/*" multiple style="display: none;">
         </div>
         <div id="imagePreview" class="image-preview"></div>
@@ -54,7 +58,6 @@
       <section class="action-section">
         <button id="pasteToPageBtn" class="btn btn-primary btn-large">📋 ページに貼り付ける</button>
         <button id="copyTextBtn" class="btn btn-secondary btn-large">テキストをコピー</button>
-        <button id="copyAllBtn" class="btn btn-secondary btn-large">すべてをコピー</button>
       </section>
     </main>
   </div>

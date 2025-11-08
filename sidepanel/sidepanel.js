@@ -12,8 +12,9 @@ const imageCount = document.getElementById('imageCount');
 const hashtagList = document.getElementById('hashtagList');
 const manageHashtagsBtn = document.getElementById('manageHashtagsBtn');
 const copyTextBtn = document.getElementById('copyTextBtn');
-const copyAllBtn = document.getElementById('copyAllBtn');
+const clearTextBtn = document.getElementById('clearTextBtn');
 const pasteToPageBtn = document.getElementById('pasteToPageBtn');
+const captureScreenshotBtn = document.getElementById('captureScreenshotBtn');
 const hashtagModal = document.getElementById('hashtagModal');
 const closeHashtagModal = document.getElementById('closeHashtagModal');
 const newHashtagInput = document.getElementById('newHashtagInput');
@@ -113,6 +114,11 @@ function setupEventListeners() {
     imageInput.value = '';
   });
 
+  // スクリーンショット取得
+  captureScreenshotBtn.addEventListener('click', async () => {
+    await captureScreenshot();
+  });
+
   // ハッシュタグ管理
   manageHashtagsBtn.addEventListener('click', () => {
     hashtagModal.classList.add('active');
@@ -144,8 +150,8 @@ function setupEventListeners() {
     await copyText();
   });
 
-  copyAllBtn.addEventListener('click', async () => {
-    await copyAll();
+  clearTextBtn.addEventListener('click', async () => {
+    await clearText();
   });
 
   // ページに貼り付ける機能
@@ -199,6 +205,51 @@ async function addImages(files) {
 
   await saveData();
   renderImages();
+}
+
+// スクリーンショット取得
+async function captureScreenshot() {
+  try {
+    showNotification('スクリーンショットを取得中...');
+    
+    chrome.runtime.sendMessage({ action: 'captureScreenshot' }, async (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[SidePanel] スクリーンショット取得エラー:', chrome.runtime.lastError);
+        showNotification('スクリーンショットの取得に失敗しました: ' + chrome.runtime.lastError.message);
+        return;
+      }
+      
+      if (response && response.success === false) {
+        console.error('[SidePanel] スクリーンショット取得失敗:', response);
+        showNotification('スクリーンショットの取得に失敗しました: ' + (response.error || '不明なエラー'));
+        return;
+      }
+      
+      if (response && response.success && response.dataUrl) {
+        // Base64データURLを画像として追加
+        const base64 = response.dataUrl;
+        const imageData = {
+          id: Date.now() + Math.random(),
+          base64: base64,
+          name: `スクリーンショット_${new Date().toISOString().replace(/[:.]/g, '-')}.png`
+        };
+        
+        // Xの画像制限（4枚まで）
+        if (currentImages.length >= 4) {
+          showNotification('画像は最大4枚まで追加できます');
+          return;
+        }
+        
+        currentImages.push(imageData);
+        await saveData();
+        renderImages();
+        showNotification('スクリーンショットを追加しました');
+      }
+    });
+  } catch (error) {
+    console.error('スクリーンショット取得に失敗しました:', error);
+    showNotification('スクリーンショットの取得に失敗しました');
+  }
 }
 
 // 画像の削除
@@ -372,21 +423,13 @@ async function pasteToPage() {
   }
 }
 
-// すべてをコピー（テキスト + 画像情報）
-async function copyAll() {
-  try {
-    let text = textEditor.value;
-    
-    if (currentImages.length > 0) {
-      text += `\n\n[画像 ${currentImages.length}枚]`;
-    }
-    
-    await navigator.clipboard.writeText(text);
-    showNotification('すべてをコピーしました');
-  } catch (error) {
-    console.error('コピーに失敗しました:', error);
-    alert('コピーに失敗しました。');
-  }
+// テキストをクリア
+async function clearText() {
+  textEditor.value = '';
+  updateCharCount();
+  await saveData();
+  showNotification('テキストをクリアしました');
+  textEditor.focus();
 }
 
 // 通知を表示

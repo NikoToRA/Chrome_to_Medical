@@ -80,4 +80,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
+  
+  if (request.action === 'captureScreenshot') {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      if (tabs.length === 0) {
+        console.error('[Background] アクティブなタブが見つかりません');
+        sendResponse({ success: false, error: 'アクティブなタブが見つかりません' });
+        return;
+      }
+      
+      const tab = tabs[0];
+      console.log('[Background] スクリーンショット取得開始:', tab.id);
+      
+      try {
+        // 現在のタブのスクリーンショットを取得
+        const dataUrl = await chrome.tabs.captureVisibleTab(null, {
+          format: 'png'
+        });
+        
+        console.log('[Background] スクリーンショット取得成功');
+        sendResponse({ success: true, dataUrl: dataUrl });
+      } catch (error) {
+        console.error('[Background] スクリーンショット取得エラー:', error);
+        sendResponse({ 
+          success: false, 
+          error: error.message || 'スクリーンショットの取得に失敗しました'
+        });
+      }
+    });
+    return true; // 非同期レスポンス用
+  }
 });
