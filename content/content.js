@@ -8,6 +8,45 @@ let focusedElement = null;
 let lastEditableElement = null;
 // 貼り付け処理中フラグ（重複実行を防ぐ）
 let isPasting = false;
+// 選択範囲スクリーンショット用の状態
+let selectionOverlay = null;
+let selectionState = {
+  isSelecting: false,
+  startX: 0,
+  startY: 0,
+  currentX: 0,
+  currentY: 0
+};
+
+/**
+ * プラットフォーム検出（簡易版）
+ */
+function detectPlatform() {
+  const url = window.location.href;
+  const hostname = window.location.hostname.toLowerCase();
+  
+  // X (旧Twitter)
+  if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
+    return 'x';
+  }
+  
+  // Gmail
+  if (hostname.includes('mail.google.com') || hostname.includes('gmail.com')) {
+    return 'gmail';
+  }
+  
+  // Facebook
+  if (hostname.includes('facebook.com')) {
+    return 'facebook';
+  }
+  
+  // MicroCMS
+  if (hostname.includes('microcms.io')) {
+    return 'microcms';
+  }
+  
+  return null;
+}
 
 /**
  * テキストエリアやinput要素にフォーカスしたときに要素を記録
@@ -350,14 +389,29 @@ async function pasteContent(text, images) {
     if (images && images.length > 0) {
       console.log('[Chrome to X] 画像の貼り付け開始:', images.length, '枚');
       
-      // Xの画像アップロード機能を使用
-      const uploadSuccess = await uploadImagesToX(images);
+      // プラットフォームを検出
+      const platform = detectPlatform();
+      
+      let uploadSuccess = false;
+      
+      if (platform === 'x') {
+        // Xの画像アップロード機能を使用
+        uploadSuccess = await uploadImagesToX(images);
+      } else if (platform === 'gmail') {
+        // Gmailの画像アップロード機能を使用
+        uploadSuccess = await uploadImagesToGmail(images);
+      } else {
+        // その他のプラットフォーム: クリップボード経由で貼り付けを試行
+        console.log('[Chrome to X] プラットフォーム:', platform, 'クリップボード経由で試行');
+        await pasteImagesViaClipboard(element, images);
+        uploadSuccess = true;
+      }
       
       if (uploadSuccess) {
         showNotification(`テキストと画像${images.length}枚を貼り付けました`);
       } else {
         // フォールバック: クリップボード経由で貼り付けを試行
-        console.log('[Chrome to X] Xの画像アップロードに失敗、クリップボード経由で試行');
+        console.log('[Chrome to X] 画像アップロードに失敗、クリップボード経由で試行');
         await pasteImagesViaClipboard(element, images);
         showNotification(`テキストと画像${images.length}枚を貼り付けました`);
       }
@@ -538,6 +592,129 @@ async function uploadImagesToX(images) {
 }
 
 /**
+ * Gmailの画像アップロード機能を使用して画像をアップロード
+ */
+async function uploadImagesToGmail(images) {
+  try {
+    console.log('[Chrome to X] Gmailの画像アップロード開始');
+    
+    // Gmailのファイル添付ボタンを探す（複数のパターンを試す）
+    // GmailのUI構造は動的に変わる可能性があるため、複数のセレクタを試す
+    const attachSelectors = [
+      'div[aria-label*="添付"]',
+      'div[aria-label*="Attach"]',
+      'div[aria-label*="ファイルを添付"]',
+      'div[aria-label*="Attach files"]',
+      'div[role="button"][aria-label*="添付"]',
+      'div[role="button"][aria-label*="Attach"]',
+      'div[data-tooltip*="添付"]',
+      'div[data-tooltip*="Attach"]',
+      'div[title*="添付"]',
+      'div[title*="Attach"]',
+      'div[aria-label="添付"]',
+      'div[aria-label="Attach"]'
+    ];
+    
+    let attachButton = null;
+    for (const selector of attachSelectors) {
+      attachButton = document.querySelector(selector);
+      if (attachButton) {
+        console.log('[Chrome to X] Gmailの添付ボタンを発見:', selector, attachButton);
+        break;
+      }
+    }
+    
+    // ファイル入力要素を探す（Gmailは通常、ページ内に隠しinputがある）
+    let fileInput = document.querySelector('input[type="file"]');
+    
+    // 見つからない場合は、添付ボタンをクリックしてファイル入力を表示
+    if (!fileInput && attachButton) {
+      console.log('[Chrome to X] 添付ボタンをクリック');
+      attachButton.click();
+      // ファイル入力が表示されるまで待つ
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // 再度ファイル入力を探す
+      fileInput = document.querySelector('input[type="file"]');
+    }
+    
+    // まだ見つからない場合は、Gmailのエディタエリア内を探す
+    if (!fileInput) {
+      const editorArea = document.querySelector('div[role="textbox"]')?.closest('div')?.parentElement;
+      if (editorArea) {
+        fileInput = editorArea.querySelector('input[type="file"]');
+      }
+    }
+    
+    if (!fileInput) {
+      console.log('[Chrome to X] Gmailのファイル入力要素が見つかりません');
+      // フォールバック: クリップボード経由を試す
+      return false;
+    }
+    
+    console.log('[Chrome to X] Gmailのファイル入力要素を発見:', fileInput);
+    
+    // Base64データURLからFileオブジェクトを作成
+    const files = [];
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      const base64Data = image.base64;
+      const response = await fetch(base64Data);
+      const blob = await response.blob();
+      
+      // Fileオブジェクトを作成
+      const fileName = image.name || `image_${Date.now()}_${i}.png`;
+      const file = new File([blob], fileName, { type: blob.type });
+      files.push(file);
+      
+      // Gmailは1枚ずつアップロードする必要がある場合がある
+      if (i === 0) {
+        // 最初のファイルを設定
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        fileInput.files = dataTransfer.files;
+        
+        // changeイベントを発火
+        const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+        fileInput.dispatchEvent(changeEvent);
+        
+        // inputイベントも発火
+        const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+        fileInput.dispatchEvent(inputEvent);
+        
+        // 次のファイルの前に少し待つ
+        if (images.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+    }
+    
+    // 複数ファイルの場合は、すべてのファイルを一度に設定
+    if (files.length > 1) {
+      const dataTransfer = new DataTransfer();
+      files.forEach(file => dataTransfer.items.add(file));
+      fileInput.files = dataTransfer.files;
+      
+      const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+      fileInput.dispatchEvent(changeEvent);
+      
+      const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+      fileInput.dispatchEvent(inputEvent);
+    }
+    
+    console.log('[Chrome to X] Gmailの画像アップロード成功:', files.length, '枚');
+    
+    // 画像がアップロードされるまで少し待つ
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    return true;
+  } catch (error) {
+    console.error('[Chrome to X] Gmailの画像アップロードに失敗:', error);
+    return false;
+  }
+}
+
+/**
  * クリップボード経由で画像を貼り付ける（フォールバック）
  */
 async function pasteImagesViaClipboard(element, images) {
@@ -653,6 +830,216 @@ async function pasteImagesViaClipboard(element, images) {
 }
 
 /**
+ * 選択範囲スクリーンショットを開始
+ */
+function startSelectionScreenshot() {
+  return new Promise((resolve, reject) => {
+    // 既存のオーバーレイがあれば削除
+    if (selectionOverlay) {
+      removeSelectionOverlay();
+    }
+    
+    // オーバーレイを作成
+    const overlay = document.createElement('div');
+    overlay.id = 'chrome-to-x-selection-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.3);
+      z-index: 999999;
+      cursor: crosshair;
+      user-select: none;
+    `;
+    
+    // 選択範囲ボックス
+    const selectionBox = document.createElement('div');
+    selectionBox.id = 'chrome-to-x-selection-box';
+    selectionBox.style.cssText = `
+      position: absolute;
+      border: 2px dashed #1da1f2;
+      background-color: rgba(29, 161, 242, 0.1);
+      pointer-events: none;
+      display: none;
+    `;
+    
+    // インストラクション
+    const instruction = document.createElement('div');
+    instruction.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #1da1f2;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      z-index: 1000000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    `;
+    instruction.textContent = '範囲をドラッグして選択してください（ESCキーでキャンセル）';
+    
+    overlay.appendChild(selectionBox);
+    overlay.appendChild(instruction);
+    document.body.appendChild(overlay);
+    selectionOverlay = overlay;
+    
+    // マウスイベント
+    const handleMouseDown = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const rect = overlay.getBoundingClientRect();
+      selectionState.isSelecting = true;
+      selectionState.startX = e.clientX - rect.left;
+      selectionState.startY = e.clientY - rect.top;
+      selectionState.currentX = e.clientX - rect.left;
+      selectionState.currentY = e.clientY - rect.top;
+      
+      selectionBox.style.display = 'block';
+      updateSelectionBox();
+    };
+    
+    const handleMouseMove = (e) => {
+      if (!selectionState.isSelecting) return;
+      
+      const rect = overlay.getBoundingClientRect();
+      selectionState.currentX = e.clientX - rect.left;
+      selectionState.currentY = e.clientY - rect.top;
+      
+      updateSelectionBox();
+    };
+    
+    const handleMouseUp = (e) => {
+      if (!selectionState.isSelecting) return;
+      
+      selectionState.isSelecting = false;
+      
+      const startX = Math.min(selectionState.startX, selectionState.currentX);
+      const startY = Math.min(selectionState.startY, selectionState.currentY);
+      const width = Math.abs(selectionState.currentX - selectionState.startX);
+      const height = Math.abs(selectionState.currentY - selectionState.startY);
+      
+      if (width < 10 || height < 10) {
+        // 選択範囲が小さすぎる場合は無視
+        return;
+      }
+      
+      // 選択範囲の座標を取得（ビューポート基準）
+      // chrome.tabs.captureVisibleTabはビューポートのみをキャプチャするため、
+      // ビューポート基準の座標を使用する
+      const viewportX = startX;
+      const viewportY = startY;
+      
+      // デバッグ情報を収集
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const devicePixelRatio = window.devicePixelRatio || 1;
+      const scrollX = window.scrollX;
+      const scrollY = window.scrollY;
+      
+      console.log('[Chrome to X] 選択範囲情報:', {
+        selection: {
+          x: Math.round(viewportX),
+          y: Math.round(viewportY),
+          width: Math.round(width),
+          height: Math.round(height)
+        },
+        viewport: {
+          width: viewportWidth,
+          height: viewportHeight
+        },
+        devicePixelRatio: devicePixelRatio,
+        scroll: {
+          x: scrollX,
+          y: scrollY
+        },
+        rawCoordinates: {
+          startX: selectionState.startX,
+          startY: selectionState.startY,
+          currentX: selectionState.currentX,
+          currentY: selectionState.currentY
+        }
+      });
+      
+      // オーバーレイを削除
+      removeSelectionOverlay();
+      
+      // 選択範囲を返す（ビューポート基準 + デバイスピクセル比を考慮）
+      // chrome.tabs.captureVisibleTabはデバイスピクセル比を考慮したサイズで取得するため、
+      // 座標もデバイスピクセル比を掛ける必要がある
+      resolve({
+        x: Math.round(viewportX * devicePixelRatio),
+        y: Math.round(viewportY * devicePixelRatio),
+        width: Math.round(width * devicePixelRatio),
+        height: Math.round(height * devicePixelRatio),
+        viewportWidth: Math.round(viewportWidth * devicePixelRatio),
+        viewportHeight: Math.round(viewportHeight * devicePixelRatio),
+        devicePixelRatio: devicePixelRatio
+      });
+    };
+    
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        removeSelectionOverlay();
+        reject(new Error('キャンセルされました'));
+      }
+    };
+    
+    overlay.addEventListener('mousedown', handleMouseDown);
+    overlay.addEventListener('mousemove', handleMouseMove);
+    overlay.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('keydown', handleKeyDown);
+    
+    // クリーンアップ関数
+    overlay._cleanup = () => {
+      overlay.removeEventListener('mousedown', handleMouseDown);
+      overlay.removeEventListener('mousemove', handleMouseMove);
+      overlay.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+    
+    function updateSelectionBox() {
+      const startX = Math.min(selectionState.startX, selectionState.currentX);
+      const startY = Math.min(selectionState.startY, selectionState.currentY);
+      const width = Math.abs(selectionState.currentX - selectionState.startX);
+      const height = Math.abs(selectionState.currentY - selectionState.startY);
+      
+      selectionBox.style.left = `${startX}px`;
+      selectionBox.style.top = `${startY}px`;
+      selectionBox.style.width = `${width}px`;
+      selectionBox.style.height = `${height}px`;
+    }
+  });
+}
+
+/**
+ * 選択範囲オーバーレイを削除
+ */
+function removeSelectionOverlay() {
+  if (selectionOverlay) {
+    if (selectionOverlay._cleanup) {
+      selectionOverlay._cleanup();
+    }
+    selectionOverlay.remove();
+    selectionOverlay = null;
+    selectionState.isSelecting = false;
+  }
+}
+
+/**
+ * 選択範囲スクリーンショットをキャンセル
+ */
+function cancelSelectionScreenshot() {
+  removeSelectionOverlay();
+}
+
+/**
  * 擬似的なPasteイベントを発火してDraft.jsにテキストを挿入させる
  */
 function dispatchSyntheticPaste(element, text) {
@@ -710,6 +1097,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
+  
+  if (request.action === 'startSelectionScreenshot') {
+    console.log('[Chrome to X] 選択範囲スクリーンショット開始');
+    startSelectionScreenshot().then((selection) => {
+      sendResponse({ success: true, selection: selection });
+    }).catch((error) => {
+      console.error('[Chrome to X] 選択範囲スクリーンショットエラー:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+    return true; // 非同期レスポンス用
+  }
+  
+  if (request.action === 'cancelSelectionScreenshot') {
+    console.log('[Chrome to X] 選択範囲スクリーンショットキャンセル');
+    cancelSelectionScreenshot();
+    sendResponse({ success: true });
+    return true;
+  }
+  
   return false;
 });
 
@@ -724,6 +1130,9 @@ console.log('[Chrome to X] content script loaded v1.0.1');
 
 // pasteContent 関数をグローバルに公開（background.jsから呼び出せるようにする）
 window.pasteContent = pasteContent;
+// 選択範囲スクリーンショット関数も公開
+window.startSelectionScreenshot = startSelectionScreenshot;
+window.cancelSelectionScreenshot = cancelSelectionScreenshot;
 
 // 背景スクリプトからのカスタムイベントを受け取って貼り付けを実行
 window.addEventListener('chrome-to-x-paste-request', (event) => {

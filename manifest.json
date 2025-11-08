@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Chrome to X",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "description": "サイドバーでテキストと画像を編集し、XやFacebook、MicroCMSなどに投稿するためのコンテンツを作成するツール",
   "permissions": [
     "sidePanel",

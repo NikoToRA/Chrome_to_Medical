@@ -11,10 +11,11 @@ const imagePreview = document.getElementById('imagePreview');
 const imageCount = document.getElementById('imageCount');
 const hashtagList = document.getElementById('hashtagList');
 const manageHashtagsBtn = document.getElementById('manageHashtagsBtn');
-const copyTextBtn = document.getElementById('copyTextBtn');
 const clearTextBtn = document.getElementById('clearTextBtn');
+const clearAllBtn = document.getElementById('clearAllBtn');
 const pasteToPageBtn = document.getElementById('pasteToPageBtn');
 const captureScreenshotBtn = document.getElementById('captureScreenshotBtn');
+const captureSelectScreenshotBtn = document.getElementById('captureSelectScreenshotBtn');
 const hashtagModal = document.getElementById('hashtagModal');
 const closeHashtagModal = document.getElementById('closeHashtagModal');
 const newHashtagInput = document.getElementById('newHashtagInput');
@@ -119,6 +120,11 @@ function setupEventListeners() {
     await captureScreenshot();
   });
 
+  // 選択してスクリーンショット取得
+  captureSelectScreenshotBtn.addEventListener('click', async () => {
+    await captureSelectScreenshot();
+  });
+
   // ハッシュタグ管理
   manageHashtagsBtn.addEventListener('click', () => {
     hashtagModal.classList.add('active');
@@ -145,13 +151,13 @@ function setupEventListeners() {
     }
   });
 
-  // コピー機能
-  copyTextBtn.addEventListener('click', async () => {
-    await copyText();
-  });
-
   clearTextBtn.addEventListener('click', async () => {
     await clearText();
+  });
+
+  // Allクリア機能
+  clearAllBtn.addEventListener('click', async () => {
+    await clearAll();
   });
 
   // ページに貼り付ける機能
@@ -249,6 +255,132 @@ async function captureScreenshot() {
   } catch (error) {
     console.error('スクリーンショット取得に失敗しました:', error);
     showNotification('スクリーンショットの取得に失敗しました');
+  }
+}
+
+// 選択してスクリーンショット取得
+async function captureSelectScreenshot() {
+  try {
+    showNotification('範囲を選択してください...');
+    
+    // まず、content scriptに選択範囲を指定してもらう
+    chrome.runtime.sendMessage({ action: 'startSelectionScreenshot' }, async (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('[SidePanel] 選択範囲スクリーンショットエラー:', chrome.runtime.lastError);
+        showNotification('選択範囲の指定に失敗しました: ' + chrome.runtime.lastError.message);
+        return;
+      }
+      
+      if (response && response.success === false) {
+        if (response.error === 'キャンセルされました') {
+          showNotification('キャンセルされました');
+          return;
+        }
+        console.error('[SidePanel] 選択範囲スクリーンショット失敗:', response);
+        showNotification('選択範囲の指定に失敗しました: ' + (response.error || '不明なエラー'));
+        return;
+      }
+      
+      if (response && response.success && response.selection) {
+        // 選択範囲が取得できたので、スクリーンショットを取得して切り抜く
+        const selection = response.selection;
+        showNotification('スクリーンショットを取得中...');
+        
+        chrome.runtime.sendMessage({ 
+          action: 'captureSelectScreenshot',
+          selection: selection
+        }, async (screenshotResponse) => {
+          if (chrome.runtime.lastError) {
+            console.error('[SidePanel] スクリーンショット取得エラー:', chrome.runtime.lastError);
+            showNotification('スクリーンショットの取得に失敗しました: ' + chrome.runtime.lastError.message);
+            return;
+          }
+          
+          if (screenshotResponse && screenshotResponse.success === false) {
+            console.error('[SidePanel] スクリーンショット取得失敗:', screenshotResponse);
+            showNotification('スクリーンショットの取得に失敗しました: ' + (screenshotResponse.error || '不明なエラー'));
+            return;
+          }
+          
+          if (screenshotResponse && screenshotResponse.success && screenshotResponse.dataUrl) {
+            // 選択範囲を切り抜く
+            const img = new Image();
+            img.onload = () => {
+              // デバッグ情報を出力
+              console.log('[Chrome to X] スクリーンショット情報:', {
+                screenshotSize: {
+                  width: img.width,
+                  height: img.height
+                },
+                selection: selection,
+                devicePixelRatio: selection.devicePixelRatio || window.devicePixelRatio || 1
+              });
+              
+              // スクリーンショット画像のサイズと選択範囲の座標を比較
+              // デバイスピクセル比が考慮されている場合、座標は既に調整済み
+              const devicePixelRatio = selection.devicePixelRatio || window.devicePixelRatio || 1;
+              
+              // 実際の切り抜き座標を計算
+              // スクリーンショット画像はデバイスピクセル比を考慮したサイズになっている
+              const cropX = selection.x;
+              const cropY = selection.y;
+              const cropWidth = selection.width;
+              const cropHeight = selection.height;
+              
+              console.log('[Chrome to X] 切り抜き座標:', {
+                cropX: cropX,
+                cropY: cropY,
+                cropWidth: cropWidth,
+                cropHeight: cropHeight,
+                screenshotWidth: img.width,
+                screenshotHeight: img.height,
+                isWithinBounds: cropX >= 0 && cropY >= 0 && 
+                               (cropX + cropWidth) <= img.width && 
+                               (cropY + cropHeight) <= img.height
+              });
+              
+              // Canvasを作成して選択範囲を切り抜く
+              const canvas = document.createElement('canvas');
+              canvas.width = cropWidth;
+              canvas.height = cropHeight;
+              const ctx = canvas.getContext('2d');
+              
+              // スクリーンショット画像から選択範囲を描画
+              ctx.drawImage(
+                img,
+                cropX, cropY, cropWidth, cropHeight,
+                0, 0, cropWidth, cropHeight
+              );
+              
+              // Base64データURLに変換
+              const croppedDataUrl = canvas.toDataURL('image/png');
+              
+              // Base64データURLを画像として追加
+              const imageData = {
+                id: Date.now() + Math.random(),
+                base64: croppedDataUrl,
+                name: `スクリーンショット_選択_${new Date().toISOString().replace(/[:.]/g, '-')}.png`
+              };
+              
+              // Xの画像制限（4枚まで）
+              if (currentImages.length >= 4) {
+                showNotification('画像は最大4枚まで追加できます');
+                return;
+              }
+              
+              currentImages.push(imageData);
+              saveData();
+              renderImages();
+              showNotification('選択範囲をスクリーンショットとして保存しました');
+            };
+            img.src = screenshotResponse.dataUrl;
+          }
+        });
+      }
+    });
+  } catch (error) {
+    console.error('選択範囲スクリーンショット取得に失敗しました:', error);
+    showNotification('選択範囲スクリーンショットの取得に失敗しました');
   }
 }
 
@@ -373,17 +505,6 @@ function renderHashtagManageList() {
   });
 }
 
-// テキストをコピー
-async function copyText() {
-  try {
-    await navigator.clipboard.writeText(textEditor.value);
-    showNotification('テキストをコピーしました');
-  } catch (error) {
-    console.error('コピーに失敗しました:', error);
-    alert('コピーに失敗しました。');
-  }
-}
-
 // ページに貼り付ける
 async function pasteToPage() {
   try {
@@ -430,6 +551,18 @@ async function clearText() {
   await saveData();
   showNotification('テキストをクリアしました');
   textEditor.focus();
+}
+
+// Allクリア（テキストと画像の両方をクリア）
+async function clearAll() {
+  if (confirm('テキストと画像をすべてクリアしますか？')) {
+    textEditor.value = '';
+    currentImages = [];
+    updateCharCount();
+    await saveData();
+    renderImages();
+    showNotification('すべてクリアしました');
+  }
 }
 
 // 通知を表示

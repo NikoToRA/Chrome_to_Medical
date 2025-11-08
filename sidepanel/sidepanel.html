@@ -20,6 +20,9 @@
           <h2>テキスト編集</h2>
           <div class="char-count" id="charCount">0文字</div>
         </div>
+        <div class="text-editor-top-controls">
+          <button id="clearAllBtn" class="btn btn-small btn-danger">🗑️ Allクリア</button>
+        </div>
         <textarea 
           id="textEditor" 
           class="text-editor" 
@@ -31,6 +34,11 @@
         </div>
       </section>
 
+      <!-- ページに貼り付けるボタン -->
+      <section class="action-section">
+        <button id="pasteToPageBtn" class="btn btn-primary btn-large">📋 ページに貼り付ける</button>
+      </section>
+
       <!-- 画像追加エリア -->
       <section class="image-section">
         <div class="section-header">
@@ -38,8 +46,9 @@
           <span class="image-count" id="imageCount">0枚</span>
         </div>
         <div class="image-controls">
+          <button id="captureScreenshotBtn" class="btn btn-primary">📷 画面をSS</button>
+          <button id="captureSelectScreenshotBtn" class="btn btn-primary">✂️ 選択SS</button>
           <button id="addImageBtn" class="btn btn-primary">画像を追加</button>
-          <button id="captureScreenshotBtn" class="btn btn-secondary">📷 スクリーンショット</button>
           <input type="file" id="imageInput" accept="image/*" multiple style="display: none;">
         </div>
         <div id="imagePreview" class="image-preview"></div>
@@ -52,12 +61,6 @@
           <button id="manageHashtagsBtn" class="btn btn-small">管理</button>
         </div>
         <div id="hashtagList" class="hashtag-list"></div>
-      </section>
-
-      <!-- アクションボタン -->
-      <section class="action-section">
-        <button id="pasteToPageBtn" class="btn btn-primary btn-large">📋 ページに貼り付ける</button>
-        <button id="copyTextBtn" class="btn btn-secondary btn-large">テキストをコピー</button>
       </section>
     </main>
   </div>

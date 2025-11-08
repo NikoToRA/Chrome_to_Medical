@@ -110,4 +110,111 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
+  
+  if (request.action === 'startSelectionScreenshot') {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      if (tabs.length === 0) {
+        console.error('[Background] アクティブなタブが見つかりません');
+        sendResponse({ success: false, error: 'アクティブなタブが見つかりません' });
+        return;
+      }
+      
+      const tab = tabs[0];
+      console.log('[Background] 選択範囲スクリーンショット開始:', tab.id);
+      
+      try {
+        // content scriptが読み込まれているか確認し、なければ注入
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            return typeof window.startSelectionScreenshot === 'function';
+          }
+        });
+        
+        const isContentScriptLoaded = results && results[0] && results[0].result;
+        
+        if (!isContentScriptLoaded) {
+          // content scriptを注入
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['content/content.js']
+          });
+          // 注入後に少し待つ
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        // content scriptに選択範囲を指定してもらう
+        const selectionResults = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            return new Promise((resolve, reject) => {
+              if (typeof window.startSelectionScreenshot === 'function') {
+                window.startSelectionScreenshot().then(resolve).catch(reject);
+              } else {
+                // メッセージ経由で呼び出す
+                chrome.runtime.sendMessage({ action: 'startSelectionScreenshot' }, (response) => {
+                  if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                  } else if (response && response.success) {
+                    resolve(response.selection);
+                  } else {
+                    reject(new Error(response?.error || '選択範囲の取得に失敗しました'));
+                  }
+                });
+              }
+            });
+          }
+        });
+        
+        const selection = selectionResults && selectionResults[0] && selectionResults[0].result;
+        
+        if (selection) {
+          console.log('[Background] 選択範囲を取得:', selection);
+          sendResponse({ success: true, selection: selection });
+        } else {
+          sendResponse({ success: false, error: '選択範囲を取得できませんでした' });
+        }
+      } catch (error) {
+        console.error('[Background] 選択範囲スクリーンショットエラー:', error);
+        sendResponse({ 
+          success: false, 
+          error: error.message || '選択範囲の取得に失敗しました'
+        });
+      }
+    });
+    return true; // 非同期レスポンス用
+  }
+  
+  if (request.action === 'captureSelectScreenshot') {
+    chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
+      if (tabs.length === 0) {
+        console.error('[Background] アクティブなタブが見つかりません');
+        sendResponse({ success: false, error: 'アクティブなタブが見つかりません' });
+        return;
+      }
+      
+      const tab = tabs[0];
+      const selection = request.selection;
+      console.log('[Background] 選択範囲スクリーンショット取得開始:', tab.id, selection);
+      
+      try {
+        // 現在のタブのスクリーンショットを取得
+        const dataUrl = await chrome.tabs.captureVisibleTab(null, {
+          format: 'png'
+        });
+        
+        // 選択範囲を切り抜く（background scriptではできないので、sidepanelで処理）
+        // ここではスクリーンショットと選択範囲の情報を返す
+        console.log('[Background] スクリーンショット取得成功');
+        sendResponse({ success: true, dataUrl: dataUrl, selection: selection });
+      } catch (error) {
+        console.error('[Background] スクリーンショット取得エラー:', error);
+        sendResponse({ 
+          success: false, 
+          error: error.message || 'スクリーンショットの取得に失敗しました'
+        });
+      }
+    });
+    return true; // 非同期レスポンス用
+  }
 });

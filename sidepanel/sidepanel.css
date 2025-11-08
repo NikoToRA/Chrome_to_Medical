@@ -92,6 +92,23 @@ body {
   justify-content: flex-end;
 }
 
+.text-editor-top-controls {
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: #fff;
+  border: 1px solid #dc3545;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+  border-color: #bd2130;
+}
+
 /* 画像エリア */
 .image-section {
   margin-bottom: 24px;
@@ -104,6 +121,9 @@ body {
 
 .image-controls {
   margin-bottom: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .image-preview {
