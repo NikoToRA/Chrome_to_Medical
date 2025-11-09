@@ -1198,8 +1198,14 @@ const chatState = {
 };
 
 let chatSessionsCache = [];
+let isPersistingChatSession = false;
 
 async function loadChatHistory() {
+  // persistChatSession実行中は再読み込みをスキップ
+  if (isPersistingChatSession) {
+    return;
+  }
+
   try {
     chatSessionsCache = await StorageManager.getChatSessions();
     const activeSession = selectSessionForAgent(chatSessionsCache, aiState.selectedAgentId);
@@ -1323,34 +1329,40 @@ async function persistChatSession() {
     return;
   }
 
-  const persistedMessages = chatState.messages
-    .filter((message) => message.status !== 'pending')
-    .map((message) => ({
-      id: message.id,
-      role: message.role,
-      content: message.content,
-      createdAt: message.createdAt
-    }));
+  isPersistingChatSession = true;
 
-  const sessionPayload = {
-    id: chatState.sessionId,
-    agentId: chatState.agentId,
-    agentName: chatState.agentName,
-    createdAt: chatState.createdAt || new Date().toISOString(),
-    updatedAt: chatState.updatedAt || new Date().toISOString(),
-    messages: persistedMessages
-  };
+  try {
+    const persistedMessages = chatState.messages
+      .filter((message) => message.status !== 'pending')
+      .map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        createdAt: message.createdAt
+      }));
 
-  const nextSessions = Array.isArray(chatSessionsCache) ? [...chatSessionsCache] : [];
-  const sessionIndex = nextSessions.findIndex((session) => session.id === sessionPayload.id);
-  if (sessionIndex >= 0) {
-    nextSessions[sessionIndex] = sessionPayload;
-  } else {
-    nextSessions.push(sessionPayload);
+    const sessionPayload = {
+      id: chatState.sessionId,
+      agentId: chatState.agentId,
+      agentName: chatState.agentName,
+      createdAt: chatState.createdAt || new Date().toISOString(),
+      updatedAt: chatState.updatedAt || new Date().toISOString(),
+      messages: persistedMessages
+    };
+
+    const nextSessions = Array.isArray(chatSessionsCache) ? [...chatSessionsCache] : [];
+    const sessionIndex = nextSessions.findIndex((session) => session.id === sessionPayload.id);
+    if (sessionIndex >= 0) {
+      nextSessions[sessionIndex] = sessionPayload;
+    } else {
+      nextSessions.push(sessionPayload);
+    }
+
+    await StorageManager.saveChatSessions(nextSessions);
+    chatSessionsCache = await StorageManager.getChatSessions();
+  } finally {
+    isPersistingChatSession = false;
   }
-
-  await StorageManager.saveChatSessions(nextSessions);
-  chatSessionsCache = await StorageManager.getChatSessions();
 }
 
 function buildConversationPayload() {
@@ -1381,8 +1393,6 @@ async function sendLatestAssistantMessageToEditor() {
 
   // 自動的にテキスト編集タブに切り替え
   switchToTextTab();
-
-  await clearCurrentChatSession();
 }
 
 async function clearCurrentChatSession() {
