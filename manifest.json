@@ -25,7 +25,12 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/content.js"],
+      "js": [
+        "content/platforms/default.js",
+        "content/platforms/x.js",
+        "content/platforms/facebook.js",
+        "content/content.js"
+      ],
       "run_at": "document_idle"
     }
   ],

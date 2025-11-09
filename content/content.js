@@ -194,6 +194,117 @@ function insertTextToDraftEditor(element, text) {
 }
 
 /**
+ * Facebook用のテキスト挿入（フォールバック用）
+ */
+async function insertTextForFacebook(element, text) {
+  try {
+    // HTMLエスケープ
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+    
+    // 改行で分割して<div>要素に変換
+    const lines = escaped.split('\n');
+    const htmlParts = lines.map((line, index) => {
+      if (index === 0 && line === '' && lines.length > 1) {
+        return '<div><br></div>';
+      } else if (line === '' && index < lines.length - 1) {
+        return '<div><br></div>';
+      } else if (line === '' && index === lines.length - 1) {
+        return '';
+      } else {
+        return `<div>${line}</div>`;
+      }
+    });
+    const htmlText = htmlParts.join('');
+    
+    const selection = window.getSelection();
+    let range;
+    if (selection.rangeCount > 0) {
+      range = selection.getRangeAt(0);
+    } else {
+      range = document.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false);
+    }
+    
+    if (selection.rangeCount > 0 && !selection.isCollapsed) {
+      range.deleteContents();
+    }
+    
+    // execCommand('insertHTML')を試す
+    if (typeof document.execCommand === 'function') {
+      try {
+        selection.removeAllRanges();
+        selection.addRange(range);
+        const executed = document.execCommand('insertHTML', false, htmlText);
+        if (executed) {
+          const newRange = document.createRange();
+          newRange.selectNodeContents(element);
+          newRange.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(newRange);
+          
+          element.dispatchEvent(new InputEvent('input', { 
+            bubbles: true, 
+            cancelable: true,
+            inputType: 'insertFromPaste',
+            data: text
+          }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+          
+          return true;
+        }
+      } catch (error) {
+        console.warn('[Chrome to X] execCommand(insertHTML)に失敗:', error);
+      }
+    }
+    
+    // フォールバック: フラグメントを使用
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlText;
+    const fragment = document.createDocumentFragment();
+    while (tempDiv.firstChild) {
+      fragment.appendChild(tempDiv.firstChild);
+    }
+    
+    if (fragment.childNodes.length === 0) {
+      return false;
+    }
+    
+    range.insertNode(fragment);
+    
+    const lastNode = fragment.lastChild;
+    if (lastNode) {
+      if (lastNode.nodeType === Node.ELEMENT_NODE && lastNode.tagName === 'DIV') {
+        range.setStart(lastNode, lastNode.childNodes.length);
+      } else {
+        range.setStartAfter(lastNode);
+      }
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    
+    element.dispatchEvent(new InputEvent('input', { 
+      bubbles: true, 
+      cancelable: true,
+      inputType: 'insertFromPaste',
+      data: text
+    }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+    
+    return true;
+  } catch (error) {
+    console.error('[Chrome to X] Facebook用の挿入に失敗:', error);
+    return false;
+  }
+}
+
+/**
  * contenteditable要素に直接テキストを挿入（確実な方法）
  * Draft.jsエディタ向けには insertTextToDraftEditor から適切なオプションを渡して利用する
  */
@@ -347,36 +458,79 @@ async function pasteContent(text, images) {
     
     // テキストを貼り付け
     if (text) {
-      let success = false;
+      // プラットフォームを検出
+      const platform = detectPlatform();
       
-      if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
-        // 通常のテキストエリアやinput要素
-        const start = element.selectionStart || 0;
-        const end = element.selectionEnd || 0;
-        const value = element.value;
-        
-        element.value = value.substring(0, start) + text + value.substring(end);
-        
-        // カーソル位置を更新
-        const newPosition = start + text.length;
-        element.setSelectionRange(newPosition, newPosition);
-        
-        // イベントを発火
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-        
-        console.log('[Chrome to X] テキストエリア/inputに貼り付け完了');
-        success = true;
-      } else if (element.isContentEditable || element.getAttribute('contenteditable') === 'true') {
-        // contenteditable要素の場合（X、Gmailなど）
-        // XのDraft.jsエディタの場合は非同期処理
-        const isDraftEditor = element.classList.contains('public-DraftEditor-content') || 
-                             element.closest('[data-testid="tweetTextarea_0"]');
-        
-        if (isDraftEditor) {
-          success = await insertTextToDraftEditor(element, text);
-        } else {
-          success = insertTextDirectly(element, text);
+      console.log('[Chrome to X] プラットフォーム検出結果:', platform);
+      console.log('[Chrome to X] window.PlatformHandlers:', window.PlatformHandlers);
+      
+      // プラットフォームハンドラーを取得
+      let handler = null;
+      if (window.PlatformHandlers) {
+        // Xの場合
+        if (platform === 'x' && window.PlatformHandlers.x) {
+          handler = window.PlatformHandlers.x;
+          console.log('[Chrome to X] Xハンドラーを選択');
+        }
+        // Facebookの場合
+        else if (platform === 'facebook' && window.PlatformHandlers.facebook) {
+          handler = window.PlatformHandlers.facebook;
+          console.log('[Chrome to X] Facebookハンドラーを選択');
+        }
+        // デフォルトハンドラー
+        else if (window.PlatformHandlers.default) {
+          handler = window.PlatformHandlers.default;
+          console.log('[Chrome to X] デフォルトハンドラーを選択');
+        }
+      } else {
+        console.warn('[Chrome to X] window.PlatformHandlersが存在しません');
+      }
+      
+      // ハンドラーが利用可能な場合はそれを使用、そうでなければフォールバック
+      let success = false;
+      if (handler && handler.insertText) {
+        console.log('[Chrome to X] プラットフォームハンドラーを使用:', platform, handler);
+        success = await handler.insertText(element, text, {
+          inputType: 'insertFromPaste',
+          dispatchChange: true
+        });
+      } else {
+        // フォールバック: 既存のロジック
+        console.log('[Chrome to X] フォールバックロジックを使用', {
+          platform,
+          hasPlatformHandlers: !!window.PlatformHandlers,
+          hasFacebookHandler: !!(window.PlatformHandlers && window.PlatformHandlers.facebook),
+          handler: handler
+        });
+        if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
+          const start = element.selectionStart || 0;
+          const end = element.selectionEnd || 0;
+          const value = element.value;
+          
+          element.value = value.substring(0, start) + text + value.substring(end);
+          
+          const newPosition = start + text.length;
+          element.setSelectionRange(newPosition, newPosition);
+          
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+          
+          success = true;
+        } else if (element.isContentEditable || element.getAttribute('contenteditable') === 'true') {
+          const isDraftEditor = element.classList.contains('public-DraftEditor-content') || 
+                               element.closest('[data-testid="tweetTextarea_0"]');
+          
+          if (isDraftEditor) {
+            success = await insertTextToDraftEditor(element, text);
+          } else {
+            // Facebookの場合は改行を<div>要素に変換
+            if (platform === 'facebook' && text.includes('\n')) {
+              console.log('[Chrome to X] フォールバック: Facebookの改行処理を実行');
+              success = await insertTextForFacebook(element, text);
+            } else {
+              success = insertTextDirectly(element, text);
+            }
+          }
         }
       }
       
