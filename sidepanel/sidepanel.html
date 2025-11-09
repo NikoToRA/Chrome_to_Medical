@@ -36,28 +36,33 @@
         <div class="text-editor-top-controls">
           <button id="clearAllBtn" class="btn btn-small btn-danger">🗑️ Allクリア</button>
         </div>
-        <textarea 
-          id="textEditor" 
-          class="text-editor" 
+        <textarea
+          id="textEditor"
+          class="text-editor"
           placeholder="テキストを入力してください..."
           rows="8"
         ></textarea>
         <div class="text-editor-controls">
           <button id="clearTextBtn" class="btn btn-small btn-ghost">クリア</button>
+          <div class="text-retention-toggle">
+            <label for="retainTextToggle" class="toggle-label">
+              <span class="toggle-text">テキスト保持</span>
+              <div class="toggle-switch">
+                <input type="checkbox" id="retainTextToggle" class="toggle-input">
+                <span class="toggle-slider"></span>
+              </div>
+            </label>
+          </div>
         </div>
       </section>
 
-      <!-- 設定エリア -->
-      <section class="settings-section">
-        <div class="setting-item">
-          <label for="retainTextToggle" class="setting-label">
-            <span class="setting-text">貼り付け後にテキストを保持する</span>
-            <div class="toggle-switch">
-              <input type="checkbox" id="retainTextToggle" class="toggle-input">
-              <span class="toggle-slider"></span>
-            </div>
-          </label>
+      <!-- ハッシュタグ管理エリア -->
+      <section class="hashtag-section">
+        <div class="section-header">
+          <h2>ハッシュタグ</h2>
+          <button id="manageHashtagsBtn" class="btn btn-small">管理</button>
         </div>
+        <div id="hashtagList" class="hashtag-list"></div>
       </section>
 
       <!-- ページに貼り付けるボタン -->
