@@ -329,7 +329,10 @@ function insertTextDirectly(element, text, options = {}) {
         if (dispatchChange) {
           element.dispatchEvent(new Event('change', { bubbles: true }));
         }
-        return true;
+        const afterText = normalizeContentText(element);
+        const wasInserted = afterText.includes(text) || afterText.length >= beforeText.length + text.length;
+        console.log('[Chrome to X] 直接挿入完了 (execCommand):', { beforeText, afterText, wasInserted });
+        return wasInserted;
       }
     }
     
@@ -465,25 +468,43 @@ async function pasteContent(text, images) {
       console.log('[Chrome to X] window.PlatformHandlers:', window.PlatformHandlers);
       
       // プラットフォームハンドラーを取得
+      // プラットフォームハンドラーが読み込まれていない場合は、少し待ってから再試行
       let handler = null;
-      if (window.PlatformHandlers) {
-        // Xの場合
-        if (platform === 'x' && window.PlatformHandlers.x) {
-          handler = window.PlatformHandlers.x;
-          console.log('[Chrome to X] Xハンドラーを選択');
+      let retryCount = 0;
+      const maxRetries = 5;
+      
+      while (!handler && retryCount < maxRetries) {
+        if (window.PlatformHandlers) {
+          // Xの場合
+          if (platform === 'x' && window.PlatformHandlers.x) {
+            handler = window.PlatformHandlers.x;
+            console.log('[Chrome to X] Xハンドラーを選択');
+            break;
+          }
+          // Facebookの場合
+          else if (platform === 'facebook' && window.PlatformHandlers.facebook) {
+            handler = window.PlatformHandlers.facebook;
+            console.log('[Chrome to X] Facebookハンドラーを選択');
+            break;
+          }
+          // デフォルトハンドラー
+          else if (window.PlatformHandlers.default) {
+            handler = window.PlatformHandlers.default;
+            console.log('[Chrome to X] デフォルトハンドラーを選択');
+            break;
+          }
         }
-        // Facebookの場合
-        else if (platform === 'facebook' && window.PlatformHandlers.facebook) {
-          handler = window.PlatformHandlers.facebook;
-          console.log('[Chrome to X] Facebookハンドラーを選択');
+        
+        if (!handler && retryCount < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          retryCount++;
+        } else {
+          break;
         }
-        // デフォルトハンドラー
-        else if (window.PlatformHandlers.default) {
-          handler = window.PlatformHandlers.default;
-          console.log('[Chrome to X] デフォルトハンドラーを選択');
-        }
-      } else {
-        console.warn('[Chrome to X] window.PlatformHandlersが存在しません');
+      }
+      
+      if (!handler && !window.PlatformHandlers) {
+        console.warn('[Chrome to X] window.PlatformHandlersが存在しません（再試行後も失敗）');
       }
       
       // ハンドラーが利用可能な場合はそれを使用、そうでなければフォールバック
@@ -656,11 +677,47 @@ function showNotification(message) {
   }, 2000);
 }
 
-function normalizeContentText(element) {
+/**
+ * Draft.jsエディタのテキストを取得（改行を保持）
+ */
+function getDraftEditorText(element) {
   if (!element) return '';
+  
+  // Draft.jsエディタの場合、改行を保持する必要がある
+  const isDraftEditor = element.classList.contains('public-DraftEditor-content') || 
+                       element.closest('[data-testid="tweetTextarea_0"]');
+  
+  if (isDraftEditor) {
+    // Draft.jsエディタでは、<div>要素が改行を表す
+    // 直接の子要素の<div>を取得し、それぞれのテキストを改行で結合する
+    const childDivs = Array.from(element.children).filter(child => child.tagName === 'DIV');
+    if (childDivs.length > 0) {
+      // Draft.jsのブロック構造を使用
+      let text = '';
+      childDivs.forEach((div, index) => {
+        if (index > 0) {
+          text += '\n';
+        }
+        // div内のテキストを取得（<br>タグも改行として扱う）
+        const divText = div.innerText || div.textContent || '';
+        text += divText;
+      });
+      return text.replace(/\u200B/g, ''); // zero-width spaceを除去
+    }
+    
+    // フォールバック: innerTextを使用（ブラウザが改行を処理）
+    const text = element.innerText || element.textContent || '';
+    return text.replace(/\u200B/g, ''); // zero-width spaceを除去
+  }
+  
+  // 通常の要素の場合
   return (element.textContent || element.innerText || '')
     .replace(/\u200B/g, '')  // zero-width space
     .replace(/\n$/, '');     // trailing newline from <br>
+}
+
+function normalizeContentText(element) {
+  return getDraftEditorText(element);
 }
 
 /**
@@ -1276,6 +1333,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // 初期化
 function initializeContentScript() {
   setupTextInputDetection();
+  
+  // プラットフォームハンドラーの読み込みを確認
+  if (typeof window.PlatformHandlers === 'undefined') {
+    console.warn('[Chrome to X] プラットフォームハンドラーが読み込まれていません。再試行します...');
+    // 少し待ってから再確認
+    setTimeout(() => {
+      if (typeof window.PlatformHandlers === 'undefined') {
+        console.error('[Chrome to X] プラットフォームハンドラーが読み込まれていません');
+      } else {
+        console.log('[Chrome to X] プラットフォームハンドラーが読み込まれました:', window.PlatformHandlers);
+      }
+    }, 100);
+  }
   
   // document.bodyが存在するまで待機してからドラッグ&ドロップ機能を設定
   if (document.body) {

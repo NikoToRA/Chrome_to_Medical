@@ -46,13 +46,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const isContentScriptLoaded = results && results[0] && results[0].result;
         
         if (!isContentScriptLoaded) {
-          // content scriptを注入
+          // プラットフォームハンドラーとcontent scriptを注入（manifest.jsonと同じ順序）
           await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['content/content.js']
+            files: [
+              'content/platforms/default.js',
+              'content/platforms/x.js',
+              'content/platforms/facebook.js',
+              'content/content.js'
+            ]
           });
-          // 注入後に少し待つ
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // 注入後に少し待つ（プラットフォームハンドラーの初期化を待つ）
+          await new Promise(resolve => setTimeout(resolve, 200));
         }
         
         // pasteContentを直接呼び出す
@@ -134,12 +139,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         const isContentScriptLoaded = results && results[0] && results[0].result;
         
         if (!isContentScriptLoaded) {
-          // content scriptを注入
+          // プラットフォームハンドラーとcontent scriptを注入（manifest.jsonと同じ順序）
           await chrome.scripting.executeScript({
             target: { tabId: tab.id },
-            files: ['content/content.js']
+            files: [
+              'content/platforms/default.js',
+              'content/platforms/x.js',
+              'content/platforms/facebook.js',
+              'content/content.js'
+            ]
           });
-          // 注入後に少し待つ
+          // 注入後に少し待つ（プラットフォームハンドラーの初期化を待つ）
           await new Promise(resolve => setTimeout(resolve, 200));
         }
         

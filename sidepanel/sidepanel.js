@@ -737,9 +737,20 @@ async function deleteHashtag(hashtag) {
 
 // ハッシュタグの挿入
 function insertHashtag(hashtag) {
+  const currentText = textEditor.value;
+  
+  // 既に同じハッシュタグがテキストに含まれているかチェック
+  // ハッシュタグは通常、単語の境界で区切られているため、完全一致でチェック
+  const hashtagRegex = new RegExp(`\\b${hashtag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+  if (hashtagRegex.test(currentText)) {
+    console.log('[SidePanel] ハッシュタグは既にテキストに含まれています:', hashtag);
+    showNotification(`ハッシュタグ「${hashtag}」は既にテキストに含まれています`);
+    return;
+  }
+  
   const cursorPos = textEditor.selectionStart;
-  const textBefore = textEditor.value.substring(0, cursorPos);
-  const textAfter = textEditor.value.substring(cursorPos);
+  const textBefore = currentText.substring(0, cursorPos);
+  const textAfter = currentText.substring(cursorPos);
   const space = textBefore && !textBefore.endsWith(' ') ? ' ' : '';
   
   textEditor.value = textBefore + space + hashtag + ' ' + textAfter;

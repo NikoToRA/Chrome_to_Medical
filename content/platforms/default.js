@@ -26,6 +26,8 @@
         dispatchChange = true
       } = options;
 
+      const beforeText = normalizeContentText(element);
+
       if (typeof document.execCommand === 'function') {
         const executed = document.execCommand('insertText', false, text);
         if (executed) {
