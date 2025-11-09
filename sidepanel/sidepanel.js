@@ -31,6 +31,7 @@ const aiChatInput = document.getElementById('aiChatInput');
 const aiChatSendBtn = document.getElementById('aiChatSendBtn');
 const aiChatForm = document.getElementById('aiChatForm');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
+const retainTextToggle = document.getElementById('retainTextToggle');
 // 状態管理
 let currentImages = [];
 let hashtags = [];
@@ -46,6 +47,9 @@ const aiState = {
 };
 let isAgentSelectionUpdateSilent = false;
 
+// テキスト保持設定
+let retainTextAfterPaste = false;
+
 // 初期化
 async function init() {
   await Promise.all([loadEditorState(), loadAiState()]);
@@ -55,6 +59,7 @@ async function init() {
   setupPlatformDetection();
   setupDragAndDrop();
   setupStorageObservers();
+  setupTextRetentionToggle();
   updateCharCount();
   renderHashtags();
   renderImages();
@@ -104,10 +109,30 @@ async function loadEditorState() {
   const text = await StorageManager.getText();
   const images = await StorageManager.getImages();
   const savedHashtags = await StorageManager.getHashtags();
-  
+
   textEditor.value = text;
   currentImages = images || [];
   hashtags = savedHashtags || [];
+}
+
+// テキスト保持トグルの設定
+async function setupTextRetentionToggle() {
+  // ストレージから設定を読み込み
+  retainTextAfterPaste = await StorageManager.getTextRetentionSetting();
+
+  // トグルの初期状態を設定
+  if (retainTextToggle) {
+    retainTextToggle.checked = retainTextAfterPaste;
+
+    // イベントリスナー設定
+    retainTextToggle.addEventListener('change', async (e) => {
+      retainTextAfterPaste = e.target.checked;
+      await StorageManager.saveTextRetentionSetting(retainTextAfterPaste);
+
+      const status = retainTextAfterPaste ? '保持' : 'クリア';
+      showNotification(`貼り付け後のテキストを${status}する設定に変更しました`);
+    });
+  }
 }
 
 // AI設定の読み込み
@@ -185,6 +210,11 @@ function setupTabNavigation() {
   // 初期タブ設定
   const defaultTab = Array.from(tabButtons).find((btn) => btn.classList.contains('active'))?.getAttribute('data-tab-target') || tabButtons[0].getAttribute('data-tab-target');
   activateTab(defaultTab);
+}
+
+// テキスト編集タブに切り替え
+function switchToTextTab() {
+  activateTab('textTab');
 }
 
 // イベントリスナーの設定
@@ -783,8 +813,12 @@ async function pasteToPage() {
         }
       } else {
         console.log('[SidePanel] 貼り付け成功:', response);
-        await clearAll({ skipConfirm: true, skipNotification: true });
-        showNotification('ページに貼り付けました（テキストと画像をクリアしました）');
+        if (retainTextAfterPaste) {
+          showNotification('ページに貼り付けました（内容を保持しました）');
+        } else {
+          await clearAll({ skipConfirm: true, skipNotification: true });
+          showNotification('ページに貼り付けました（テキストと画像をクリアしました）');
+        }
       }
     });
   } catch (error) {
@@ -1340,6 +1374,9 @@ async function sendLatestAssistantMessageToEditor() {
   await saveData();
   textEditor.focus();
   showNotification('最新のAI応答をテキストに反映しました');
+
+  // 自動的にテキスト編集タブに切り替え
+  switchToTextTab();
 
   await clearCurrentChatSession();
 }

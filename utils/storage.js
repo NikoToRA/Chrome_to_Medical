@@ -10,7 +10,8 @@ class StorageManager {
     AI_AGENTS: 'aiAgents',
     AI_SELECTED_AGENT_ID: 'aiSelectedAgentId',
     AI_CHAT_SESSIONS: 'aiChatSessions',
-    AI_SELECTED_MODEL: 'aiSelectedModel'
+    AI_SELECTED_MODEL: 'aiSelectedModel',
+    TEXT_RETENTION: 'textRetentionAfterPaste'
   };
 
   static STORAGE_SOFT_LIMIT_BYTES = 4 * 1024 * 1024; // 4MB
@@ -302,6 +303,22 @@ class StorageManager {
    */
   static async getSelectedModel(defaultModel = '') {
     return this.get(this.STORAGE_KEYS.AI_SELECTED_MODEL, defaultModel);
+  }
+
+  /**
+   * 貼り付け後のテキスト保持設定を保存
+   * @param {boolean} retainText
+   */
+  static async saveTextRetentionSetting(retainText) {
+    return this.set(this.STORAGE_KEYS.TEXT_RETENTION, Boolean(retainText));
+  }
+
+  /**
+   * 貼り付け後のテキスト保持設定を取得
+   * @returns {Promise<boolean>}
+   */
+  static async getTextRetentionSetting() {
+    return this.get(this.STORAGE_KEYS.TEXT_RETENTION, false);
   }
 }
 
