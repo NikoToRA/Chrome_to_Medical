@@ -6,9 +6,11 @@ const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const agentsList = document.getElementById('agentsList');
 const toastContainer = document.getElementById('toastContainer');
 const modelSelector = document.getElementById('modelSelector');
+const pasteBehaviorRadios = document.querySelectorAll('input[name="pasteBehavior"]');
 
 const SUPPORTED_MODELS = ['claude-sonnet-4-5', 'claude-haiku-4-5'];
 const DEFAULT_MODEL = SUPPORTED_MODELS[0];
+const PASTE_BEHAVIORS = ['clear', 'retain'];
 
 const state = {
   defaultAgents: (window.AiAgentUtils && window.AiAgentUtils.getDefaultAgents()) || [],
@@ -16,6 +18,7 @@ const state = {
   isSavingApiKey: false,
   isSavingAgents: false,
   selectedModel: DEFAULT_MODEL,
+  pasteBehavior: 'clear',
   isSavingModel: false
 };
 
@@ -24,6 +27,7 @@ document.addEventListener('DOMContentLoaded', initOptions);
 async function initOptions() {
   bindEvents();
   await Promise.all([loadApiKey(), loadAgents(), loadSelectedModel()]);
+  await loadPasteBehavior();
   setupStorageWatchers();
 }
 
@@ -67,6 +71,23 @@ async function loadSelectedModel() {
   }
 }
 
+async function loadPasteBehavior() {
+  try {
+    const storedBehavior = await StorageManager.getPasteBehavior('clear');
+    const resolvedBehavior = PASTE_BEHAVIORS.includes(storedBehavior) ? storedBehavior : 'clear';
+    state.pasteBehavior = resolvedBehavior;
+    pasteBehaviorRadios.forEach((radio) => {
+      radio.checked = radio.value === resolvedBehavior;
+    });
+    if (!PASTE_BEHAVIORS.includes(storedBehavior)) {
+      await StorageManager.savePasteBehavior(resolvedBehavior);
+    }
+  } catch (error) {
+    console.error('[Options] ペースト挙動の読み込みに失敗しました', error);
+    showToast('テキスト送信後の挙動設定を読み込めませんでした', 'warning');
+  }
+}
+
 function bindEvents() {
   if (toggleApiKeyVisibilityBtn) {
     toggleApiKeyVisibilityBtn.addEventListener('click', toggleApiKeyVisibility);
@@ -83,6 +104,10 @@ function bindEvents() {
   if (modelSelector) {
     modelSelector.addEventListener('change', handleModelChange);
   }
+
+  pasteBehaviorRadios.forEach((radio) => {
+    radio.addEventListener('change', handlePasteBehaviorChange);
+  });
 
   if (closeSettingsBtn) {
     closeSettingsBtn.addEventListener('click', () => {
@@ -134,6 +159,19 @@ function setupStorageWatchers() {
       if (!SUPPORTED_MODELS.includes(rawModel)) {
         StorageManager.saveSelectedModel(resolvedModel);
       }
+    }
+
+    if (changes[StorageManager.STORAGE_KEYS.PASTE_BEHAVIOR]) {
+      const rawBehavior = changes[StorageManager.STORAGE_KEYS.PASTE_BEHAVIOR].newValue || 'clear';
+      const resolvedBehavior = PASTE_BEHAVIORS.includes(rawBehavior) ? rawBehavior : 'clear';
+      state.pasteBehavior = resolvedBehavior;
+      pasteBehaviorRadios.forEach((radio) => {
+        radio.checked = radio.value === resolvedBehavior;
+      });
+      if (!PASTE_BEHAVIORS.includes(rawBehavior)) {
+        StorageManager.savePasteBehavior(resolvedBehavior);
+      }
+      showToast('テキスト送信後の挙動を同期しました', 'info');
     }
   });
 }
@@ -206,6 +244,26 @@ async function handleModelChange(event) {
     showToast('モデル設定の保存に失敗しました', 'warning');
   } finally {
     state.isSavingModel = false;
+  }
+}
+
+async function handlePasteBehaviorChange(event) {
+  const { value } = event.target;
+  if (!PASTE_BEHAVIORS.includes(value)) {
+    showToast('選択した設定は利用できません', 'warning');
+    pasteBehaviorRadios.forEach((radio) => {
+      radio.checked = radio.value === state.pasteBehavior;
+    });
+    return;
+  }
+
+  state.pasteBehavior = value;
+  try {
+    await StorageManager.savePasteBehavior(value);
+    showToast('テキスト送信後の挙動を保存しました', 'info');
+  } catch (error) {
+    console.error('[Options] ペースト挙動の保存に失敗しました', error);
+    showToast('テキスト送信後の挙動の保存に失敗しました', 'warning');
   }
 }
 

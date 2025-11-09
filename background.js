@@ -22,7 +22,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
-  
+
   if (request.action === 'pasteToActiveTab') {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (tabs.length === 0) {
@@ -30,10 +30,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: false, error: 'アクティブなタブが見つかりません' });
         return;
       }
-      
+
       const tab = tabs[0];
       console.log('[Background] タブにメッセージを送信:', tab.id, tab.url);
-      
+
       try {
         // まず、content scriptが読み込まれているか確認し、なければ注入
         const results = await chrome.scripting.executeScript({
@@ -42,9 +42,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return typeof window.pasteContent === 'function';
           }
         });
-        
+
         const isContentScriptLoaded = results && results[0] && results[0].result;
-        
+
         if (!isContentScriptLoaded) {
           // content scriptを注入
           await chrome.scripting.executeScript({
@@ -54,7 +54,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           // 注入後に少し待つ
           await new Promise(resolve => setTimeout(resolve, 100));
         }
-        
+
         // pasteContentを直接呼び出す
         const pasteResults = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
@@ -67,12 +67,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           },
           args: [request.text, request.images]
         });
-        
+
         sendResponse({ success: true });
       } catch (error) {
         console.error('[Background] スクリプト実行エラー:', error);
-        sendResponse({ 
-          success: false, 
+        sendResponse({
+          success: false,
           error: error.message,
           details: 'ページへの貼り付けに失敗しました'
         });
@@ -80,7 +80,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
-  
+
   if (request.action === 'captureScreenshot') {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (tabs.length === 0) {

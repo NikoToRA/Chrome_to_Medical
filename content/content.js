@@ -139,53 +139,81 @@ function getActiveTextElement() {
 
 /**
  * XのDraft.jsエディタ専用のテキスト挿入
- * クリップボード操作をシミュレートして、実際のコピーアンドペーストと同じ動作を実現
+ * Draft.jsの安定性を考慮した慎重なアプローチ
  */
-function insertTextToDraftEditor(element, text) {
+function insertTextToDraftEditor(element, text, options = {}) {
+  const { preferSynthetic = false } = options || {};
   return new Promise(async (resolve) => {
     try {
+      console.log('[Chrome to X] Draft.js挿入開始:', {
+        preferSynthetic,
+        textLength: text.length,
+        elementType: element.tagName
+      });
+
       // 貼り付け前のテキスト内容を記録
       const beforeText = normalizeContentText(element);
-      
-      // フォーカスを確実に戻す
+      console.log('[Chrome to X] 挿入前テキスト:', beforeText.substring(0, 50) + '...');
+
+      // フォーカスを確実に戻す（XのUIがフォーカスを奪うことがある）
       await new Promise(resolve => {
         requestAnimationFrame(() => {
-          if (typeof window.focus === 'function') {
-            window.focus();
-          }
           element.focus({ preventScroll: true });
           requestAnimationFrame(() => resolve());
         });
       });
-      
-      // 少し待ってから処理（フォーカスが安定するのを待機）
-      await new Promise(resolve => setTimeout(resolve, 100));
-      // Draft.jsではcontenteditable配下のDOMを直接更新することで挿入できる場合が多い
-      // insertTextDirectlyを利用し、inputTypeをinsertFromPasteとして通知する
-      const directSuccess = insertTextDirectly(element, text, {
-        inputType: 'insertFromPaste'
-      });
 
-      // directSuccessがfalseの場合は、擬似的なPasteイベントを発火してDraft.js側に処理を委ねる
-      const syntheticPasteDispatched = !directSuccess && dispatchSyntheticPaste(element, text);
+      // フォーカスが安定するまで待機
+      await delay(50);
 
-      // 結果を確認（Draft.jsが非同期で処理する可能性を考慮）
-      setTimeout(() => {
-        const afterText = normalizeContentText(element);
-        const wasInserted = afterText.includes(text) || 
-                           afterText.length > beforeText.length ||
-                           (beforeText.length === 0 && afterText.length > 0);
-        
-        console.log('[Chrome to X] 貼り付け結果:', { 
-          beforeText, 
-          afterText, 
-          wasInserted,
-          directSuccess,
-          syntheticPasteDispatched
+      let success = false;
+
+      if (!preferSynthetic) {
+        // 直接DOM操作を優先（Xではこちらの方が安定する傾向）
+        console.log('[Chrome to X] 直接DOM操作を試行');
+        success = insertTextDirectly(element, text, {
+          inputType: 'insertFromPaste',
+          dispatchChange: false  // Xではchangeイベントを控えめに
         });
 
-        resolve(wasInserted || directSuccess || syntheticPasteDispatched);
-      }, 400);
+        if (success) {
+          console.log('[Chrome to X] 直接DOM操作成功');
+        }
+      }
+
+      // 直接操作が失敗した場合、またはpreferSyntheticがtrueの場合は擬似Pasteを試す
+      if (!success && preferSynthetic) {
+        console.log('[Chrome to X] 擬似Pasteイベントを試行');
+        const dispatched = dispatchSyntheticPaste(element, text);
+        if (dispatched) {
+          success = true;
+          console.log('[Chrome to X] 擬似Pasteイベント発火成功');
+        }
+      }
+
+      // Draft.jsが処理する時間を十分に待つ
+      await delay(300);
+
+      // 結果を確認
+      const afterText = normalizeContentText(element);
+      const wasInserted = afterText.length > beforeText.length ||
+                         (beforeText.length === 0 && afterText.length > 0);
+
+      console.log('[Chrome to X] 挿入結果確認:', {
+        beforeLength: beforeText.length,
+        afterLength: afterText.length,
+        wasInserted,
+        success
+      });
+
+      // 挿入が確認できれば成功
+      if (wasInserted) {
+        resolve(true);
+      } else {
+        // 挿入が確認できなくても、メソッドが成功していればtrue
+        resolve(success);
+      }
+
     } catch (error) {
       console.error('[Chrome to X] Draft.jsエディタへの挿入に失敗:', error);
       resolve(false);
@@ -293,6 +321,111 @@ function insertTextDirectly(element, text, options = {}) {
 }
 
 /**
+ * contenteditable要素の内容をクリア
+ * Draft.jsなどでも安全に動作するよう、選択して削除する
+ */
+function clearContentEditable(element) {
+  if (!element) return;
+  try {
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    selection.deleteFromDocument();
+
+    // Draft.jsなどに変更を通知
+    element.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      cancelable: true,
+      inputType: 'deleteContentBackward',
+      data: null
+    }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  } catch (error) {
+    console.error('[Chrome to X] clearContentEditable に失敗:', error);
+  }
+}
+
+/**
+ * X(Twitter) の投稿欄にテキストを貼り付け
+ * Draft.jsの安定性を考慮した慎重なアプローチ
+ */
+async function pasteForTwitter(element, text) {
+  const normalized = (text || '').replace(/\r\n/g, '\n');
+  const trimmed = normalized.replace(/\s+$/, '');
+
+  console.log('[Chrome to X] X貼り付け開始:', { text: trimmed.substring(0, 50) + '...' });
+
+  // フォーカスを確実に当てる
+  element.focus({ preventScroll: true });
+  await delay(50);
+
+  // クリップボードAPIを試す（ユーザーのアクション直後なので成功する可能性が高い）
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(trimmed);
+      console.log('[Chrome to X] クリップボード書き込み成功');
+
+      // 擬似Pasteイベントを発火（クリップボードの内容を使用）
+      const dispatched = dispatchSyntheticPaste(element, trimmed);
+      if (dispatched) {
+        // Draft.jsが処理する時間を待つ
+        await delay(200);
+
+        const afterText = normalizeContentText(element);
+        const hasText = afterText.length > 0;
+
+        console.log('[Chrome to X] 擬似貼り付け結果:', {
+          beforeLength: 0,
+          afterLength: afterText.length,
+          hasText
+        });
+
+        if (hasText) {
+          return true;
+        }
+      }
+    }
+  } catch (clipboardError) {
+    console.warn('[Chrome to X] クリップボードAPI失敗、DOM操作にフォールバック:', clipboardError);
+  }
+
+  // クリップボードAPIが失敗した場合のみDOM操作を試す
+  // Draft.jsの状態を尊重して、最小限の操作に留める
+  console.log('[Chrome to X] DOM操作での貼り付けを試行');
+
+  try {
+    // 既存の内容を記録
+    const beforeText = normalizeContentText(element);
+
+    // Draft.jsに適した方法でテキストを挿入
+    const success = await insertTextToDraftEditor(element, trimmed, {
+      preferSynthetic: false  // 直接DOM操作を優先
+    });
+
+    if (success) {
+      await delay(100);
+      const afterText = normalizeContentText(element);
+      console.log('[Chrome to X] DOM操作結果:', {
+        beforeLength: beforeText.length,
+        afterLength: afterText.length,
+        success
+      });
+      return afterText.length > beforeText.length;
+    }
+  } catch (domError) {
+    console.error('[Chrome to X] DOM操作も失敗:', domError);
+  }
+
+  return false;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
  * テキストと画像を貼り付け
  */
 async function pasteContent(text, images) {
@@ -334,6 +467,8 @@ async function pasteContent(text, images) {
     // 少し待ってから処理（フォーカスが確実に当たるように）
     await new Promise(resolve => setTimeout(resolve, 150));
     
+    const platform = detectPlatform();
+    
     // 再度要素を取得（フォーカス後の状態を確認）
     element = getActiveTextElement() || element;
     if (document.activeElement !== element) {
@@ -350,17 +485,11 @@ async function pasteContent(text, images) {
       let success = false;
       
       if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
-        // 通常のテキストエリアやinput要素
-        const start = element.selectionStart || 0;
-        const end = element.selectionEnd || 0;
-        const value = element.value;
-        
-        element.value = value.substring(0, start) + text + value.substring(end);
-        
-        // カーソル位置を更新
-        const newPosition = start + text.length;
+        // 通常のテキストエリアやinput要素：既存内容を置き換え
+        element.value = text;
+        // カーソル位置を末尾に移動
+        const newPosition = element.value.length;
         element.setSelectionRange(newPosition, newPosition);
-        
         // イベントを発火
         element.dispatchEvent(new Event('input', { bubbles: true }));
         element.dispatchEvent(new Event('change', { bubbles: true }));
@@ -374,8 +503,24 @@ async function pasteContent(text, images) {
                              element.closest('[data-testid="tweetTextarea_0"]');
         
         if (isDraftEditor) {
-          success = await insertTextToDraftEditor(element, text);
+          // XのDraft.jsエディタをより確実に検出
+          const isXEditor = platform === 'x' ||
+                           element.closest('[data-testid="tweetTextarea_0"]') ||
+                           element.closest('[role="textbox"][aria-label*="ツイート"]') ||
+                           element.closest('[role="textbox"][aria-label*="Tweet"]') ||
+                           window.location.hostname.includes('x.com') ||
+                           window.location.hostname.includes('twitter.com');
+
+          if (isXEditor) {
+            console.log('[Chrome to X] XのDraft.jsエディタを検出、専用処理を使用');
+            success = await pasteForTwitter(element, text);
+          } else {
+            console.log('[Chrome to X] 汎用Draft.jsエディタを検出');
+            clearContentEditable(element);
+            success = await insertTextToDraftEditor(element, text);
+          }
         } else {
+          clearContentEditable(element);
           success = insertTextDirectly(element, text);
         }
       }
@@ -390,8 +535,6 @@ async function pasteContent(text, images) {
       console.log('[Chrome to X] 画像の貼り付け開始:', images.length, '枚');
       
       // プラットフォームを検出
-      const platform = detectPlatform();
-      
       let uploadSuccess = false;
       
       if (platform === 'x') {
@@ -511,82 +654,241 @@ function normalizeContentText(element) {
 
 /**
  * Xの画像アップロード機能を使用して画像をアップロード
+ * XのUI構造が頻繁に変更されるため、複数の方法を試す
  */
 async function uploadImagesToX(images) {
   try {
-    // Xの投稿フォーム全体を探す
-    const composer = document.querySelector('[data-testid="tweetTextarea_0"]')?.closest('div[role="textbox"]')?.closest('div')?.closest('div');
-    
-    // ファイル入力要素を探す（ページ全体から）
+    console.log('[Chrome to X] X画像アップロード開始:', images.length, '枚');
+
+    // XのUI構造は頻繁に変更されるため、複数の方法を試す
+
+    // 方法1: 直接クリップボード経由で画像を貼り付け
+    console.log('[Chrome to X] 方法1: クリップボード経由で試行');
+    const clipboardSuccess = await tryClipboardImageUpload(images);
+    if (clipboardSuccess) {
+      console.log('[Chrome to X] クリップボード経由で成功');
+      return true;
+    }
+
+    // 方法2: ファイル入力要素を探して使用
+    console.log('[Chrome to X] 方法2: ファイル入力要素経由で試行');
+    const fileInputSuccess = await tryFileInputImageUpload(images);
+    if (fileInputSuccess) {
+      console.log('[Chrome to X] ファイル入力要素経由で成功');
+      return true;
+    }
+
+    // 方法3: ドラッグ&ドロップをシミュレート
+    console.log('[Chrome to X] 方法3: ドラッグ&ドロップシミュレートで試行');
+    const dragSuccess = await tryDragDropImageUpload(images);
+    if (dragSuccess) {
+      console.log('[Chrome to X] ドラッグ&ドロップシミュレートで成功');
+      return true;
+    }
+
+    console.log('[Chrome to X] すべての方法で失敗しました');
+    return false;
+
+  } catch (error) {
+    console.error('[Chrome to X] Xの画像アップロードに失敗:', error);
+    return false;
+  }
+}
+
+/**
+ * クリップボード経由で画像をアップロード（最も信頼性が高い）
+ */
+async function tryClipboardImageUpload(images) {
+  try {
+    // 1枚ずつ処理
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+
+      // Base64からBlobを作成
+      const base64Data = image.base64;
+      const response = await fetch(base64Data);
+      const blob = await response.blob();
+
+      // クリップボードに画像をコピー
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob })
+      ]);
+
+      // 少し待ってから擬似貼り付け
+      await delay(100);
+
+      // 貼り付けイベントを発火
+      const activeElement = document.activeElement;
+      if (activeElement && (activeElement.isContentEditable || activeElement.getAttribute('contenteditable') === 'true')) {
+        const pasteEvent = new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true,
+          clipboardData: new DataTransfer()
+        });
+
+        // clipboardDataを設定
+        Object.defineProperty(pasteEvent.clipboardData, 'items', {
+          value: [{
+            kind: 'file',
+            type: blob.type,
+            getAsFile: () => new File([blob], `image_${i}.png`, { type: blob.type })
+          }],
+          writable: false
+        });
+
+        Object.defineProperty(pasteEvent.clipboardData, 'files', {
+          value: [new File([blob], `image_${i}.png`, { type: blob.type })],
+          writable: false
+        });
+
+        activeElement.dispatchEvent(pasteEvent);
+        console.log(`[Chrome to X] 画像${i + 1}枚目をクリップボード経由で貼り付け`);
+      }
+
+      // 次の画像の前に待機
+      if (i < images.length - 1) {
+        await delay(500);
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('[Chrome to X] クリップボード画像アップロード失敗:', error);
+    return false;
+  }
+}
+
+/**
+ * ファイル入力要素経由で画像をアップロード
+ */
+async function tryFileInputImageUpload(images) {
+  try {
+    // ファイル入力要素を探す（複数のパターン）
     let fileInput = document.querySelector('input[type="file"][accept*="image"]') ||
-                   document.querySelector('input[type="file"]');
-    
-    // 見つからない場合は、画像ボタンをクリックしてファイル入力を表示
+                   document.querySelector('input[type="file"]') ||
+                   document.querySelector('input[accept*="image"]');
+
+    // 見つからない場合は画像ボタンを探してクリック
     if (!fileInput) {
-      // ツールバー内の画像ボタンを探す
-      const toolbar = document.querySelector('[data-testid="toolBar"]');
-      if (toolbar) {
-        const mediaButton = toolbar.querySelector('[data-testid="attach"]') || 
-                           toolbar.querySelector('button[aria-label*="画像"]') ||
-                           toolbar.querySelector('button[aria-label*="メディア"]') ||
-                           toolbar.querySelector('button[aria-label*="画像を追加"]');
-        
-        if (mediaButton) {
-          console.log('[Chrome to X] 画像ボタンをクリック');
-          mediaButton.click();
-          // ファイル入力が表示されるまで待つ
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // 再度ファイル入力を探す
-          fileInput = document.querySelector('input[type="file"][accept*="image"]') ||
-                     document.querySelector('input[type="file"]');
+      // 新しいXのUI構造に対応したセレクタ
+      const imageSelectors = [
+        '[data-testid="fileInput"]',
+        '[aria-label*="画像"][aria-label*="追加"]',
+        '[aria-label*="写真"][aria-label*="追加"]',
+        '[aria-label*="メディア"][aria-label*="追加"]',
+        'button[aria-label*="画像"]',
+        'button[aria-label*="写真"]',
+        'button[aria-label*="メディア"]',
+        '[data-testid*="attach"]',
+        '[role="button"][aria-label*="画像"]'
+      ];
+
+      for (const selector of imageSelectors) {
+        const button = document.querySelector(selector);
+        if (button) {
+          console.log('[Chrome to X] 画像ボタンをクリック:', selector);
+          button.click();
+          await delay(300);
+
+          // クリック後にファイル入力を探す
+          fileInput = document.querySelector('input[type="file"]') ||
+                     document.querySelector('input[accept*="image"]');
+          if (fileInput) break;
         }
       }
     }
-    
+
     if (!fileInput) {
       console.log('[Chrome to X] ファイル入力要素が見つかりません');
       return false;
     }
-    
+
     console.log('[Chrome to X] ファイル入力要素を発見:', fileInput);
-    
-    // Base64データURLからFileオブジェクトを作成
+
+    // Base64からFileオブジェクトを作成
     const files = [];
     for (const image of images) {
       const base64Data = image.base64;
       const response = await fetch(base64Data);
       const blob = await response.blob();
-      
-      // Fileオブジェクトを作成
+
       const fileName = image.name || `image_${Date.now()}.png`;
       const file = new File([blob], fileName, { type: blob.type });
       files.push(file);
     }
-    
-    // DataTransferオブジェクトを作成してファイルを設定
+
+    // DataTransferでファイルを設定
     const dataTransfer = new DataTransfer();
     files.forEach(file => dataTransfer.items.add(file));
-    
-    // ファイル入力にファイルを設定
     fileInput.files = dataTransfer.files;
-    
-    // changeイベントを発火
-    const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+
+    // イベントを発火
+    const changeEvent = new Event('change', { bubbles: true });
+    const inputEvent = new Event('input', { bubbles: true });
+
     fileInput.dispatchEvent(changeEvent);
-    
-    // inputイベントも発火（Xがリッスンしている可能性がある）
-    const inputEvent = new Event('input', { bubbles: true, cancelable: true });
     fileInput.dispatchEvent(inputEvent);
-    
-    console.log('[Chrome to X] Xの画像アップロード成功:', files.length, '枚');
-    
-    // 画像がアップロードされるまで少し待つ
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
+
+    console.log('[Chrome to X] ファイル入力経由で画像を設定:', files.length, '枚');
+    await delay(500);
+
     return true;
   } catch (error) {
-    console.error('[Chrome to X] Xの画像アップロードに失敗:', error);
+    console.error('[Chrome to X] ファイル入力画像アップロード失敗:', error);
+    return false;
+  }
+}
+
+/**
+ * ドラッグ&ドロップをシミュレートして画像をアップロード
+ */
+async function tryDragDropImageUpload(images) {
+  try {
+    const activeElement = document.activeElement;
+    if (!activeElement) return false;
+
+    // ドラッグ可能な領域を探す
+    const dropZone = activeElement.closest('[data-testid="tweetTextarea_0"]') ||
+                    activeElement.closest('[role="textbox"]') ||
+                    activeElement;
+
+    if (!dropZone) return false;
+
+    console.log('[Chrome to X] ドラッグ&ドロップ領域を発見:', dropZone);
+
+    // 各画像をドラッグ&ドロップ
+    for (const image of images) {
+      const base64Data = image.base64;
+      const response = await fetch(base64Data);
+      const blob = await response.blob();
+
+      const file = new File([blob], image.name || `image_${Date.now()}.png`, { type: blob.type });
+
+      // DataTransferオブジェクトを作成
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      // ドラッグイベントを発火
+      const dragOverEvent = new DragEvent('dragover', {
+        bubbles: true,
+        dataTransfer
+      });
+
+      const dropEvent = new DragEvent('drop', {
+        bubbles: true,
+        dataTransfer
+      });
+
+      dropZone.dispatchEvent(dragOverEvent);
+      dropZone.dispatchEvent(dropEvent);
+
+      console.log('[Chrome to X] ドラッグ&ドロップイベントを発火');
+      await delay(300);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('[Chrome to X] ドラッグ&ドロップ画像アップロード失敗:', error);
     return false;
   }
 }
@@ -1097,7 +1399,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
-  
+
   if (request.action === 'startSelectionScreenshot') {
     console.log('[Chrome to X] 選択範囲スクリーンショット開始');
     startSelectionScreenshot().then((selection) => {
@@ -1245,9 +1547,3 @@ window.pasteContent = pasteContent;
 // 選択範囲スクリーンショット関数も公開
 window.startSelectionScreenshot = startSelectionScreenshot;
 window.cancelSelectionScreenshot = cancelSelectionScreenshot;
-
-// 背景スクリプトからのカスタムイベントを受け取って貼り付けを実行
-window.addEventListener('chrome-to-x-paste-request', (event) => {
-  const detail = event.detail || {};
-  pasteContent(detail.text || '', detail.images || []);
-});

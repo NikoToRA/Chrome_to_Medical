@@ -47,6 +47,15 @@
         </div>
       </section>
 
+      <!-- ハッシュタグ管理エリア -->
+      <section class="hashtag-section">
+        <div class="section-header">
+          <h2>ハッシュタグ</h2>
+          <button id="manageHashtagsBtn" class="btn btn-small">管理</button>
+        </div>
+        <div id="hashtagList" class="hashtag-list"></div>
+      </section>
+
       <!-- ページに貼り付けるボタン -->
       <section class="action-section">
         <button id="pasteToPageBtn" class="btn btn-primary btn-large">📋 ページに貼り付ける</button>
@@ -66,15 +75,6 @@
         </div>
         <div id="imagePreview" class="image-preview drop-zone"></div>
       </section>
-
-      <!-- ハッシュタグ管理エリア -->
-      <section class="hashtag-section">
-        <div class="section-header">
-          <h2>ハッシュタグ</h2>
-          <button id="manageHashtagsBtn" class="btn btn-small">管理</button>
-        </div>
-        <div id="hashtagList" class="hashtag-list"></div>
-      </section>
       </section>
 
       <section class="tab-content" data-tab="aiTab" role="tabpanel" aria-labelledby="aiTab">
@@ -93,6 +93,7 @@
             <div id="aiChatMessages" class="ai-chat-messages" aria-live="polite"></div>
           </div>
           <div class="ai-actions">
+            <button id="clearChatBtn" class="btn btn-small btn-ghost">チャット履歴をクリア</button>
             <button id="sendAiToTextBtn" class="btn btn-primary btn-send-to-text">➡️ テキストに送る</button>
           </div>
           <form class="ai-chat-input" id="aiChatForm">

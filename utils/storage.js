@@ -10,7 +10,8 @@ class StorageManager {
     AI_AGENTS: 'aiAgents',
     AI_SELECTED_AGENT_ID: 'aiSelectedAgentId',
     AI_CHAT_SESSIONS: 'aiChatSessions',
-    AI_SELECTED_MODEL: 'aiSelectedModel'
+    AI_SELECTED_MODEL: 'aiSelectedModel',
+    PASTE_BEHAVIOR: 'pasteBehavior'
   };
 
   static STORAGE_SOFT_LIMIT_BYTES = 4 * 1024 * 1024; // 4MB
@@ -213,6 +214,25 @@ class StorageManager {
   static async getHashtags() {
     return this.get(this.STORAGE_KEYS.HASHTAGS, []);
   }
+
+  /**
+   * ペースト後の振る舞いを保存
+   * @param {string} behavior
+   */
+  static async savePasteBehavior(behavior) {
+    return this.set(this.STORAGE_KEYS.PASTE_BEHAVIOR, behavior || 'clear');
+  }
+
+  /**
+   * ペースト後の振る舞いを取得
+   * @param {string} defaultBehavior
+   * @returns {Promise<string>}
+   */
+  static async getPasteBehavior(defaultBehavior = 'clear') {
+    const behavior = await this.get(this.STORAGE_KEYS.PASTE_BEHAVIOR, defaultBehavior);
+    return behavior || defaultBehavior;
+  }
+
 
   /**
    * Claude APIキーを保存

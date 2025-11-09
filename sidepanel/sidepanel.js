@@ -31,6 +31,7 @@ const aiChatInput = document.getElementById('aiChatInput');
 const aiChatSendBtn = document.getElementById('aiChatSendBtn');
 const aiChatForm = document.getElementById('aiChatForm');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
+const clearChatBtn = document.getElementById('clearChatBtn');
 // 状態管理
 let currentImages = [];
 let hashtags = [];
@@ -42,9 +43,119 @@ const aiState = {
   apiKey: '',
   agents: [],
   selectedAgentId: '',
-  selectedModel: DEFAULT_MODEL
+  selectedModel: DEFAULT_MODEL,
+  pasteBehavior: 'clear'
 };
 let isAgentSelectionUpdateSilent = false;
+
+function normalizeHashtag(tag) {
+  if (!tag) return '';
+  return tag.startsWith('#') ? tag : `#${tag}`;
+}
+
+function extractTrailingHashtags(text) {
+  if (!text) {
+    return { body: '', tags: [] };
+  }
+
+  const withoutTrailingWhitespace = text.replace(/\s+$/, '');
+  if (!withoutTrailingWhitespace) {
+    return { body: '', tags: [] };
+  }
+
+  const lines = withoutTrailingWhitespace.split('\n');
+  let index = lines.length - 1;
+  const trailingLines = [];
+
+  while (index >= 0) {
+    const rawLine = lines[index];
+    const line = rawLine.trim();
+
+    if (!line) {
+      // 空行はスキップし、さらに上の行を確認
+      index -= 1;
+      continue;
+    }
+
+    const tokens = line.split(/\s+/);
+    const isHashtagLine = tokens.length > 0 && tokens.every((token) => token.startsWith('#'));
+
+    if (isHashtagLine) {
+      trailingLines.unshift(tokens);
+      index -= 1;
+    } else {
+      break;
+    }
+  }
+
+  const bodyLines = lines.slice(0, index + 1);
+  const body = bodyLines.join('\n').replace(/\s+$/, '');
+  const tags = trailingLines.flat();
+
+  return {
+    body,
+    tags
+  };
+}
+
+function buildTextWithHashtags(body, tags) {
+  const normalizedBody = (body || '').replace(/\s+$/, '');
+  const uniqueTags = [];
+
+  (tags || []).forEach((tag) => {
+    if (!tag) return;
+    const normalized = normalizeHashtag(tag);
+    if (!normalized) return;
+    const lower = normalized.toLowerCase();
+    if (!uniqueTags.some((existing) => existing.toLowerCase() === lower)) {
+      uniqueTags.push(normalized);
+    }
+  });
+
+  if (uniqueTags.length === 0) {
+    return normalizedBody;
+  }
+
+  const separator = normalizedBody ? '\n\n' : '';
+  return `${normalizedBody}${separator}${uniqueTags.join(' ')}`.trim();
+}
+
+function deduplicateHashtags(text) {
+  if (!text) return '';
+  const normalized = (text || '').replace(/\r\n/g, '\n');
+  const { body, tags } = extractTrailingHashtags(normalized);
+  const uniqueMap = new Map();
+
+  (tags || []).forEach((tag) => {
+    const normalizedTag = normalizeHashtag(tag);
+    const lower = normalizedTag.toLowerCase();
+    if (!uniqueMap.has(lower)) {
+      uniqueMap.set(lower, normalizedTag);
+    }
+  });
+
+  const uniqueTags = Array.from(uniqueMap.values());
+  const separator = body ? '\n\n' : '';
+  return `${body}${separator}${uniqueTags.join(' ')}`.trim();
+}
+
+function getActiveHashtagsForX() {
+  if (currentPlatform !== 'x') {
+    return [];
+  }
+  const { tags } = extractTrailingHashtags(textEditor.value || '');
+  const active = [];
+
+  (tags || []).forEach((tag) => {
+    const normalized = normalizeHashtag(tag);
+    const lower = normalized.toLowerCase();
+    if (!active.some((existing) => existing.toLowerCase() === lower)) {
+      active.push(normalized);
+    }
+  });
+
+  return active;
+}
 
 // 初期化
 async function init() {
@@ -68,6 +179,8 @@ async function detectPlatform() {
         const platform = PlatformDetector.detectFromURL(response.tab.url);
         currentPlatform = platform;
         updatePlatformIndicator(platform);
+        renderHashtags();
+        renderHashtagManageList();
       }
     });
   } catch (error) {
@@ -114,11 +227,12 @@ async function loadEditorState() {
 async function loadAiState() {
   try {
     const defaults = getDefaultAgents();
-    const [storedAgents, storedSelectedId, apiKey, storedModel] = await Promise.all([
+    const [storedAgents, storedSelectedId, apiKey, storedModel, storedPasteBehavior] = await Promise.all([
       StorageManager.getAgents(defaults),
       StorageManager.getSelectedAgentId(),
       StorageManager.getApiKey(),
-      StorageManager.getSelectedModel('claude-4.5-sonnet')
+      StorageManager.getSelectedModel('claude-4.5-sonnet'),
+      StorageManager.getPasteBehavior('clear')
     ]);
 
     aiState.apiKey = apiKey || '';
@@ -126,6 +240,7 @@ async function loadAiState() {
     aiState.selectedAgentId = resolveSelectedAgentId(aiState.agents, storedSelectedId);
     const resolvedModel = SUPPORTED_MODELS.includes(storedModel) ? storedModel : DEFAULT_MODEL;
     aiState.selectedModel = resolvedModel;
+    aiState.pasteBehavior = storedPasteBehavior === 'retain' ? 'retain' : 'clear';
 
     if (aiState.selectedAgentId !== storedSelectedId) {
       await StorageManager.saveSelectedAgentId(aiState.selectedAgentId);
@@ -193,6 +308,10 @@ function setupEventListeners() {
   textEditor.addEventListener('input', () => {
     updateCharCount();
     saveData();
+    if (currentPlatform === 'x') {
+      renderHashtags();
+      renderHashtagManageList();
+    }
   });
 
   // 画像追加
@@ -259,6 +378,19 @@ function setupEventListeners() {
   if (sendAiToTextBtn) {
     sendAiToTextBtn.addEventListener('click', async () => {
       await sendLatestAssistantMessageToEditor();
+    });
+  }
+
+  if (clearChatBtn) {
+    clearChatBtn.addEventListener('click', async () => {
+      if (chatState.messages.length === 0) {
+        showNotification('クリアするチャットがありません');
+        return;
+      }
+      const confirmed = confirm('AIチャット履歴をすべて削除しますか？');
+      if (!confirmed) return;
+      await clearCurrentChatSession(true);
+      showNotification('チャット履歴をクリアしました');
     });
   }
 
@@ -686,7 +818,21 @@ async function addHashtag() {
 
 // ハッシュタグの削除
 async function deleteHashtag(hashtag) {
-  hashtags = hashtags.filter(h => h !== hashtag);
+  const normalizedTarget = normalizeHashtag(hashtag).toLowerCase();
+  hashtags = hashtags.filter(
+    (h) => normalizeHashtag(h).toLowerCase() !== normalizedTarget
+  );
+
+  if (currentPlatform === 'x') {
+    const { body, tags } = extractTrailingHashtags(textEditor.value || '');
+    const updatedTags = (tags || []).filter(
+      (tag) => normalizeHashtag(tag).toLowerCase() !== normalizedTarget
+    );
+    const nextText = buildTextWithHashtags(body, updatedTags);
+    textEditor.value = nextText;
+    updateCharCount();
+  }
+
   await saveData();
   renderHashtags();
   renderHashtagManageList();
@@ -694,18 +840,27 @@ async function deleteHashtag(hashtag) {
 
 // ハッシュタグの挿入
 function insertHashtag(hashtag) {
-  const cursorPos = textEditor.selectionStart;
-  const textBefore = textEditor.value.substring(0, cursorPos);
-  const textAfter = textEditor.value.substring(cursorPos);
-  const space = textBefore && !textBefore.endsWith(' ') ? ' ' : '';
-  
-  textEditor.value = textBefore + space + hashtag + ' ' + textAfter;
-  textEditor.focus();
-  textEditor.setSelectionRange(
-    cursorPos + space.length + hashtag.length + 1,
-    cursorPos + space.length + hashtag.length + 1
+  if (!hashtag) return;
+
+  const formatted = normalizeHashtag(hashtag);
+
+  const existingHashtags = (textEditor.value.match(/#[^\s#]+/g) || []).map((tag) =>
+    tag.toLowerCase()
   );
-  
+
+  if (existingHashtags.includes(formatted.toLowerCase())) {
+    showNotification('このハッシュタグはすでにテキストに含まれています');
+    return;
+  }
+
+  const needsSpacing =
+    textEditor.value && !/\s$/.test(textEditor.value.slice(-1)) ? ' ' : '';
+  const nextText = `${textEditor.value}${needsSpacing}${formatted}`.trimStart();
+
+  textEditor.value = nextText;
+  textEditor.focus();
+  const newCursor = textEditor.value.length;
+  textEditor.setSelectionRange(newCursor, newCursor);
   updateCharCount();
   saveData();
 }
@@ -717,14 +872,26 @@ function renderHashtags() {
     return;
   }
 
-  hashtagList.innerHTML = hashtags.map((hashtag, index) => `
-    <span class="hashtag-tag" data-hashtag-index="${index}">${hashtag}</span>
-  `).join('');
+  const isXPlatform = currentPlatform === 'x';
+  const activeSet = new Set(
+    getActiveHashtagsForX().map((tag) => normalizeHashtag(tag).toLowerCase())
+  );
 
-  // イベントリスナーを追加
-  hashtagList.querySelectorAll('.hashtag-tag').forEach(tag => {
+  hashtagList.innerHTML = hashtags
+    .map((hashtag, index) => {
+      const normalized = normalizeHashtag(hashtag);
+      const isSelected = isXPlatform && activeSet.has(normalized.toLowerCase());
+      return `
+        <span class="hashtag-tag${isSelected ? ' selected' : ''}" data-hashtag-index="${index}">
+          ${hashtag}
+        </span>
+      `;
+    })
+    .join('');
+
+  hashtagList.querySelectorAll('.hashtag-tag').forEach((tag) => {
     tag.addEventListener('click', () => {
-      const index = parseInt(tag.getAttribute('data-hashtag-index'));
+      const index = parseInt(tag.getAttribute('data-hashtag-index'), 10);
       insertHashtag(hashtags[index]);
     });
   });
@@ -737,12 +904,21 @@ function renderHashtagManageList() {
     return;
   }
 
-  hashtagManageList.innerHTML = hashtags.map((hashtag, index) => `
-    <div class="hashtag-manage-item">
+  const isXPlatform = currentPlatform === 'x';
+  const activeSet = new Set(
+    getActiveHashtagsForX().map((tag) => normalizeHashtag(tag).toLowerCase())
+  );
+
+  hashtagManageList.innerHTML = hashtags.map((hashtag, index) => {
+    const normalized = normalizeHashtag(hashtag);
+    const isSelected = isXPlatform && activeSet.has(normalized.toLowerCase());
+    return `
+    <div class="hashtag-manage-item${isSelected ? ' selected' : ''}" data-hashtag-index="${index}">
       <span class="hashtag-text">${hashtag}</span>
       <button class="delete-btn" data-hashtag-index="${index}">削除</button>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   // 削除ボタンのイベントリスナーを追加
   hashtagManageList.querySelectorAll('.delete-btn').forEach(btn => {
@@ -751,21 +927,53 @@ function renderHashtagManageList() {
       deleteHashtag(hashtags[index]);
     });
   });
+
+  if (isXPlatform) {
+    hashtagManageList.querySelectorAll('.hashtag-manage-item').forEach((item) => {
+      item.addEventListener('click', (event) => {
+        if (event.target.closest('.delete-btn')) {
+          return;
+        }
+        const indexAttr = item.getAttribute('data-hashtag-index');
+        const index = parseInt(indexAttr, 10);
+        if (!Number.isNaN(index)) {
+          insertHashtag(hashtags[index]);
+        }
+      });
+    });
+  }
 }
 
 // ページに貼り付ける
 async function pasteToPage() {
   try {
-    const text = textEditor.value;
+    const baseText = textEditor.value;
+    let text = baseText;
     const images = currentImages;
-    
+    const platform = currentPlatform;
+
+    if (platform === 'x') {
+      const textContent = textEditor.value || '';
+      const normalizedText = textContent.replace(/\s+$/, '');
+      const dedupedText = deduplicateHashtags(normalizedText);
+      text = dedupedText;
+
+      if (textEditor.value !== dedupedText) {
+        textEditor.value = dedupedText;
+        updateCharCount();
+        await StorageManager.saveText(dedupedText);
+      }
+      renderHashtags();
+      renderHashtagManageList();
+    }
+
     if (!text && images.length === 0) {
       showNotification('貼り付けるコンテンツがありません');
       return;
     }
-    
+
     console.log('[SidePanel] 貼り付けリクエスト:', { text, imagesCount: images.length });
-    
+
     // background.js経由でコンテンツスクリプトにメッセージを送る
     chrome.runtime.sendMessage({
       action: 'pasteToActiveTab',
@@ -783,8 +991,20 @@ async function pasteToPage() {
         }
       } else {
         console.log('[SidePanel] 貼り付け成功:', response);
-        await clearAll({ skipConfirm: true, skipNotification: true });
-        showNotification('ページに貼り付けました（テキストと画像をクリアしました）');
+        if (aiState.pasteBehavior === 'clear') {
+          await clearAll({ skipNotification: true });
+          showNotification('ページに貼り付けました（テキストと画像をクリアしました）');
+        } else {
+          if (platform === 'x') {
+            const normalizedText = deduplicateHashtags(text);
+            textEditor.value = normalizedText;
+            updateCharCount();
+            await StorageManager.saveText(normalizedText);
+            renderHashtags();
+            renderHashtagManageList();
+          }
+          showNotification('ページに貼り付けました（内容を保持しました）');
+        }
       }
     });
   } catch (error) {
@@ -798,26 +1018,23 @@ async function clearText() {
   textEditor.value = '';
   updateCharCount();
   await saveData();
+  renderHashtags();
+  renderHashtagManageList();
   showNotification('テキストをクリアしました');
   textEditor.focus();
 }
 
 // Allクリア（テキストと画像の両方をクリア）
 async function clearAll(options = {}) {
-  const { skipConfirm = false, skipNotification = false } = options || {};
-
-  if (!skipConfirm) {
-    const confirmed = confirm('テキストと画像をすべてクリアしますか？');
-    if (!confirmed) {
-      return;
-    }
-  }
+  const { skipNotification = false } = options || {};
 
   textEditor.value = '';
   currentImages = [];
   updateCharCount();
   await saveData();
   renderImages();
+  renderHashtags();
+  renderHashtagManageList();
 
   if (!skipNotification) {
     showNotification('すべてクリアしました');
@@ -1108,6 +1325,28 @@ function setupStorageObservers() {
       }
     }
 
+    if (changes[StorageManager.STORAGE_KEYS.PASTE_BEHAVIOR]) {
+      const newBehavior = changes[StorageManager.STORAGE_KEYS.PASTE_BEHAVIOR].newValue;
+      aiState.pasteBehavior = newBehavior === 'retain' ? 'retain' : 'clear';
+      showNotification(`テキスト送信後の挙動を「${aiState.pasteBehavior === 'retain' ? '保持' : 'クリア'}」に更新しました`);
+    }
+
+    if (changes[StorageManager.STORAGE_KEYS.AI_SELECTED_MODEL]) {
+      const rawModel = changes[StorageManager.STORAGE_KEYS.AI_SELECTED_MODEL].newValue || DEFAULT_MODEL;
+      const resolvedModel = SUPPORTED_MODELS.includes(rawModel) ? rawModel : DEFAULT_MODEL;
+      aiState.selectedModel = resolvedModel;
+      showNotification('モデル設定を更新しました');
+      if (!SUPPORTED_MODELS.includes(rawModel)) {
+        StorageManager.saveSelectedModel(resolvedModel);
+      }
+    }
+
+    if (changes[StorageManager.STORAGE_KEYS.PASTE_BEHAVIOR]) {
+      const newBehavior = changes[StorageManager.STORAGE_KEYS.PASTE_BEHAVIOR].newValue;
+      aiState.pasteBehavior = newBehavior === 'retain' ? 'retain' : 'clear';
+      showNotification(`テキスト送信後の挙動を「${aiState.pasteBehavior === 'retain' ? '保持' : 'クリア'}」に更新しました`);
+    }
+
     if (changes[StorageManager.STORAGE_KEYS.CLAUDE_API_KEY]) {
       aiState.apiKey = changes[StorageManager.STORAGE_KEYS.CLAUDE_API_KEY].newValue || '';
     }
@@ -1342,6 +1581,7 @@ async function sendLatestAssistantMessageToEditor() {
   showNotification('最新のAI応答をテキストに反映しました');
 
   await clearCurrentChatSession();
+  switchToTextTab();
 }
 
 async function clearCurrentChatSession() {
@@ -1358,6 +1598,12 @@ async function clearCurrentChatSession() {
   await StorageManager.saveChatSessions(chatSessionsCache);
   resetChatState();
   renderChatMessages();
+}
+
+function switchToTextTab() {
+  const textTabButton = Array.from(tabButtons).find((btn) => btn.getAttribute('data-tab-target') === 'textTab');
+  if (!textTabButton) return;
+  textTabButton.click();
 }
 // 初期化実行
 if (document.readyState === 'loading') {

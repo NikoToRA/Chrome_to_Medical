@@ -41,6 +41,17 @@
             <option value="claude-haiku-4-5">Claude 4.5 Haiku（高速・低コスト）</option>
           </select>
           <p class="help-text">用途に応じてモデルを切り替えられます。Sonnetは高精度、Haikuは高速で低コストです。</p>
+          <fieldset class="field-group">
+            <legend class="field-label">テキスト送信後の挙動</legend>
+            <label class="radio-option">
+              <input type="radio" name="pasteBehavior" value="clear" checked>
+              <span>送信後にテキストと画像をクリアする</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="pasteBehavior" value="retain">
+              <span>送信後も内容を残して別SNSに再利用する</span>
+            </label>
+          </fieldset>
         </div>
         <div class="card-footer">
           <button type="button" id="saveApiKeyBtn" class="btn btn-primary">保存する</button>
