@@ -49,6 +49,32 @@
   }
 
   /**
+   * Draft.js用にテキストをHTMLに変換（改行をdivとして表現）
+   */
+  function convertTextToDraftHtml(text) {
+    if (!text) return '';
+
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    const lines = escaped.split('\n');
+    if (lines.length === 0) {
+      return '<div><br></div>';
+    }
+
+    return lines.map(line => {
+      if (line === '') {
+        return '<div><br></div>';
+      }
+      return `<div>${line}</div>`;
+    }).join('');
+  }
+
+  /**
    * contenteditable要素に直接テキストを挿入
    */
   function insertTextDirectly(element, text, options = {}) {
@@ -147,38 +173,19 @@
   /**
    * 擬似的なPasteイベントを発火してDraft.jsにテキストを挿入させる
    */
-  function dispatchSyntheticPaste(element, text) {
+  function dispatchSyntheticPaste(element, text, html) {
     try {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.setData('text/plain', text);
+      dataTransfer.setData('text', text);
+      if (html) {
+        dataTransfer.setData('text/html', html);
+      }
+
       const pasteEvent = new ClipboardEvent('paste', {
         bubbles: true,
         cancelable: true,
-        clipboardData: new DataTransfer()
-      });
-
-      Object.defineProperty(pasteEvent.clipboardData, 'getData', {
-        value: function(type) {
-          if (type === 'text/plain' || type === 'text') {
-            return text;
-          }
-          return '';
-        },
-        writable: false
-      });
-
-      Object.defineProperty(pasteEvent.clipboardData, 'items', {
-        value: [{
-          kind: 'string',
-          type: 'text/plain',
-          getAsString: function(callback) {
-            callback(text);
-          }
-        }],
-        writable: false
-      });
-
-      Object.defineProperty(pasteEvent.clipboardData, 'types', {
-        value: ['text/plain'],
-        writable: false
+        clipboardData: dataTransfer
       });
 
       return element.dispatchEvent(pasteEvent);
@@ -228,9 +235,11 @@
         let pasteSuccess = false;
         let pasteHandled = false;
         
+        const draftHtml = convertTextToDraftHtml(text);
+
         if (dispatchSyntheticPaste) {
           // Pasteイベントを発火
-          pasteSuccess = dispatchSyntheticPaste(element, text);
+          pasteSuccess = dispatchSyntheticPaste(element, text, draftHtml);
           
           // Pasteイベントが発火された後、Draft.jsが処理するのを待つ
           // 複数回チェックして、テキストが挿入されるまで待つ
@@ -269,7 +278,7 @@
                                  (hasCorrectNewlines && hasAllLines));
             
             // <div>要素が追加されているかも確認
-            const hasDivStructure = lineDivs.length >= originalLines.length;
+            const hasDivStructure = lineDivs.length >= Math.max(originalLines.length, 1);
             
             if (textInserted || hasDivStructure) {
               pasteHandledCheck = true;
