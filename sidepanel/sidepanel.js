@@ -32,6 +32,7 @@ const aiChatSendBtn = document.getElementById('aiChatSendBtn');
 const aiChatForm = document.getElementById('aiChatForm');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
 const retainTextToggle = document.getElementById('retainTextToggle');
+const clearChatBtn = document.getElementById('clearChatBtn');
 // 状態管理
 let currentImages = [];
 let hashtags = [];
@@ -175,29 +176,34 @@ async function saveData() {
   await StorageManager.saveHashtags(hashtags);
 }
 
+// タブをアクティブにする関数（グローバルスコープ）
+function activateTab(targetId) {
+  if (!tabButtons.length || !tabPanels.length) {
+    return;
+  }
+
+  tabButtons.forEach((btn) => {
+    const isActive = btn.getAttribute('data-tab-target') === targetId;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+
+  tabPanels.forEach((panel) => {
+    const isActive = panel.getAttribute('data-tab') === targetId;
+    panel.classList.toggle('active', isActive);
+    if (isActive) {
+      panel.removeAttribute('hidden');
+    } else {
+      panel.setAttribute('hidden', 'true');
+    }
+  });
+}
+
 // タブ切り替えを設定
 function setupTabNavigation() {
   if (!tabButtons.length || !tabPanels.length) {
     return;
   }
-
-  const activateTab = (targetId) => {
-    tabButtons.forEach((btn) => {
-      const isActive = btn.getAttribute('data-tab-target') === targetId;
-      btn.classList.toggle('active', isActive);
-      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-    });
-
-    tabPanels.forEach((panel) => {
-      const isActive = panel.getAttribute('data-tab') === targetId;
-      panel.classList.toggle('active', isActive);
-      if (isActive) {
-        panel.removeAttribute('hidden');
-      } else {
-        panel.setAttribute('hidden', 'true');
-      }
-    });
-  };
 
   tabButtons.forEach((button) => {
     button.addEventListener('click', () => {
@@ -294,6 +300,13 @@ function setupEventListeners() {
 
   if (agentSelector) {
     agentSelector.addEventListener('change', handleAgentSelectorChange);
+  }
+
+  if (clearChatBtn) {
+    clearChatBtn.addEventListener('click', async () => {
+      await clearCurrentChatSession();
+      showNotification('チャットを全消ししました');
+    });
   }
 
   if (openSettingsBtn) {
@@ -1359,17 +1372,8 @@ async function sendLatestAssistantMessageToEditor() {
     return;
   }
 
-  const currentValue = textEditor.value || '';
-  let nextValue;
-
-  if (!currentValue.trim()) {
-    nextValue = latestAssistant.content;
-  } else {
-    const trimmed = currentValue.replace(/\s*$/, '');
-    nextValue = `${trimmed}\n\n${latestAssistant.content}`;
-  }
-
-  textEditor.value = nextValue;
+  // 既存のテキストを上書き（追加ではなく置き換え）
+  textEditor.value = latestAssistant.content;
   updateCharCount();
   await saveData();
   textEditor.focus();
