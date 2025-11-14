@@ -169,6 +169,73 @@ function detectPlatform() {
   return null;
 }
 
+const PLATFORM_HANDLER_WAIT_TIMEOUT = 500; // 2.5秒から500msに短縮
+const PLATFORM_HANDLER_WAIT_INTERVAL = 50; // 150msから50msに短縮
+
+function getPlatformHandlers() {
+  // メインフレームのwindow.PlatformHandlersを優先的に使用
+  try {
+    if (window.top && window.top !== window && window.top.PlatformHandlers) {
+      console.log('[Chrome to X] メインフレームのPlatformHandlersを使用');
+      return window.top.PlatformHandlers;
+    }
+  } catch (error) {
+    // クロスオリジンの場合はアクセスできない（正常）
+  }
+  
+  // 現在のフレームのwindow.PlatformHandlersを使用
+  return window.PlatformHandlers;
+}
+
+async function waitForPlatformHandlers(requiredHandlers = []) {
+  const normalized = Array.isArray(requiredHandlers)
+    ? requiredHandlers.filter(Boolean)
+    : [];
+  
+  console.log('[Chrome to X] waitForPlatformHandlers開始 - 必要なハンドラー:', normalized);
+  console.log('[Chrome to X] waitForPlatformHandlers - 実行フレーム:', window === window.top ? 'メインフレーム' : 'iframe');
+  
+  // 最初に即座にチェック（待機なし）
+  const immediateCheck = getPlatformHandlers();
+  console.log('[Chrome to X] waitForPlatformHandlers - 即座チェック:', immediateCheck ? Object.keys(immediateCheck) : 'undefined');
+  
+  if (immediateCheck) {
+    const missing = normalized.filter((name) => !immediateCheck[name]);
+    console.log('[Chrome to X] waitForPlatformHandlers - 不足しているハンドラー:', missing);
+    if (missing.length === 0) {
+      console.log('[Chrome to X] waitForPlatformHandlers - すべてのハンドラーが利用可能（即座に返却）');
+      return immediateCheck;
+    }
+  } else {
+    console.log('[Chrome to X] waitForPlatformHandlers - window.PlatformHandlersが未定義、待機開始');
+  }
+  
+  // 必要なハンドラーがない場合のみ待機
+  const deadline = Date.now() + PLATFORM_HANDLER_WAIT_TIMEOUT;
+  let attemptCount = 0;
+
+  while (Date.now() < deadline) {
+    attemptCount++;
+    const handlers = getPlatformHandlers();
+    if (handlers) {
+      const missing = normalized.filter((name) => !handlers[name]);
+      console.log(`[Chrome to X] waitForPlatformHandlers - 試行${attemptCount}: 利用可能:`, Object.keys(handlers), '不足:', missing);
+      if (missing.length === 0) {
+        console.log('[Chrome to X] waitForPlatformHandlers - すべてのハンドラーが利用可能（待機後）');
+        return handlers;
+      }
+    } else {
+      console.log(`[Chrome to X] waitForPlatformHandlers - 試行${attemptCount}: window.PlatformHandlersが未定義`);
+    }
+    await new Promise(resolve => setTimeout(resolve, PLATFORM_HANDLER_WAIT_INTERVAL));
+  }
+
+  // タイムアウト後、利用可能なハンドラーを返す（完全一致でなくてもOK）
+  const finalHandlers = getPlatformHandlers();
+  console.log('[Chrome to X] waitForPlatformHandlers - タイムアウト。最終結果:', finalHandlers ? Object.keys(finalHandlers) : 'null');
+  return finalHandlers;
+}
+
 /**
  * テキストエリアやinput要素にフォーカスしたときに要素を記録
  */
@@ -1212,68 +1279,86 @@ async function pasteContent(text, images) {
       });
     }
     
+    // プラットフォームを検出（テキストと画像の両方で使用）
+    const platform = detectPlatform();
+    
+    console.log('[Chrome to X] プラットフォーム検出結果:', platform);
+    
+    // デバッグ: 即座にチェック（メインフレーム優先）
+    const currentHandlers = (() => {
+      try {
+        if (window.top && window.top !== window && window.top.PlatformHandlers) {
+          return window.top.PlatformHandlers;
+        }
+      } catch (error) {
+        // クロスオリジンの場合はアクセスできない
+      }
+      return window.PlatformHandlers;
+    })();
+    
+    console.log('[Chrome to X] 即座チェック - window.PlatformHandlers:', currentHandlers);
+    console.log('[Chrome to X] 即座チェック - 実行フレーム:', window === window.top ? 'メインフレーム' : 'iframe');
+    if (currentHandlers) {
+      console.log('[Chrome to X] 即座チェック - 利用可能なハンドラー:', Object.keys(currentHandlers));
+      console.log('[Chrome to X] 即座チェック - notion存在:', !!currentHandlers.notion);
+      console.log('[Chrome to X] 即座チェック - generic存在:', !!currentHandlers.generic);
+    }
+    
+    // ハンドラー取得（短いタイムアウトで高速化）
+    const requiredHandlers = platform ? [platform, 'generic'] : ['generic'];
+    console.log('[Chrome to X] 必要なハンドラー:', requiredHandlers);
+    const handlers = await waitForPlatformHandlers(requiredHandlers);
+    const availableHandlers = handlers ? Object.keys(handlers) : [];
+    console.log('[Chrome to X] window.PlatformHandlers:', handlers);
+    console.log('[Chrome to X] 利用可能なハンドラー:', availableHandlers);
+    
+    // デバッグ: 必要なハンドラーが存在するか確認
+    if (handlers) {
+      requiredHandlers.forEach(name => {
+        console.log(`[Chrome to X] ハンドラー ${name} 存在:`, !!handlers[name]);
+      });
+    }
+
+    // ハンドラー選択（優先順位: platform > generic > default）
+    let handlerKey = null;
+    if (handlers) {
+      if (platform && handlers[platform]) {
+        handlerKey = platform;
+        console.log('[Chrome to X] プラットフォーム専用ハンドラーを選択:', platform);
+      } else if (handlers.generic) {
+        handlerKey = 'generic';
+        console.log('[Chrome to X] 汎用ハンドラーを選択');
+      } else if (handlers.default) {
+        handlerKey = 'default';
+        console.log('[Chrome to X] デフォルトハンドラーを選択（フォールバック）');
+      }
+    }
+
+    if (!handlerKey) {
+      console.warn('[Chrome to X] 選択可能なハンドラーが見つかりません。利用可能:', availableHandlers);
+    }
+
+    const handler = handlerKey && handlers ? handlers[handlerKey] : null;
+    
+    // Notionの場合、画像がある場合はドラッグ&ドロップで貼り付けを試行
+    if (platform === 'notion' && images && images.length > 0 && handler && typeof handler.insertImages === 'function') {
+      console.log('[Chrome to X] Notion: 画像をドラッグ&ドロップで貼り付けます');
+      try {
+        const imageResult = await handler.insertImages(element, images);
+        if (imageResult && imageResult.success) {
+          console.log('[Chrome to X] Notion: 画像をドラッグ&ドロップで貼り付けました');
+        }
+      } catch (error) {
+        console.error('[Chrome to X] Notion: 画像のドラッグ&ドロップに失敗:', error);
+      }
+    }
+    
     // テキストを貼り付け
     if (text) {
-      // プラットフォームを検出
-      const platform = detectPlatform();
-      
-      console.log('[Chrome to X] プラットフォーム検出結果:', platform);
-      console.log('[Chrome to X] window.PlatformHandlers:', window.PlatformHandlers);
-      
-      // プラットフォームハンドラーを取得
-      // プラットフォームハンドラーが読み込まれていない場合は、少し待ってから再試行
-      let handler = null;
-      let retryCount = 0;
-      const maxRetries = 5;
-      
-      while (!handler && retryCount < maxRetries) {
-      if (window.PlatformHandlers) {
-        console.log('[Chrome to X] 利用可能なハンドラー:', Object.keys(window.PlatformHandlers));
-
-        // Xの場合
-        if (platform === 'x' && window.PlatformHandlers.x) {
-          handler = window.PlatformHandlers.x;
-          console.log('[Chrome to X] Xハンドラーを選択');
-            break;
-        }
-        // Facebookの場合
-        else if (platform === 'facebook' && window.PlatformHandlers.facebook) {
-          handler = window.PlatformHandlers.facebook;
-          console.log('[Chrome to X] Facebookハンドラーを選択');
-            break;
-        }
-        // 汎用ハンドラー（フォールバック）
-        // 注意: default.jsはGoogle Docs用として保持しているため、汎用はgenericを使用
-        else if (window.PlatformHandlers.generic) {
-          handler = window.PlatformHandlers.generic;
-          console.log('[Chrome to X] 汎用ハンドラー（generic）を選択（プラットフォーム:', platform, '）');
-            break;
-        }
-        // defaultハンドラーもフォールバック（後方互換性）
-        else if (window.PlatformHandlers.default) {
-          handler = window.PlatformHandlers.default;
-          console.log('[Chrome to X] デフォルトハンドラー（default）を選択（プラットフォーム:', platform, '）');
-            break;
-        }
-        }
-
-        if (!handler && retryCount < maxRetries - 1) {
-          console.log('[Chrome to X] ハンドラーが見つかりません、再試行:', retryCount + 1);
-          await new Promise(resolve => setTimeout(resolve, 100));
-          retryCount++;
-      } else {
-          break;
-        }
-      }
-      
-      if (!handler && !window.PlatformHandlers) {
-        console.warn('[Chrome to X] window.PlatformHandlersが存在しません（再試行後も失敗）');
-      }
-      
       // ハンドラーが利用可能な場合はそれを使用、そうでなければフォールバック
       let success = false;
       if (handler && handler.insertText) {
-        console.log('[Chrome to X] プラットフォームハンドラーを使用:', platform, handler);
+        console.log('[Chrome to X] プラットフォームハンドラーを使用:', handlerKey || platform, handler);
         success = await handler.insertText(element, text, {
           inputType: 'insertFromPaste',
           dispatchChange: true
@@ -1323,40 +1408,49 @@ async function pasteContent(text, images) {
       }
     }
     
-    // 画像の処理
-    if (images && images.length > 0) {
-      console.log('[Chrome to X] 画像の貼り付け開始:', images.length, '枚');
-      
-      // プラットフォームを検出
-      const platform = detectPlatform();
-      
-      let uploadSuccess = false;
-      
-      if (platform === 'x') {
-        // Xの画像アップロード機能を使用
-        uploadSuccess = await uploadImagesToX(images);
-      } else if (platform === 'gmail') {
-        // Gmailの画像アップロード機能を使用
-        uploadSuccess = await uploadImagesToGmail(images);
-      } else if (platform === 'facebook') {
-        // Facebookの画像アップロード機能を使用
-        uploadSuccess = await uploadImagesToFacebook(images, element);
-      } else {
-        // その他のプラットフォーム: クリップボード経由で貼り付けを試行
-        console.log('[Chrome to X] プラットフォーム:', platform, 'クリップボード経由で試行');
-        await pasteImagesViaClipboard(element, images);
-        uploadSuccess = true;
-      }
-      
-      if (uploadSuccess) {
-        showNotification(`テキストと画像${images.length}枚を貼り付けました`);
-      } else {
-        // フォールバック: クリップボード経由で貼り付けを試行
-        console.log('[Chrome to X] 画像アップロードに失敗、クリップボード経由で試行');
-        await pasteImagesViaClipboard(element, images);
-        showNotification(`テキストと画像${images.length}枚を貼り付けました`);
-      }
-    } else if (text) {
+      // 画像の処理（Notionの場合は既にクリップボードにコピー済みなのでスキップ）
+      if (images && images.length > 0 && !(platform === 'notion' && handler && typeof handler.insertImages === 'function')) {
+        console.log('[Chrome to X] 画像の貼り付け開始:', images.length, '枚');
+        
+        let uploadSuccess = false;
+        let handlerImageResult = null;
+        
+        if (handler && typeof handler.insertImages === 'function') {
+          try {
+            handlerImageResult = await handler.insertImages(element, images);
+            if (handlerImageResult && handlerImageResult.success) {
+              uploadSuccess = true;
+        console.log('[Chrome to X] プラットフォームハンドラーで画像貼り付け成功:', handlerKey || platform, handlerImageResult);
+            } else {
+              console.warn('[Chrome to X] プラットフォームハンドラーで画像貼り付け失敗:', handlerImageResult);
+            }
+          } catch (handlerError) {
+            console.error('[Chrome to X] プラットフォームハンドラーで画像貼り付け中にエラー:', handlerError);
+          }
+        }
+        
+        if (!uploadSuccess) {
+          if (platform === 'x') {
+            uploadSuccess = await uploadImagesToX(images);
+          } else if (platform === 'gmail') {
+            uploadSuccess = await uploadImagesToGmail(images);
+          } else if (platform === 'facebook') {
+            uploadSuccess = await uploadImagesToFacebook(images, element);
+          } else {
+            console.log('[Chrome to X] プラットフォーム:', platform, 'クリップボード経由で試行');
+            await pasteImagesViaClipboard(element, images);
+            uploadSuccess = true;
+          }
+        }
+        
+        if (uploadSuccess) {
+          showNotification(`テキストと画像${images.length}枚を貼り付けました`);
+        } else {
+          console.log('[Chrome to X] 画像アップロードに失敗、クリップボード経由で試行');
+          await pasteImagesViaClipboard(element, images);
+          showNotification(`テキストと画像${images.length}枚を貼り付けました`);
+        }
+      } else if (text) {
       showNotification('テキストを貼り付けました');
     }
     
@@ -2490,6 +2584,122 @@ function setupImageDragAndDrop() {
     console.log('[Chrome to X] 画像ドラッグ&ドロップ機能を有効化');
   } catch (error) {
     console.error('[Chrome to X] MutationObserver設定エラー:', error);
+  }
+  
+  // サイドパネルからの画像ドロップを受け取る（Notion用）
+  // 手動ドラッグ&ドロップ時に、ドロップ位置を正確に処理する
+  try {
+    document.addEventListener('drop', async (e) => {
+      try {
+        const data = e.dataTransfer.getData('text/plain');
+        if (!data) return;
+        
+        const parsedData = JSON.parse(data);
+        if (parsedData.type === 'chrome-to-x-image' && parsedData.imageData) {
+          console.log('[Chrome to X] サイドパネルからの画像ドロップを検出');
+          
+          // Notionページの場合
+          const platform = detectPlatform();
+          if (platform === 'notion') {
+            // ドロップ位置の座標を取得（実際のマウス位置を使用）
+            const dropX = e.clientX;
+            const dropY = e.clientY;
+            
+            console.log('[Chrome to X] Notion: ドロップ位置:', { x: dropX, y: dropY });
+            
+            // ドロップ位置の要素を取得
+            const dropTarget = document.elementFromPoint(dropX, dropY);
+            if (!dropTarget) {
+              console.warn('[Chrome to X] Notion: ドロップ位置の要素が見つかりません');
+              return;
+            }
+            
+            // Notionのleaf要素を探す（ドロップ位置から）
+            const leafElement = dropTarget.closest('[data-content-editable-leaf="true"]') ||
+                               dropTarget.querySelector('[data-content-editable-leaf="true"]') ||
+                               dropTarget;
+            
+            console.log('[Chrome to X] Notion: ドロップ先要素:', {
+              dropTarget: dropTarget.tagName,
+              leafElement: leafElement ? leafElement.tagName : null
+            });
+            
+            // 画像データからFileオブジェクトを作成
+            const imageData = parsedData.imageData;
+            const base64Data = imageData.base64;
+            const response = await fetch(base64Data);
+            const blob = await response.blob();
+            const file = new File([blob], imageData.name || 'image.png', { type: blob.type });
+            
+            // DataTransferを作成
+            const dataTransfer = new DataTransfer();
+            dataTransfer.items.add(file);
+            
+            // ドロップ位置の座標を使用してドラッグ&ドロップイベントを発火
+            leafElement.focus({ preventScroll: true });
+            await new Promise(resolve => setTimeout(resolve, 50));
+            
+            // ドロップ位置の座標を使用
+            const dragenter = new DragEvent('dragenter', {
+              bubbles: true,
+              cancelable: true,
+              dataTransfer: dataTransfer,
+              clientX: dropX,
+              clientY: dropY
+            });
+            
+            const dragover = new DragEvent('dragover', {
+              bubbles: true,
+              cancelable: true,
+              dataTransfer: dataTransfer,
+              clientX: dropX,
+              clientY: dropY
+            });
+            dragover.preventDefault();
+            
+            const drop = new DragEvent('drop', {
+              bubbles: true,
+              cancelable: true,
+              dataTransfer: dataTransfer,
+              clientX: dropX,
+              clientY: dropY
+            });
+            drop.preventDefault();
+            
+            leafElement.dispatchEvent(dragenter);
+            await new Promise(resolve => setTimeout(resolve, 10));
+            leafElement.dispatchEvent(dragover);
+            await new Promise(resolve => setTimeout(resolve, 10));
+            const dropResult = leafElement.dispatchEvent(drop);
+            
+            if (dropResult) {
+              console.log('[Chrome to X] Notion: ドラッグ&ドロップで画像を貼り付けました（位置:', dropX, dropY, '）');
+            } else {
+              console.warn('[Chrome to X] Notion: ドラッグ&ドロップに失敗しました');
+            }
+            
+            // 元のイベントをキャンセル（Notionのデフォルト処理を防ぐ）
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+      } catch (error) {
+        // JSON解析エラーなどは無視（通常のドロップイベントの可能性があるため）
+        console.log('[Chrome to X] ドロップイベント処理:', error);
+      }
+    }, true); // キャプチャフェーズでリスナーを追加
+    
+    document.addEventListener('dragover', (e) => {
+      // dragoverイベントではgetData()が使えないため、typesを確認
+      if (e.dataTransfer.types.includes('text/plain')) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    }, true);
+    
+    console.log('[Chrome to X] サイドパネルからの画像ドロップ受信機能を有効化');
+  } catch (error) {
+    console.error('[Chrome to X] ドロップイベント設定エラー:', error);
   }
 }
 

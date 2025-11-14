@@ -33,7 +33,6 @@ const aiChatForm = document.getElementById('aiChatForm');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
 const retainTextToggle = document.getElementById('retainTextToggle');
 const clearChatBtn = document.getElementById('clearChatBtn');
-const executePasteBtn = document.getElementById('executePasteBtn');
 // 状態管理
 let currentImages = [];
 let hashtags = [];
@@ -291,40 +290,7 @@ function setupEventListeners() {
   // ページに貼り付ける機能
   pasteToPageBtn.addEventListener('click', async () => {
     await pasteToPage();
-    // ペーストボタンを表示
-    if (executePasteBtn) {
-      executePasteBtn.style.display = 'block';
-    }
   });
-  
-  // ペーストボタンのイベントリスナー
-  if (executePasteBtn) {
-    executePasteBtn.addEventListener('click', async () => {
-      try {
-        // アクティブタブを取得
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab) {
-          showNotification('アクティブなタブが見つかりません');
-          return;
-        }
-        
-        // タブにメッセージを送信してペーストを実行
-        chrome.tabs.sendMessage(tab.id, { 
-          action: 'simulatePaste' 
-        }, (response) => {
-          if (chrome.runtime.lastError) {
-            console.error('ペーストエラー:', chrome.runtime.lastError);
-            showNotification('ペーストに失敗しました');
-          } else {
-            showNotification('ペーストを実行しました');
-          }
-        });
-      } catch (error) {
-        console.error('ペーストエラー:', error);
-        showNotification('ペーストに失敗しました');
-      }
-    });
-  }
 
   if (sendAiToTextBtn) {
     sendAiToTextBtn.addEventListener('click', async () => {
@@ -726,17 +692,56 @@ function renderImages() {
   }
 
   imagePreview.innerHTML = currentImages.map(img => `
-    <div class="image-item">
-      <img src="${img.base64}" alt="${img.name}">
+    <div class="image-item" draggable="true" data-image-id="${img.id}">
+      <img src="${img.base64}" alt="${img.name}" draggable="false">
       <button class="remove-btn" data-image-id="${img.id}">&times;</button>
     </div>
   `).join('');
 
   // 削除ボタンのイベントリスナーを追加
   imagePreview.querySelectorAll('.remove-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // ドラッグイベントを防ぐ
       const imageId = parseFloat(btn.getAttribute('data-image-id'));
       removeImage(imageId);
+    });
+  });
+
+  // ドラッグ&ドロップ機能を追加（ページへのドロップ用）
+  imagePreview.querySelectorAll('.image-item').forEach(item => {
+    const imageId = parseFloat(item.getAttribute('data-image-id'));
+    const image = currentImages.find(img => img.id === imageId);
+    
+    if (!image) return;
+
+    // ドラッグ開始
+    item.addEventListener('dragstart', (e) => {
+      e.stopPropagation();
+      console.log('[SidePanel] 画像のドラッグ開始:', image.name);
+      
+      // 画像データをDataTransferに設定
+      const imageData = {
+        type: 'chrome-to-x-image',
+        imageData: {
+          base64: image.base64,
+          name: image.name,
+          id: image.id
+        }
+      };
+      
+      e.dataTransfer.setData('text/plain', JSON.stringify(imageData));
+      e.dataTransfer.effectAllowed = 'copy';
+      
+      // 画像のプレビューを設定（オプション）
+      const img = item.querySelector('img');
+      if (img) {
+        e.dataTransfer.setDragImage(img, 0, 0);
+      }
+    });
+
+    // ドラッグ終了
+    item.addEventListener('dragend', (e) => {
+      console.log('[SidePanel] 画像のドラッグ終了');
     });
   });
 }

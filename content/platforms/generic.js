@@ -12,8 +12,12 @@
  * - IFRAMEの検出と適切な処理
  */
 
+console.log('[Chrome to X] generic.js の読み込み開始');
+
 (function() {
   'use strict';
+
+  console.log('[Chrome to X] generic.js の即時関数内に入りました');
 
   /**
    * テキストを正規化（改行やゼロ幅スペースを除去）
@@ -24,6 +28,179 @@
       .replace(/\u200B/g, '')  // zero-width space
       .replace(/\n$/, '');     // trailing newline from <br>
   }
+
+    const CLAUDE_HOST_PATTERN = /(?:^|\.)claude\.ai$|(?:^|\.)anthropic\.com$/;
+
+    function isClaudeEnvironment() {
+      try {
+        const hostname = window.location.hostname.toLowerCase();
+        return CLAUDE_HOST_PATTERN.test(hostname);
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function attachClipboardData(event, dataTransfer, text = '') {
+      if (!event) return;
+      if (dataTransfer) {
+        try {
+          Object.defineProperty(event, 'clipboardData', {
+            value: dataTransfer,
+            configurable: true
+          });
+          return;
+        } catch (error) {
+          console.warn('[Chrome to X] clipboardData設定でエラー:', error);
+        }
+      }
+
+      // フォールバック: 最低限のclipboardDataを注入
+      const fallbackClipboard = {
+        getData: (type) => {
+          if (type === 'text/plain' || type === 'text') {
+            return text;
+          }
+          return '';
+        },
+        types: ['text/plain'],
+        items: []
+      };
+
+      try {
+        Object.defineProperty(event, 'clipboardData', {
+          value: fallbackClipboard,
+          configurable: true
+        });
+      } catch (defineError) {
+        event.clipboardData = fallbackClipboard;
+      }
+    }
+
+    function attachDataTransfer(event, dataTransfer) {
+      if (!event || !dataTransfer) return;
+      try {
+        Object.defineProperty(event, 'dataTransfer', {
+          value: dataTransfer,
+          configurable: true
+        });
+      } catch (error) {
+        // dataTransfer が定義済みの場合は無視
+      }
+    }
+
+    function createTextDataTransfer(text) {
+      if (typeof DataTransfer === 'undefined') {
+        return null;
+      }
+
+      const dataTransfer = new DataTransfer();
+      try {
+        dataTransfer.setData('text/plain', text);
+        dataTransfer.setData('text', text);
+      } catch (error) {
+        // 一部の環境では setData が失敗する場合がある
+        console.warn('[Chrome to X] DataTransfer#setData に失敗:', error);
+      }
+      return dataTransfer;
+    }
+
+    function delay(ms = 50) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function createSyntheticClipboardEvent(text, dataTransfer) {
+      let pasteEvent;
+      try {
+        pasteEvent = new ClipboardEvent('paste', {
+          bubbles: true,
+          cancelable: true
+        });
+      } catch (error) {
+        pasteEvent = document.createEvent('Event');
+        pasteEvent.initEvent('paste', true, true);
+      }
+
+      if (dataTransfer) {
+        attachClipboardData(pasteEvent, dataTransfer, text);
+      } else {
+        attachClipboardData(pasteEvent, null, text);
+      }
+
+      return pasteEvent;
+    }
+
+    function createInputEventWithTransfer(eventType, text, dataTransfer) {
+      let event;
+      if (typeof InputEvent === 'function') {
+        event = new InputEvent(eventType, {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertFromPaste',
+          data: text
+        });
+      } else {
+        event = document.createEvent('Event');
+        event.initEvent(eventType, true, true);
+        event.data = text;
+        event.inputType = 'insertFromPaste';
+      }
+
+      if (dataTransfer) {
+        attachDataTransfer(event, dataTransfer);
+      }
+
+      return event;
+    }
+
+    function createDataTransferFromFiles(files = []) {
+      if (typeof DataTransfer === 'undefined') {
+        return {
+          files,
+          items: files.map((file) => ({
+            kind: 'file',
+            type: file?.type || 'image/png',
+            getAsFile: () => file
+          })),
+          getData: () => '',
+          setData: () => {}
+        };
+      }
+      const dataTransfer = new DataTransfer();
+      files.forEach((file) => {
+        try {
+          dataTransfer.items.add(file);
+        } catch (error) {
+          console.warn('[Chrome to X] DataTransfer#items.add に失敗:', error);
+        }
+      });
+      return dataTransfer;
+    }
+
+    async function createFileFromImagePayload(image, index = 0) {
+      if (!image || !image.base64) {
+        throw new Error('Invalid image payload');
+      }
+      const response = await fetch(image.base64);
+      const blob = await response.blob();
+      const fileName = image.name || `image_${Date.now()}_${index}.png`;
+      return new File([blob], fileName, { type: blob.type || 'image/png' });
+    }
+
+    async function writeImageViaBackground(imageDataUrl) {
+      if (typeof chrome === 'undefined' || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
+        return false;
+      }
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'writeToClipboard',
+          imageData: imageDataUrl
+        });
+        return !!(response && response.success);
+      } catch (error) {
+        console.warn('[Chrome to X] Background経由クリップボード書き込みに失敗:', error);
+        return false;
+      }
+    }
 
   /**
    * テキスト挿入の戦略1: execCommand（非推奨だが互換性が高い）
@@ -245,6 +422,58 @@
     }
   }
 
+    /**
+     * Claude.ai / Anthropic エディタ向けの擬似ペースト
+     */
+    async function insertTextForClaude(element, text, options = {}) {
+      try {
+        const { dispatchChange = true } = options;
+        const beforeText = normalizeContentText(element) || '';
+
+        element.focus({ preventScroll: true });
+        await delay(80);
+
+        const dataTransfer = createTextDataTransfer(text);
+        const beforeInputEvent = createInputEventWithTransfer('beforeinput', text, dataTransfer);
+        const pasteEvent = createSyntheticClipboardEvent(text, dataTransfer);
+        const inputEvent = createInputEventWithTransfer('input', text, dataTransfer);
+
+        let dispatched = false;
+
+        if (beforeInputEvent) {
+          dispatched = element.dispatchEvent(beforeInputEvent) || dispatched;
+        }
+
+        if (pasteEvent) {
+          dispatched = element.dispatchEvent(pasteEvent) || dispatched;
+        }
+
+        if (inputEvent) {
+          dispatched = element.dispatchEvent(inputEvent) || dispatched;
+        }
+
+        if (dispatchChange) {
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        await delay(220);
+
+        const afterText = normalizeContentText(element) || '';
+        const wasInserted = afterText.includes(text.trim()) ||
+          afterText.length > beforeText.length;
+
+        if (wasInserted || dispatched) {
+          console.log('[Chrome to X] Claude向け擬似ペースト成功');
+          return { success: true, method: 'claudeSynthetic' };
+        }
+
+        return { success: false, reason: 'Claude synthetic paste verification failed' };
+      } catch (error) {
+        console.warn('[Chrome to X] Claude向け挿入エラー:', error);
+        return { success: false, reason: error.message };
+      }
+    }
+
   /**
    * Google Docsにフォーカスを当てる
    */
@@ -437,6 +666,15 @@
       if (element.isContentEditable || element.getAttribute('contenteditable') === 'true') {
         console.log('[Chrome to X] contenteditable要素を検出、3段階フォールバック開始');
 
+        if (isClaudeEnvironment()) {
+          console.log('[Chrome to X] Claude環境を検出: 専用挿入を優先します');
+          const claudeResult = await insertTextForClaude(element, text, { dispatchChange });
+          if (claudeResult.success) {
+            return Promise.resolve(true);
+          }
+          console.warn('[Chrome to X] Claude専用挿入が失敗:', claudeResult.reason);
+        }
+
         // 戦略1: execCommand（互換性重視）
         let result = await tryExecCommand(element, text, { dispatchChange });
         if (result.success) {
@@ -498,125 +736,86 @@
     }
   }
 
-  /**
-   * 画像挿入（汎用化 - Pasteイベント経由）
-   */
-  async function insertImages(element, images) {
-    try {
-      if (!images || images.length === 0) {
-        return { success: false, reason: 'No images provided' };
-      }
-
-      element.focus({ preventScroll: true });
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      let successCount = 0;
-
-      // 画像を1枚ずつ処理
-      for (let i = 0; i < images.length; i++) {
-        const image = images[i];
-
-        try {
-          // Base64データURLからBlobを作成
-          const base64Data = image.base64;
-          const response = await fetch(base64Data);
-          const blob = await response.blob();
-
-          // クリップボードAPIが利用可能な場合
-          if (navigator.clipboard && navigator.clipboard.write) {
-            try {
-              await navigator.clipboard.write([
-                new ClipboardItem({ [blob.type]: blob })
-              ]);
-
-              console.log(`[Chrome to X] 画像${i + 1}枚目をクリップボードに書き込み`);
-
-              // 少し待つ
-              await new Promise(resolve => setTimeout(resolve, 150));
-
-              // Google Docsの場合は、キーボードイベントを送信
-              if (element.tagName === 'CANVAS' && window.location.hostname.includes('docs.google.com')) {
-                const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-
-                const pasteKeyCombo = new KeyboardEvent('keydown', {
-                  key: 'v',
-                  code: 'KeyV',
-                  keyCode: 86,
-                  which: 86,
-                  ctrlKey: !isMac,
-                  metaKey: isMac,
-                  bubbles: true,
-                  cancelable: true
-                });
-
-                document.dispatchEvent(pasteKeyCombo);
-
-                const keyUp = new KeyboardEvent('keyup', {
-                  key: 'v',
-                  code: 'KeyV',
-                  keyCode: 86,
-                  which: 86,
-                  ctrlKey: !isMac,
-                  metaKey: isMac,
-                  bubbles: true,
-                  cancelable: true
-                });
-
-                document.dispatchEvent(keyUp);
-
-                console.log(`[Chrome to X] Google Docs: 画像${i + 1}枚目のペーストキーを送信`);
-              } else {
-                // その他のプラットフォームはペーストイベントを発火
-                const pasteEvent = new ClipboardEvent('paste', {
-                  bubbles: true,
-                  cancelable: true,
-                  clipboardData: new DataTransfer()
-                });
-
-                // clipboardDataに画像データを設定
-                Object.defineProperty(pasteEvent, 'clipboardData', {
-                  value: {
-                    items: [{
-                      kind: 'file',
-                      type: blob.type,
-                      getAsFile: () => new File([blob], image.name || `image_${i}.png`, { type: blob.type })
-                    }],
-                    files: [new File([blob], image.name || `image_${i}.png`, { type: blob.type })]
-                  },
-                  writable: false
-                });
-
-                element.dispatchEvent(pasteEvent);
-                console.log(`[Chrome to X] 画像${i + 1}枚目をペーストイベント経由で挿入`);
-              }
-
-              successCount++;
-            } catch (clipboardError) {
-              console.warn(`[Chrome to X] 画像${i + 1}枚目のクリップボード処理失敗:`, clipboardError);
-            }
-          }
-
-          // 次の画像の前に少し待つ（Google Docsの場合は長め）
-          if (i < images.length - 1) {
-            const waitTime = (element.tagName === 'CANVAS' && window.location.hostname.includes('docs.google.com')) ? 500 : 200;
-            await new Promise(resolve => setTimeout(resolve, waitTime));
-          }
-        } catch (imageError) {
-          console.error(`[Chrome to X] 画像${i + 1}枚目の処理エラー:`, imageError);
+    /**
+     * 画像挿入（汎用化 - Pasteイベント経由）
+     */
+    async function insertImages(element, images) {
+      try {
+        if (!images || images.length === 0) {
+          return { success: false, reason: 'No images provided' };
         }
-      }
 
-      if (successCount > 0) {
-        console.log(`[Chrome to X] ${successCount}枚の画像を挿入しました`);
-        return { success: true, count: successCount };
-      }
+        if (window.location.hostname.includes('docs.google.com')) {
+          console.warn('[Chrome to X] Google Docsへの画像貼り付けは現在サポートされていません');
+          return { success: false, reason: 'Google Docs image paste unsupported' };
+        }
 
-      return { success: false, reason: 'No images were inserted' };
-    } catch (error) {
-      console.error('[Chrome to X] 画像挿入エラー:', error);
-      return { success: false, reason: error.message };
+        element.focus({ preventScroll: true });
+        await delay(100);
+
+        let successCount = 0;
+
+        for (let i = 0; i < images.length; i++) {
+          const image = images[i];
+
+          try {
+            const file = await createFileFromImagePayload(image, i);
+            const dataTransfer = createDataTransferFromFiles([file]);
+
+            if (navigator.clipboard && navigator.clipboard.write && typeof ClipboardItem !== 'undefined') {
+              try {
+                await navigator.clipboard.write([
+                  new ClipboardItem({ [file.type || 'image/png']: file })
+                ]);
+                console.log(`[Chrome to X] 画像${i + 1}枚目をClipboard APIでクリップボードに書き込み`);
+              } catch (clipboardError) {
+                console.warn(`[Chrome to X] 画像${i + 1}枚目のClipboard API書き込みに失敗:`, clipboardError);
+              }
+            } else if (image.base64) {
+              const bgResult = await writeImageViaBackground(image.base64);
+              if (!bgResult) {
+                console.warn('[Chrome to X] Background経由のクリップボード書き込みに失敗しました');
+              }
+            }
+
+            const beforeInput = createInputEventWithTransfer('beforeinput', '', dataTransfer);
+            const pasteEvent = createSyntheticClipboardEvent('', dataTransfer);
+            const inputEvent = createInputEventWithTransfer('input', '', dataTransfer);
+
+            if (beforeInput) {
+              element.dispatchEvent(beforeInput);
+            }
+            if (pasteEvent) {
+              element.dispatchEvent(pasteEvent);
+            }
+            if (inputEvent) {
+              element.dispatchEvent(inputEvent);
+            }
+
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+
+            console.log(`[Chrome to X] 画像${i + 1}枚目を擬似ペーストで挿入`);
+            successCount++;
+
+            if (i < images.length - 1) {
+              await delay(250);
+            }
+          } catch (imageError) {
+            console.error(`[Chrome to X] 画像${i + 1}枚目の処理エラー:`, imageError);
+          }
+        }
+
+        if (successCount > 0) {
+          console.log(`[Chrome to X] ${successCount}枚の画像を挿入しました`);
+          return { success: true, count: successCount };
+        }
+
+        return { success: false, reason: 'No images were inserted' };
+      } catch (error) {
+        console.error('[Chrome to X] 画像挿入エラー:', error);
+        return { success: false, reason: error.message };
+      }
     }
-  }
 
   /**
    * このハンドラーが要素をサポートするかどうか
@@ -630,6 +829,8 @@
     window.PlatformHandlers = {};
   }
 
+  console.log('[Chrome to X] Generic: ハンドラー登録前:', window.PlatformHandlers ? Object.keys(window.PlatformHandlers) : 'undefined');
+
   window.PlatformHandlers.generic = {
     insertText: insertText,
     insertImages: insertImages,
@@ -637,4 +838,5 @@
   };
 
   console.log('[Chrome to X] 汎用ハンドラー（generic）を読み込みました');
+  console.log('[Chrome to X] Generic: ハンドラー登録後:', Object.keys(window.PlatformHandlers));
 })();
