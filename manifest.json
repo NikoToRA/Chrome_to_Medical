@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Chrome to X",
-  "version": "1.0.5",
-  "description": "サイドバーでテキストと画像を編集し、XやFacebook、MicroCMSなどに投稿するためのコンテンツを作成するツール",
+  "name": "Chrome to Medical",
+  "version": "0.1.0",
+  "description": "クラウド型電子カルテ向けサポート拡張機能 - AIによる診療記録作成支援と固定文挿入で医療現場の業務を効率化",
   "permissions": [
     "sidePanel",
     "storage",
@@ -18,7 +18,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Chrome to X を開く"
+    "default_title": "Chrome to Medical を開く"
   },
   "side_panel": {
     "default_path": "sidepanel/sidepanel.html"

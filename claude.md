@@ -1,117 +1,203 @@
-# Chrome to X - Claude開発ガイドライン
+# Chrome to Medical - Claude開発ガイドライン
 
-## ハンドラーファイルの役割
+## プロジェクト概要
 
-### 1. `content/platforms/generic.js` - 汎用ハンドラー（デフォルト使用）
+このプロジェクトは **Chrome to X** から派生した、クラウド型電子カルテ向けのChrome拡張機能です。
+
+### 派生の背景
+- **派生元**: [Chrome to X](https://github.com/NikoToRA/Chrome_to_X) - SNS運用支援ツール
+- **派生先**: Chrome to Medical - 医療現場の診療記録作成支援ツール
+- **分岐時期**: 2025-01-16
+- **履歴継承**: 全コミット履歴を保持（forkではないミラー複製）
+
+### プロダクトの違い
+
+| 項目 | Chrome to X | Chrome to Medical |
+|------|-------------|-------------------|
+| 対象ユーザー | SNS運用者 | 医療従事者 |
+| 主要機能 | SNS投稿作成・画像編集 | AI診療記録作成・固定文挿入 |
+| 対象プラットフォーム | X, Facebook, Notion等 | 電子カルテシステム |
+| セキュリティ要件 | 一般的 | 医療情報取り扱い基準 |
+| データ送信 | 自由 | 明示的同意が必須 |
+
+## 開発方針
+
+### 1. 独立したプロダクトとして進化
+
+**Chrome to X のコードには触れないでください。** このリポジトリは完全に独立したプロダクトです。
+
+- SNS固有の機能（X、Facebook等）は段階的に削除予定
+- 共通基盤（ストレージ、画像処理、検出ロジック等）は再利用可能
+- 将来的に共通コードは別パッケージ化を検討
+
+### 2. 医療現場特化の開発
+
+#### 主要機能の優先順位
+1. **AI診療記録作成** - Claude APIを使った記録生成（最優先）
+2. **固定文挿入** - テンプレート管理と挿入機能（最優先）
+3. **画像機能** - 補助的機能として保持（優先度低）
+
+#### セキュリティ・コンプライアンス
+- **個人情報保護**: 患者情報の匿名化を推奨
+- **データ送信の明示**: AI機能使用時は必ず事前同意取得
+- **ローカル優先**: テンプレートデータは全てローカルストレージ
+- **監査証跡**: 重要な操作はログ記録（将来実装）
+
+### 3. ハンドラーファイルの役割（継承機能）
+
+Chrome to X から継承したハンドラーシステムを医療用途に最適化します。
+
+#### `content/platforms/generic.js` - 汎用ハンドラー（デフォルト使用）
 **指定がない限り、このファイルを調整・修正してください。**
 
-- あらゆるWebサイトで動作する汎用的なテキスト貼り付けハンドラー
-- Google Docsでの動作実績あり
+- 電子カルテシステムでの動作を最優先
 - 特徴:
   - execCommand → ClipboardAPI → DOM操作の3段階フォールバック
-  - Background Script経由のクリップボード操作（フォーカス不要）
+  - Background Script経由のクリップボード操作
   - 非標準要素（カスタム要素、Reactコンポーネント等）への対応
   - IFRAMEの検出と適切な処理
 
-### 2. `content/platforms/default.js` - Google Docs用ハンドラー（保守用）
-- 元々は汎用ハンドラーでしたが、Google Docsでの動作が確認されたため、そのまま保持
-- Google Docs専用として使用（`window.PlatformHandlers.default`として登録）
-- **このファイルは触らないでください（後方互換性のため保持）**
+#### SNS専用ハンドラー（段階的削除予定）
+- `content/platforms/x.js` - X専用（将来削除）
+- `content/platforms/facebook.js` - Facebook専用（将来削除）
+- `content/platforms/default.js` - Google Docs用（保持）
 
-### 3. `content/platforms/x.js` - X (旧Twitter) 専用ハンドラー
-- X固有のDOM構造（`[data-testid="tweetTextarea_0"]`等）に対応
-- **Xの機能修正時のみ変更可**
+これらは後方互換性のため一時的に保持していますが、**医療機能の開発では使用しません。**
 
-### 4. `content/platforms/facebook.js` - Facebook 専用ハンドラー
-- Facebook固有のDOM構造に対応
-- **Facebookの機能修正時のみ変更可**
+#### 新規ハンドラーの追加（医療システム用）
 
-### 5. `content/platforms/google-docs.js` - Google Docs 専用ハンドラー（現在未使用）
-- Google Docs専用の実装（CANVAS要素等）
-- 現在は`default.js`が使われているため、このファイルは読み込まれていません
+主要な電子カルテシステムに対応する場合：
 
-## ハンドラーの優先順位（`content/content.js`）
+1. `content/platforms/`に新しいファイルを作成（例: `emr-system-a.js`）
+2. `manifest.json`の`content_scripts`に追加
+3. `content/content.js`のハンドラー選択ロジックに追加
+4. プラットフォーム検出を`utils/detector.js`に追加
+
+### 4. 新規機能の実装
+
+#### AIエージェント（`utils/aiAgents.js`）
+
+医療記録作成用のプロンプトテンプレート：
 
 ```javascript
-// 1. プラットフォーム固有のハンドラー
-if (platform === 'x' && window.PlatformHandlers.x) {
-  handler = window.PlatformHandlers.x;
-}
-else if (platform === 'facebook' && window.PlatformHandlers.facebook) {
-  handler = window.PlatformHandlers.facebook;
-}
-// 2. 汎用ハンドラー（フォールバック）
-else if (window.PlatformHandlers.generic) {
-  handler = window.PlatformHandlers.generic;
-}
-// 3. defaultハンドラー（後方互換性）
-else if (window.PlatformHandlers.default) {
-  handler = window.PlatformHandlers.default;
+// 診療記録生成プロンプトの例
+const medicalRecordPrompts = {
+  soapNote: {
+    template: `以下の情報からSOAP形式の診療記録を作成してください...`,
+    validation: ['subjective', 'objective', 'assessment', 'plan']
+  },
+  prescription: {
+    template: `処方内容を整形してください...`,
+    validation: ['medication', 'dosage', 'frequency']
+  }
+};
+```
+
+#### テンプレート管理（`utils/templates.js`）
+
+固定文テンプレートの管理機能：
+
+```javascript
+// テンプレート構造
+{
+  id: 'unique-id',
+  name: '初診問診',
+  category: '問診',
+  content: '主訴: \n現病歴: \n既往歴: ',
+  createdAt: timestamp,
+  updatedAt: timestamp
 }
 ```
+
+#### UI/UX（`sidepanel/*`）
+
+メインUIの設計方針：
+- **タブ1: AI記事作成** - プロンプト入力 → 生成 → 確認 → 挿入
+- **タブ2: 固定文挿入** - カテゴリ選択 → テンプレート選択 → 挿入
+- **タブ3: 設定** - APIキー設定、テンプレート管理、プライバシー同意
 
 ## 開発ルール
 
 ### 一般的な修正・改善
 - **指定がない限り、`content/platforms/generic.js`を調整してください**
-- このファイルは汎用性が高く、ほとんどのWebサイトで動作します
+- 電子カルテシステムでの動作確認を最優先
+- Google Docsでの動作も維持（記録の下書き用途）
 
-### プラットフォーム固有の修正
-- X、Facebook、Google Docsなど、特定のプラットフォームでの問題がある場合のみ、該当する専用ハンドラーを修正してください
-- 例: Xの投稿ボタンが見つからない → `content/platforms/x.js`を修正
+### 医療機能の開発
+- AI機能実装時は必ずデータ送信の同意UIを実装
+- テンプレート機能はカテゴリ分類を必須に
+- エラーメッセージは医療従事者にわかりやすい表現に
 
-### 新しいプラットフォームの追加
-1. `content/platforms/`に新しいファイルを作成（例: `notion.js`）
-2. `manifest.json`の`content_scripts`に追加
-3. `content/content.js`のハンドラー選択ロジックに追加
-4. プラットフォーム検出を`utils/detector.js`に追加
+### SNS機能の扱い
+- **既存のSNS機能には触れないでください**（明示的な指示がない限り）
+- 段階的にSNS関連コードを削除する予定
+- `legacy/` フォルダに移動して隔離する場合あり
 
 ## ファイル構成
 
 ```
 content/
 ├── platforms/
-│   ├── generic.js       ← 汎用ハンドラー（デフォルト使用）
-│   ├── default.js       ← Google Docs用（保守用、触らない）
-│   ├── x.js            ← X専用
-│   ├── facebook.js     ← Facebook専用
-│   └── google-docs.js  ← Google Docs専用（未使用）
+│   ├── generic.js       ← 汎用ハンドラー（電子カルテ向けに最適化）
+│   ├── default.js       ← Google Docs用（保持）
+│   ├── x.js            ← X専用（将来削除）
+│   ├── facebook.js     ← Facebook専用（将来削除）
+│   └── google-docs.js  ← 未使用
 └── content.js          ← メインのコンテンツスクリプト
+
+utils/
+├── aiAgents.js         ← AI機能（医療プロンプト追加）
+├── templates.js        ← テンプレート管理（新規作成）
+├── storage.js          ← ストレージ管理
+└── detector.js         ← プラットフォーム検出
+
+sidepanel/
+├── sidepanel.html      ← UI（医療向けに再設計）
+├── sidepanel.css       ← スタイル
+└── sidepanel.js        ← ロジック
 ```
-
-## 重要な注意事項
-
-1. **X、Facebook、Gmailのコードには触れないでください**（明示的な指示がない限り）
-2. **汎用的な改善は必ず`generic.js`で行ってください**
-3. **`default.js`は後方互換性のため保持していますが、新しい開発では使用しません**
-4. **プラットフォーム固有の問題がある場合のみ、該当する専用ハンドラーを修正してください**
 
 ## テスト方法
 
 ### 汎用ハンドラーのテスト
-1. 様々なWebサイト（GitHub、Notion、LinkedIn等）でテスト
-2. Google Docsでのテスト（既知の動作実績あり）
-3. iframeを使ったサイト（Claude.ai等）でのテスト
+1. 様々な電子カルテシステムでテスト
+2. Google Docsでのテスト（下書き用途）
+3. iframeを使ったWebアプリでのテスト
 
-### プラットフォーム固有のテスト
-- X: ツイート投稿画面でテスト
-- Facebook: 投稿作成画面でテスト
-- Google Docs: ドキュメント編集画面でテスト
+### AI機能のテスト
+1. Claude APIキーの設定
+2. 各プロンプトテンプレートの動作確認
+3. 生成された記録の品質確認
+
+### テンプレート機能のテスト
+1. テンプレートの作成・編集・削除
+2. カテゴリ分類の動作確認
+3. 挿入時の動作確認
+
+## セキュリティチェックリスト
+
+新機能実装時は以下を確認：
+
+- [ ] 患者情報を含むデータの匿名化推奨メッセージを表示
+- [ ] AI機能使用時の同意UI実装
+- [ ] データ送信先の明示
+- [ ] ローカルストレージの暗号化（Phase 2）
+- [ ] エラー時の個人情報漏洩防止
 
 ## よくある質問
 
-### Q: 貼り付けが動かないサイトがある
-A: まず`content/platforms/generic.js`を確認し、3段階フォールバックが正しく動作しているか確認してください。
+### Q: Chrome to X のコードを参考にしていい？
+A: はい。ただし、直接Chrome to Xリポジトリを編集しないでください。このリポジトリは独立したプロダクトです。
 
-### Q: X/Facebook/Gmailで問題が発生した
-A: 該当する専用ハンドラー（`x.js`、`facebook.js`等）を確認してください。
+### Q: SNS機能を削除していい？
+A: 段階的に削除予定ですが、急いで削除する必要はありません。まずは医療機能の実装を優先してください。
 
-### Q: 新しいプラットフォームに対応したい
+### Q: 新しい電子カルテシステムに対応したい
 A: まず`generic.js`で動作するか試してください。動作しない場合は、新しい専用ハンドラーを作成してください。
 
-### Q: Google Docsで貼り付けが動かない
-A: `default.js`がGoogle Docs用として動作しています。問題がある場合は、このファイルを確認してください。
+### Q: AI機能の実装で注意することは？
+A: データ送信の同意UI実装は必須です。また、生成結果は必ず医療従事者が確認・修正することを前提に設計してください。
 
 ---
 
-最終更新日: 2025-01-14
+最終更新日: 2025-01-16
