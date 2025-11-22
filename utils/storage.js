@@ -9,7 +9,6 @@ class StorageManager {
     TEMPLATES: 'templates',
     TEMPLATE_CATEGORIES: 'templateCategories',
     TEMPLATES_DIRECT_PASTE: 'templatesDirectPaste',
-    CLAUDE_API_KEY: 'claudeApiKey',
     AI_AGENTS: 'aiAgents',
     AI_SELECTED_AGENT_ID: 'aiSelectedAgentId',
     AI_CHAT_SESSIONS: 'aiChatSessions',
@@ -279,21 +278,7 @@ class StorageManager {
     return this.get(this.STORAGE_KEYS.TEMPLATES_DIRECT_PASTE, false);
   }
 
-  /**
-   * Claude APIキーを保存
-   * @param {string} apiKey
-   */
-  static async saveApiKey(apiKey) {
-    return this.set(this.STORAGE_KEYS.CLAUDE_API_KEY, apiKey || '');
-  }
 
-  /**
-   * Claude APIキーを取得
-   * @returns {Promise<string>}
-   */
-  static async getApiKey() {
-    return this.get(this.STORAGE_KEYS.CLAUDE_API_KEY, '');
-  }
 
   /**
    * AIエージェントを保存

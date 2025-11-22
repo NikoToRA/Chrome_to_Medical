@@ -12,12 +12,13 @@ module.exports = async function (context, req) {
         return;
     }
 
-    const { messages, system, model } = req.body;
+    const { messages, system } = req.body;
 
     // 2. Initialize OpenAI Client
     const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
     const apiKey = process.env.AZURE_OPENAI_API_KEY;
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME || "gpt-4o-mini"; // Fallback or use user provided
+    // Deployment name is strictly managed by environment variables for security and cost control
+    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME || "gpt-4o-mini";
 
     if (!endpoint || !apiKey) {
         context.log.error('[CHAT] Missing Azure OpenAI Credentials');

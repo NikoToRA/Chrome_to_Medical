@@ -48,12 +48,10 @@ let templates = { diagnoses: [], medications: [], phrases: [] };
 let templateCategories = [];
 let currentTemplateCategory = 'diagnoses';
 let currentPlatform = null;
-const DEFAULT_MODEL = 'claude-haiku-4-5';
-
 const aiState = {
   agents: [],
   selectedAgentId: '',
-  selectedModel: DEFAULT_MODEL
+  selectedModel: '' // Managed by Azure
 };
 let isAgentSelectionUpdateSilent = false;
 
@@ -193,7 +191,8 @@ async function loadAiState() {
 
     aiState.agents = normalizeAgents(storedAgents, defaults);
     aiState.selectedAgentId = resolveSelectedAgentId(aiState.agents, storedSelectedId);
-    aiState.selectedModel = DEFAULT_MODEL;
+    aiState.selectedAgentId = resolveSelectedAgentId(aiState.agents, storedSelectedId);
+    aiState.selectedModel = ''; // Managed by Azure
 
     if (aiState.selectedAgentId !== storedSelectedId) {
       await StorageManager.saveSelectedAgentId(aiState.selectedAgentId);
@@ -1246,9 +1245,7 @@ async function handleAiChatSend() {
     return;
   }
 
-  // API Key check removed as it is handled in backend
 
-  const selectedModel = DEFAULT_MODEL; // Always use default model (Haiku)
 
   ensureChatSession(selectedAgent);
 
@@ -1293,7 +1290,7 @@ async function handleAiChatSend() {
     const messages = buildConversationPayload();
 
     // Use ApiClient to call Azure Function
-    const response = await window.ApiClient.chat(messages, system, selectedModel);
+    const response = await window.ApiClient.chat(messages, system);
 
     // Debug log
     console.log('[SidePanel] AI Response:', response);
@@ -1328,7 +1325,7 @@ async function handleAiChatSend() {
         'ai_chat',
         {
           agentId: selectedAgent.id,
-          model: selectedModel,
+          // model: managed by backend
           inputLength: message.length,
           outputLength: replyText.length
         },
@@ -1544,15 +1541,7 @@ function setupStorageObservers() {
       loadChatHistory();
     }
 
-    if (changes[StorageManager.STORAGE_KEYS.AI_SELECTED_MODEL]) {
-      const rawModel = changes[StorageManager.STORAGE_KEYS.AI_SELECTED_MODEL].newValue || DEFAULT_MODEL;
-      const resolvedModel = SUPPORTED_MODELS.includes(rawModel) ? rawModel : DEFAULT_MODEL;
-      aiState.selectedModel = resolvedModel;
-      showNotification('モデル設定を更新しました');
-      if (!SUPPORTED_MODELS.includes(rawModel)) {
-        StorageManager.saveSelectedModel(resolvedModel);
-      }
-    }
+
 
     if (changes[StorageManager.STORAGE_KEYS.AI_CHAT_SESSIONS]) {
       loadChatHistory();
