@@ -1,45 +1,25 @@
-const claudeApiKeyInput = document.getElementById('claudeApiKey');
-const toggleApiKeyVisibilityBtn = document.getElementById('toggleApiKeyVisibility');
-const saveApiKeyBtn = document.getElementById('saveApiKeyBtn');
 const addAgentBtn = document.getElementById('addAgentBtn');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 const agentsList = document.getElementById('agentsList');
 const toastContainer = document.getElementById('toastContainer');
-const modelSelector = document.getElementById('modelSelector');
-
-const SUPPORTED_MODELS = ['claude-sonnet-4-5', 'claude-haiku-4-5'];
-const DEFAULT_MODEL = SUPPORTED_MODELS[0];
 
 const state = {
   defaultAgents: (window.AiAgentUtils && window.AiAgentUtils.getDefaultAgents()) || [],
   agents: [],
-  isSavingApiKey: false,
-  isSavingAgents: false,
-  selectedModel: DEFAULT_MODEL,
-  isSavingModel: false
+  isSavingAgents: false
 };
 
 document.addEventListener('DOMContentLoaded', initOptions);
 
 async function initOptions() {
   bindEvents();
-  await Promise.all([loadApiKey(), loadAgents(), loadSelectedModel()]);
+  await loadAgents();
   setupStorageWatchers();
-}
-
-async function loadApiKey() {
-  try {
-    const apiKey = await StorageManager.getApiKey();
-    claudeApiKeyInput.value = apiKey;
-  } catch (error) {
-    console.error('[Options] APIキーの読み込みに失敗しました', error);
-    showToast('APIキーの読み込みに失敗しました', 'warning');
-  }
 }
 
 async function loadAgents() {
   try {
-    const defaults = getDefaultAgents();
+    const defaults = await loadPackagedAgentDefaults();
     const storedAgents = await StorageManager.getAgents(defaults);
     state.agents = normalizeAgents(storedAgents, defaults);
     renderAgents();
@@ -49,39 +29,33 @@ async function loadAgents() {
   }
 }
 
-async function loadSelectedModel() {
+async function loadPackagedAgentDefaults() {
   try {
-    const storedModel = await StorageManager.getSelectedModel(DEFAULT_MODEL);
-    const isValid = SUPPORTED_MODELS.includes(storedModel);
-    const resolvedModel = isValid ? storedModel : DEFAULT_MODEL;
-    state.selectedModel = resolvedModel;
-    if (modelSelector) {
-      modelSelector.value = resolvedModel;
+    const url = chrome.runtime.getURL('defaults/ai-agents.json');
+    const res = await fetch(url, { cache: 'no-cache' });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((a, i) => ({
+          id: a.id || (window.AiAgentUtils ? AiAgentUtils.generateAgentId(`agent${i}`) : `agent-${i}`),
+          label: a.label || a.name || `Agent ${i + 1}`,
+          name: a.name || a.label || `Agent ${i + 1}`,
+          description: a.description || '',
+          instructions: a.instructions || '',
+          createdAt: a.createdAt || new Date().toISOString(),
+          updatedAt: a.updatedAt || new Date().toISOString()
+        }));
+      }
     }
-    if (!isValid) {
-      await StorageManager.saveSelectedModel(resolvedModel);
-    }
-  } catch (error) {
-    console.error('[Options] モデル設定の読み込みに失敗しました', error);
-    showToast('モデル設定の読み込みに失敗しました', 'warning');
+  } catch (e) {
+    // ignore and fallback
   }
+  return getDefaultAgents();
 }
 
 function bindEvents() {
-  if (toggleApiKeyVisibilityBtn) {
-    toggleApiKeyVisibilityBtn.addEventListener('click', toggleApiKeyVisibility);
-  }
-
-  if (saveApiKeyBtn) {
-    saveApiKeyBtn.addEventListener('click', saveApiKey);
-  }
-
   if (addAgentBtn) {
     addAgentBtn.addEventListener('click', handleAddAgent);
-  }
-
-  if (modelSelector) {
-    modelSelector.addEventListener('change', handleModelChange);
   }
 
   if (closeSettingsBtn) {
@@ -101,16 +75,6 @@ function setupStorageWatchers() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
 
-    if (changes[StorageManager.STORAGE_KEYS.CLAUDE_API_KEY]) {
-      const newValue = changes[StorageManager.STORAGE_KEYS.CLAUDE_API_KEY].newValue || '';
-      if (claudeApiKeyInput && claudeApiKeyInput.value !== newValue) {
-        claudeApiKeyInput.value = newValue;
-        if (!state.isSavingApiKey) {
-          showToast('他のタブで更新されたAPIキーを反映しました', 'info');
-        }
-      }
-    }
-
     if (changes[StorageManager.STORAGE_KEYS.AI_AGENTS]) {
       const defaults = getDefaultAgents();
       const newAgents = changes[StorageManager.STORAGE_KEYS.AI_AGENTS].newValue;
@@ -120,66 +84,7 @@ function setupStorageWatchers() {
         showToast('エージェント設定を同期しました', 'info');
       }
     }
-
-    if (changes[StorageManager.STORAGE_KEYS.AI_SELECTED_MODEL]) {
-      const rawModel = changes[StorageManager.STORAGE_KEYS.AI_SELECTED_MODEL].newValue || DEFAULT_MODEL;
-      const resolvedModel = SUPPORTED_MODELS.includes(rawModel) ? rawModel : DEFAULT_MODEL;
-      state.selectedModel = resolvedModel;
-      if (modelSelector && modelSelector.value !== resolvedModel) {
-        modelSelector.value = resolvedModel;
-      }
-      if (!state.isSavingModel) {
-        showToast('モデル設定を同期しました', 'info');
-      }
-      if (!SUPPORTED_MODELS.includes(rawModel)) {
-        StorageManager.saveSelectedModel(resolvedModel);
-      }
-    }
   });
-}
-
-function toggleApiKeyVisibility() {
-  const isPassword = claudeApiKeyInput.type === 'password';
-  claudeApiKeyInput.type = isPassword ? 'text' : 'password';
-  toggleApiKeyVisibilityBtn.textContent = isPassword ? '🙈' : '👁️';
-}
-
-async function saveApiKey() {
-  if (state.isSavingApiKey) return;
-  const apiKey = claudeApiKeyInput.value.trim();
-  const validationError = validateApiKey(apiKey);
-
-  if (validationError) {
-    showToast(validationError, 'warning');
-    return;
-  }
-
-  try {
-    state.isSavingApiKey = true;
-    setButtonLoading(saveApiKeyBtn, true, '保存中…');
-    await StorageManager.saveApiKey(apiKey);
-    const message = apiKey ? 'APIキーを保存しました' : 'APIキーをクリアしました';
-    showToast(message, 'info');
-  } catch (error) {
-    console.error('[Options] APIキーの保存に失敗しました', error);
-    showToast('APIキーの保存に失敗しました', 'warning');
-  } finally {
-    state.isSavingApiKey = false;
-    setButtonLoading(saveApiKeyBtn, false, '保存する');
-  }
-}
-
-function validateApiKey(apiKey) {
-  if (!apiKey) {
-    return null; // 空文字はクリア操作として許容
-  }
-
-  const basicPattern = /^sk-[a-z0-9-_]{5,}$/i;
-  if (!basicPattern.test(apiKey)) {
-    return 'APIキーの形式が正しくありません（例: sk-xxxxx）。';
-  }
-
-  return null;
 }
 
 function handleAddAgent() {
@@ -307,11 +212,11 @@ async function handleResetAgent(agentId) {
   const nextAgents = state.agents.map((agent) =>
     agent.id === agentId
       ? {
-          ...defaultAgent,
-          id: agent.id,
-          createdAt: agent.createdAt || defaultAgent.createdAt,
-          updatedAt: new Date().toISOString()
-        }
+        ...defaultAgent,
+        id: agent.id,
+        createdAt: agent.createdAt || defaultAgent.createdAt,
+        updatedAt: new Date().toISOString()
+      }
       : agent
   );
 
@@ -359,20 +264,20 @@ function extractAgentFromCard(card, agentId) {
 function createBlankAgent() {
   return window.AiAgentUtils
     ? window.AiAgentUtils.createAgent({
-        label: 'Custom Agent',
-        name: '新しいエージェント',
-        description: '',
-        instructions: ''
-      })
+      label: 'Custom Agent',
+      name: '新しいエージェント',
+      description: '',
+      instructions: ''
+    })
     : {
-        id: `agent-${Date.now()}`,
-        label: 'Custom Agent',
-        name: '新しいエージェント',
-        description: '',
-        instructions: '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+      id: `agent-${Date.now()}`,
+      label: 'Custom Agent',
+      name: '新しいエージェント',
+      description: '',
+      instructions: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
 }
 
 function normalizeAgents(agents, defaults) {

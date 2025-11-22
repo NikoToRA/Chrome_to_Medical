@@ -6,6 +6,9 @@ class StorageManager {
     TEXT: 'currentText',
     IMAGES: 'currentImages',
     HASHTAGS: 'hashtags',
+    TEMPLATES: 'templates',
+    TEMPLATE_CATEGORIES: 'templateCategories',
+    TEMPLATES_DIRECT_PASTE: 'templatesDirectPaste',
     CLAUDE_API_KEY: 'claudeApiKey',
     AI_AGENTS: 'aiAgents',
     AI_SELECTED_AGENT_ID: 'aiSelectedAgentId',
@@ -213,6 +216,67 @@ class StorageManager {
    */
   static async getHashtags() {
     return this.get(this.STORAGE_KEYS.HASHTAGS, []);
+  }
+
+  /**
+   * 定型文カテゴリを保存
+   * @param {Array<{id: string, name: string}>} categories
+   */
+  static async saveTemplateCategories(categories) {
+    return this.set(this.STORAGE_KEYS.TEMPLATE_CATEGORIES, Array.isArray(categories) ? categories : []);
+  }
+
+  /**
+   * 定型文カテゴリを取得
+   * @returns {Promise<Array<{id: string, name: string}>>}
+   */
+  static async getTemplateCategories() {
+    const defaults = [
+      { id: 'diagnoses', name: '病名' },
+      { id: 'medications', name: '薬剤' },
+      { id: 'phrases', name: '定型文' }
+    ];
+    const categories = await this.get(this.STORAGE_KEYS.TEMPLATE_CATEGORIES, null);
+    return Array.isArray(categories) && categories.length > 0 ? categories : defaults;
+  }
+
+  /**
+   * 定型文テンプレートを保存
+   * @param {Object.<string, string[]>} templates
+   */
+  static async saveTemplates(templates = {}) {
+    // オブジェクトの各値が配列であることを確認
+    const safe = {};
+    Object.keys(templates).forEach(key => {
+      safe[key] = Array.isArray(templates[key]) ? templates[key] : [];
+    });
+    return this.set(this.STORAGE_KEYS.TEMPLATES, safe);
+  }
+
+  /**
+   * 定型文テンプレートを取得
+   * @returns {Promise<Object.<string, string[]>>}
+   */
+  static async getTemplates() {
+    const defaults = { diagnoses: [], phrases: [], medications: [] };
+    const value = await this.get(this.STORAGE_KEYS.TEMPLATES, defaults);
+    return value || defaults;
+  }
+
+  /**
+   * 定型文の直接貼り付け設定を保存
+   * @param {boolean} enabled
+   */
+  static async saveTemplatesDirectPaste(enabled) {
+    return this.set(this.STORAGE_KEYS.TEMPLATES_DIRECT_PASTE, Boolean(enabled));
+  }
+
+  /**
+   * 定型文の直接貼り付け設定を取得
+   * @returns {Promise<boolean>}
+   */
+  static async getTemplatesDirectPaste() {
+    return this.get(this.STORAGE_KEYS.TEMPLATES_DIRECT_PASTE, false);
   }
 
   /**

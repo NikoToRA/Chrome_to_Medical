@@ -50,6 +50,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: [
+              'content/platforms/clinics.js',
               'content/platforms/default.js',
               'content/platforms/x.js',
               'content/platforms/facebook.js',
@@ -144,6 +145,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           await chrome.scripting.executeScript({
             target: { tabId: tab.id },
             files: [
+              'content/platforms/clinics.js',
               'content/platforms/default.js',
               'content/platforms/x.js',
               'content/platforms/facebook.js',

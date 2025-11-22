@@ -1,0 +1,21 @@
+{
+    "name": "karte-ai-plus-backend",
+    "version": "1.0.0",
+    "description": "Azure Functions for Karte AI+",
+    "main": "index.js",
+    "type": "commonjs",
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "scripts": {
+        "start": "func start",
+        "build": "echo 'No build required'",
+        "test": "echo \"No test specified\" && exit 1"
+    },
+    "dependencies": {
+        "openai": "^4.77.0",
+        "@azure/data-tables": "^13.0.0",
+        "@azure/storage-blob": "^12.11.0",
+        "stripe": "^17.5.0"
+    }
+}

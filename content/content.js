@@ -161,6 +161,11 @@ function detectPlatform() {
     return 'notion';
   }
 
+  // CLINICS（ドメインに clinics を含む場合を暫定判定）
+  if (hostname.includes('clinics')) {
+    return 'clinics';
+  }
+
   // Google Docs (無効化: 貼り付けが不安定なため一旦機能を停止)
   // if (hostname.includes('docs.google.com')) {
   //   return 'google-docs';
