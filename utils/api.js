@@ -69,9 +69,25 @@ class ApiClient {
     }
 
     async saveLog(type, metadata, userId) {
-        // Fire and forget for logs? Or wait?
-        // Usually better to not block UI.
-        this.post('/save-log', { userId, type, content: metadata, metadata }).catch(console.error);
+        try {
+            return await this.post('/save-log', { userId, type, content: metadata, metadata });
+        } catch (error) {
+            console.error('Failed to save log', error);
+            return null;
+        }
+    }
+
+    async logInsertion(entry) {
+        if (!entry || !entry.content) {
+            throw new Error('logInsertion requires content');
+        }
+
+        try {
+            return await this.post('/log-insertion', entry, { retries: 0 });
+        } catch (error) {
+            console.error('Failed to log insertion', error);
+            return null;
+        }
     }
 }
 

@@ -1008,7 +1008,7 @@ function handleTemplateClick(text) {
     action: 'pasteToActiveTab',
     text,
     images: []
-  }, (response) => {
+  }, async (response) => {
     if (chrome.runtime.lastError) {
       showNotification('直接貼り付けに失敗しました: ' + chrome.runtime.lastError.message);
       return;
@@ -1017,6 +1017,14 @@ function handleTemplateClick(text) {
       showNotification('直接貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
     } else {
       showNotification('定型文を直接貼り付けました');
+      await logClinicalInsertion('paste', {
+        text,
+        source: 'template-direct',
+        metadata: {
+          templateCategory: currentTemplateCategory,
+          triggeredFrom: 'template-tag'
+        }
+      });
     }
   });
 }
@@ -1131,6 +1139,15 @@ async function pasteToPage() {
           await clearAll({ skipConfirm: true, skipNotification: true });
           showNotification('ページに貼り付けました（テキストと画像をクリアしました）');
         }
+          await logClinicalInsertion('paste', {
+            text,
+            source: 'text-editor',
+            metadata: {
+              imagesCount: images.length,
+              retainTextAfterPaste,
+              triggeredFrom: 'editor-paste-button'
+            }
+          });
       }
     });
   } catch (error) {
@@ -1146,13 +1163,20 @@ async function copyEditorText() {
     showNotification('コピーするテキストがありません');
     return;
   }
-  chrome.runtime.sendMessage({ action: 'writeToClipboard', text }, (response) => {
+  chrome.runtime.sendMessage({ action: 'writeToClipboard', text }, async (response) => {
     if (chrome.runtime.lastError) {
       showNotification('コピーに失敗しました: ' + chrome.runtime.lastError.message);
       return;
     }
     if (response && response.success) {
       showNotification('テキストをコピーしました');
+      await logClinicalInsertion('copy', {
+        text,
+        source: 'text-editor',
+        metadata: {
+          triggeredFrom: 'copy-editor-button'
+        }
+      });
     } else {
       showNotification('コピーに失敗しました');
     }
@@ -1215,6 +1239,162 @@ function showNotification(message) {
   }, 2000);
 }
 
+const CLINICAL_USER_ID_STORAGE_KEY = 'karteClinicalUserId';
+let cachedClinicalUserId = null;
+
+async function logClinicalInsertion(action, { text, source = 'unknown', noteType, metadata = {} } = {}) {
+  try {
+    if (!text || !text.trim()) {
+      return;
+    }
+
+    if (!window.ApiClient || typeof window.ApiClient.logInsertion !== 'function') {
+      console.warn('[SidePanel] ApiClient.logInsertion が利用できません');
+      return;
+    }
+
+    const [userId, tabContext] = await Promise.all([
+      getClinicalUserId(),
+      getActiveTabContext()
+    ]);
+
+    const payload = {
+      userId: userId || 'anonymous',
+      action: action || 'unknown',
+      noteType: noteType || detectNoteType(text),
+      content: text,
+      metadata: {
+        source,
+        tabTitle: tabContext?.title || null,
+        tabUrl: tabContext?.url || null,
+        tabId: tabContext?.id || null,
+        recordedFrom: 'sidepanel',
+        extensionVersion: chrome?.runtime?.getManifest?.().version || null,
+        timestamp: new Date().toISOString(),
+        ...metadata
+      }
+    };
+
+    await window.ApiClient.logInsertion(payload);
+  } catch (error) {
+    console.warn('[SidePanel] logClinicalInsertion でエラー', error);
+  }
+}
+
+async function getClinicalUserId() {
+  if (cachedClinicalUserId) {
+    return cachedClinicalUserId;
+  }
+
+  const stored = await chromeStorageLocalGet(CLINICAL_USER_ID_STORAGE_KEY);
+  if (stored) {
+    cachedClinicalUserId = stored;
+    return stored;
+  }
+
+  const newId = generateClinicalUserId();
+  await chromeStorageLocalSet({ [CLINICAL_USER_ID_STORAGE_KEY]: newId });
+  cachedClinicalUserId = newId;
+  return newId;
+}
+
+function generateClinicalUserId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `user-${crypto.randomUUID()}`;
+  }
+  return `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function chromeStorageLocalGet(key) {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get([key], (result) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[SidePanel] chrome.storage.local.get エラー:', chrome.runtime.lastError);
+          resolve(null);
+          return;
+        }
+        resolve(result?.[key] || null);
+      });
+    } catch (error) {
+      console.warn('[SidePanel] chromeStorageLocalGet でエラー', error);
+      resolve(null);
+    }
+  });
+}
+
+function chromeStorageLocalSet(data) {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.set(data, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[SidePanel] chrome.storage.local.set エラー:', chrome.runtime.lastError);
+        }
+        resolve();
+      });
+    } catch (error) {
+      console.warn('[SidePanel] chromeStorageLocalSet でエラー', error);
+      resolve();
+    }
+  });
+}
+
+async function getActiveTabContext() {
+  if (!chrome?.tabs?.query) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    try {
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[SidePanel] chrome.tabs.query エラー:', chrome.runtime.lastError);
+          resolve(null);
+          return;
+        }
+        if (!tabs || tabs.length === 0) {
+          resolve(null);
+          return;
+        }
+        const tab = tabs[0];
+        resolve({
+          id: tab.id,
+          url: tab.url,
+          title: tab.title
+        });
+      });
+    } catch (error) {
+      console.warn('[SidePanel] getActiveTabContext でエラー', error);
+      resolve(null);
+    }
+  });
+}
+
+function detectNoteType(text = '') {
+  if (!text.trim()) {
+    return 'empty';
+  }
+
+  const hasS = /(^|\n)\s*S\s*[:：]/i.test(text);
+  const hasO = /(^|\n)\s*O\s*[:：]/i.test(text);
+  const hasA = /(^|\n)\s*A\s*[:：]/i.test(text);
+  const hasP = /(^|\n)\s*P\s*[:：]/i.test(text);
+
+  if (hasS && hasO && hasA && hasP) {
+    return 'soap';
+  }
+
+  if (/処方|投与|内服|頓用|Rx/i.test(text)) {
+    return 'prescription-like';
+  }
+
+  if (/同意|説明| consent /i.test(text)) {
+    return 'consent-note';
+  }
+
+  return text.length > 800 ? 'long-form' : 'free-text';
+}
+
 // グローバル関数は不要になったが、念のため残しておく
 window.removeImage = removeImage;
 
@@ -1261,6 +1441,19 @@ async function handleAiChatSend() {
   chatState.messages.push(userMessage);
   chatState.updatedAt = now;
   renderChatMessages();
+
+  logClinicalInsertion('ai_prompt', {
+    text: message,
+    source: 'ai-chat',
+    metadata: {
+      agentId: selectedAgent.id,
+      agentName: selectedAgent.name || selectedAgent.label || '',
+      conversationId: chatState.sessionId,
+      messageId: userMessage.id,
+      role: 'user',
+      totalMessages: chatState.messages.length
+    }
+  });
 
   if (aiChatInput) {
     aiChatInput.value = '';
@@ -1318,6 +1511,19 @@ async function handleAiChatSend() {
     chatState.updatedAt = new Date().toISOString();
     renderChatMessages();
     await persistChatSession();
+
+    logClinicalInsertion('ai_response', {
+      text: replyText,
+      source: 'ai-chat',
+      metadata: {
+        agentId: selectedAgent.id,
+        agentName: selectedAgent.name || selectedAgent.label || '',
+        conversationId: chatState.sessionId,
+        messageId: assistantMessage.id,
+        role: 'assistant',
+        usage: response.usage || null
+      }
+    });
 
     // Save log
     try {
@@ -1792,7 +1998,7 @@ async function pasteLatestAssistantMessageDirect() {
     action: 'pasteToActiveTab',
     text: latestAssistant.content,
     images: []
-  }, (response) => {
+  }, async (response) => {
     if (chrome.runtime.lastError) {
       showNotification('直接貼り付けに失敗しました: ' + chrome.runtime.lastError.message);
       return;
@@ -1801,6 +2007,14 @@ async function pasteLatestAssistantMessageDirect() {
       showNotification('直接貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
     } else {
       showNotification('AI応答を直接貼り付けました');
+      await logClinicalInsertion('paste', {
+        text: latestAssistant.content,
+        source: 'ai-assistant',
+        metadata: {
+          agentId: chatState.agentId || null,
+          triggeredFrom: 'ai-direct-paste-button'
+        }
+      });
     }
   });
 }
@@ -1818,13 +2032,21 @@ async function copyLatestAssistantMessage() {
   chrome.runtime.sendMessage({
     action: 'writeToClipboard',
     text: latestAssistant.content
-  }, (response) => {
+  }, async (response) => {
     if (chrome.runtime.lastError) {
       showNotification('コピーに失敗しました: ' + chrome.runtime.lastError.message);
       return;
     }
     if (response && response.success) {
       showNotification('AI応答をコピーしました');
+      await logClinicalInsertion('copy', {
+        text: latestAssistant.content,
+        source: 'ai-assistant',
+        metadata: {
+          agentId: chatState.agentId || null,
+          triggeredFrom: 'copy-ai-button'
+        }
+      });
     } else {
       showNotification('コピーに失敗しました');
     }

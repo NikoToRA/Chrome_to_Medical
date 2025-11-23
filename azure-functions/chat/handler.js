@@ -1,5 +1,42 @@
 const { AzureOpenAI } = require("openai");
 
+const DEFAULT_API_VERSION = "2024-08-01-preview";
+
+function resolveAzureConfig(rawEndpoint) {
+    const config = {
+        endpoint: rawEndpoint,
+        apiVersion: process.env.AZURE_OPENAI_API_VERSION || DEFAULT_API_VERSION
+    };
+
+    if (!rawEndpoint) {
+        return config;
+    }
+
+    try {
+        const parsed = new URL(rawEndpoint);
+        const versionFromQuery = parsed.searchParams.get("api-version");
+
+        if (versionFromQuery && !process.env.AZURE_OPENAI_API_VERSION) {
+            config.apiVersion = versionFromQuery;
+        }
+
+        let cleanedPath = parsed.pathname.replace(/\/openai\/?.*$/i, "");
+
+        if (!cleanedPath || cleanedPath === "/") {
+            cleanedPath = "/";
+        } else if (!cleanedPath.endsWith("/")) {
+            cleanedPath = `${cleanedPath}/`;
+        }
+
+        config.endpoint = `${parsed.origin}${cleanedPath === "/" ? "/" : cleanedPath}`;
+    } catch (error) {
+        const sanitized = rawEndpoint.replace(/\/openai.*$/i, "");
+        config.endpoint = sanitized.endsWith("/") ? sanitized : `${sanitized}/`;
+    }
+
+    return config;
+}
+
 module.exports = async function (context, req) {
     context.log('[CHAT] Request received');
 
@@ -12,13 +49,14 @@ module.exports = async function (context, req) {
         return;
     }
 
-    const { messages, system } = req.body;
+    const { messages, system, model: requestedModel } = req.body;
 
     // 2. Initialize OpenAI Client
-    const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-    const apiKey = process.env.AZURE_OPENAI_API_KEY;
-    // Deployment name is strictly managed by environment variables for security and cost control
-    const deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME || "gpt-4o-mini";
+    const rawEndpoint = process.env.AZURE_OPENAI_ENDPOINT;
+    const { endpoint, apiVersion } = resolveAzureConfig(rawEndpoint);
+    const apiKey = process.env.AZURE_OPENAI_API_KEY || process.env.AZURE_OPENAI_KEY;
+    const deploymentFromEnv = process.env.AZURE_OPENAI_DEPLOYMENT_NAME || "gpt-5-mini-2"; // Fallback or use user provided
+    const deployment = requestedModel || deploymentFromEnv;
 
     if (!endpoint || !apiKey) {
         context.log.error('[CHAT] Missing Azure OpenAI Credentials');
@@ -33,7 +71,7 @@ module.exports = async function (context, req) {
         const client = new AzureOpenAI({
             endpoint,
             apiKey,
-            apiVersion: "2024-08-01-preview",
+            apiVersion,
             deployment
         });
 
@@ -44,12 +82,12 @@ module.exports = async function (context, req) {
             conversation.unshift({ role: "system", content: system });
         }
 
-        context.log(`[CHAT] Sending ${conversation.length} messages to model ${deployment}`);
+        context.log(`[CHAT] Sending ${conversation.length} messages to model ${deployment} (apiVersion=${apiVersion})`);
 
         // 4. Call OpenAI
         const response = await client.chat.completions.create({
             messages: conversation,
-            model: deployment, // In Azure, this is often ignored in favor of deployment name in URL, but good to keep
+            model: deployment,
             max_completion_tokens: 5000,
         });
 
