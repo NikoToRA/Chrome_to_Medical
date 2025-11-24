@@ -868,7 +868,7 @@ async function pasteContent(text, images) {
   // 重複実行を防ぐ
   if (isPasting) {
     console.log('[Chrome to X] 貼り付け処理が既に実行中です');
-    return;
+    return false;
   }
 
   isPasting = true;

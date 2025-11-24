@@ -5,7 +5,7 @@ chrome.action.onClicked.addListener((tab) => {
 
 // 拡張機能がインストールされたときの処理
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Chrome to X 拡張機能がインストールされました');
+  console.log('KarteAI+ 拡張機能がインストールされました');
 });
 
 // サイドパネルからタブ情報を取得するためのメッセージハンドラ
@@ -32,7 +32,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
       
       const tab = tabs[0];
-      console.log('[Background] タブにメッセージを送信:', tab.id, tab.url);
+      console.log('[Background] タブにメッセージを送信:', tab.id, tab.url, 'text length:', request.text?.length);
       
       try {
         // まず、content scriptが読み込まれているか確認し、なければ注入
@@ -44,8 +44,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         
         const isContentScriptLoaded = results && results[0] && results[0].result;
+        console.log('[Background] Content script loaded:', isContentScriptLoaded);
         
         if (!isContentScriptLoaded) {
+          console.log('[Background] Content scriptを注入します');
           // プラットフォームハンドラーとcontent scriptを注入（manifest.jsonと同じ順序）
           await chrome.scripting.executeScript({
             target: { tabId: tab.id },
@@ -59,23 +61,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             ]
           });
           // 注入後に少し待つ（プラットフォームハンドラーの初期化を待つ）
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise(resolve => setTimeout(resolve, 300));
+          console.log('[Background] Content script注入完了');
         }
         
         // pasteContentを直接呼び出す
+        console.log('[Background] pasteContentを呼び出します');
         const pasteResults = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          func: (text, images) => {
-            if (typeof window.pasteContent === 'function') {
-              return window.pasteContent(text, images);
-            } else {
-              throw new Error('pasteContent function not found');
+          func: async (text, images) => {
+            console.log('[Background->Content] pasteContent呼び出し開始:', { textLength: text?.length, imagesCount: images?.length });
+            try {
+              if (typeof window.pasteContent === 'function') {
+                const result = await window.pasteContent(text, images || []);
+                console.log('[Background->Content] pasteContent結果:', result);
+                return result;
+              } else {
+                console.error('[Background->Content] pasteContent function not found');
+                throw new Error('pasteContent function not found');
+              }
+            } catch (error) {
+              console.error('[Background->Content] pasteContent実行エラー:', error);
+              throw error;
             }
           },
-          args: [request.text, request.images]
+          args: [request.text, request.images || []]
         });
         
-        sendResponse({ success: true });
+        console.log('[Background] pasteContent実行結果:', pasteResults);
+        const pasteResult = pasteResults && pasteResults[0] && pasteResults[0].result;
+        console.log('[Background] pasteResult:', pasteResult);
+        
+        if (pasteResult === false || pasteResult === undefined) {
+          console.warn('[Background] 貼り付けが失敗しました:', pasteResult);
+          sendResponse({ 
+            success: false, 
+            error: '貼り付けに失敗しました',
+            details: 'ページへの貼り付けが完了しませんでした'
+          });
+        } else {
+          console.log('[Background] 貼り付け成功');
+          sendResponse({ success: true });
+        }
       } catch (error) {
         console.error('[Background] スクリプト実行エラー:', error);
         sendResponse({ 
@@ -264,23 +291,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // 非同期レスポンス用
   }
 
-  if (request.action === 'claudeChat') {
-    handleClaudeChat(request.payload)
-      .then((result) => {
-        sendResponse(result);
-      })
-      .catch((error) => {
-        console.error('[Background] Claudeチャットエラー:', error);
-        sendResponse({
-          success: false,
-          error: error.message || 'Claude APIの呼び出しに失敗しました',
-          status: error.status || null,
-          details: error.details || null
-        });
-      });
-    return true; // 非同期レスポンス用
-  }
-
   // Google Docs用: Offscreen document経由でクリップボードに書き込む
   if (request.action === 'writeToClipboard') {
     (async () => {
@@ -347,133 +357,4 @@ function arrayBufferToBase64(buffer) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
-}
-
-const CLAUDE_API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const CLAUDE_API_VERSION = '2023-06-01';
-const CLAUDE_DEFAULT_MODEL = 'claude-sonnet-4-5';
-const CLAUDE_MAX_TOKENS = 1024;
-const SUPPORTED_MODELS = new Set(['claude-sonnet-4-5', 'claude-haiku-4-5']);
-
-async function handleClaudeChat(payload) {
-  if (!payload || !Array.isArray(payload.messages)) {
-    return {
-      success: false,
-      error: '不正なリクエストです'
-    };
-  }
-
-  const apiKey = await getClaudeApiKey();
-  if (!apiKey) {
-    return {
-      success: false,
-      error: 'Claude APIキーが設定されていません'
-    };
-  }
-
-  try {
-    const response = await callClaudeApi({
-      apiKey,
-      instructions: payload.instructions,
-      messages: payload.messages,
-      model: SUPPORTED_MODELS.has(payload.model) ? payload.model : CLAUDE_DEFAULT_MODEL
-    });
-
-    return {
-      success: true,
-      message: response.text,
-      usage: response.usage || null
-    };
-  } catch (error) {
-    throw error;
-  }
-}
-
-async function callClaudeApi({ apiKey, instructions, messages, model }) {
-  const requestBody = buildClaudeRequestBody({ instructions, messages, model });
-
-  const response = await fetch(CLAUDE_API_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': CLAUDE_API_VERSION,
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify(requestBody)
-  });
-
-  if (!response.ok) {
-    const status = response.status;
-    const rawError = await response.text();
-    let message = `Claude API error: ${status}`;
-    let details = null;
-
-    try {
-      const parsed = JSON.parse(rawError);
-      message = parsed?.error?.message || message;
-      details = parsed;
-    } catch (parseError) {
-      details = rawError;
-    }
-
-    throw {
-      status,
-      message,
-      details
-    };
-  }
-
-  const data = await response.json();
-  const text = extractClaudeText(data);
-  return {
-    text,
-    usage: data?.usage
-  };
-}
-
-function buildClaudeRequestBody({ instructions, messages, model }) {
-  const formattedMessages = messages
-    .filter((message) => message?.role && message?.content)
-    .map((message) => ({
-      role: message.role === 'assistant' ? 'assistant' : 'user',
-      content: [
-        {
-          type: 'text',
-          text: String(message.content || '')
-        }
-      ]
-    }));
-
-  const body = {
-    model: SUPPORTED_MODELS.has(model) ? model : CLAUDE_DEFAULT_MODEL,
-    max_tokens: CLAUDE_MAX_TOKENS,
-    messages: formattedMessages
-  };
-
-  if (instructions) {
-    body.system = instructions;
-  }
-
-  return body;
-}
-
-function extractClaudeText(responseData) {
-  if (!responseData) return '';
-  if (Array.isArray(responseData?.content)) {
-    return responseData.content
-      .map((item) => (item?.text ? item.text : ''))
-      .filter(Boolean)
-      .join('\n')
-      .trim();
-  }
-  return '';
-}
-
-async function getClaudeApiKey() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(['claudeApiKey'], (result) => {
-      resolve(result?.claudeApiKey || '');
-    });
-  });
 }

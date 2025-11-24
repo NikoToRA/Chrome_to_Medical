@@ -61,6 +61,9 @@ let directTemplatePaste = false;
 
 // 初期化
 async function init() {
+  // 認証チェック
+  await checkAuth();
+
   await Promise.all([loadEditorState(), loadAiState()]);
   await detectPlatform();
   setupTabNavigation();
@@ -73,6 +76,110 @@ async function init() {
   renderCategoryTabs();
   renderTemplates();
   renderImages();
+}
+
+// 認証チェック
+async function checkAuth() {
+  if (!window.AuthManager) {
+    console.error('AuthManager not found');
+    return;
+  }
+
+  const loginOverlay = document.getElementById('loginOverlay');
+  const loginBtn = document.getElementById('loginBtn');
+  const verifyTokenBtn = document.getElementById('verifyTokenBtn');
+  const loginTokenInput = document.getElementById('loginTokenInput');
+  const loginMessage = document.getElementById('loginMessage');
+
+  // イベントリスナー設定（初回のみ）
+  if (loginBtn && !loginBtn.hasAttribute('data-bound')) {
+    loginBtn.setAttribute('data-bound', 'true');
+    loginBtn.addEventListener('click', () => {
+      window.open('https://karte-ai-plus.vercel.app/login', '_blank');
+    });
+  }
+
+  if (verifyTokenBtn && !verifyTokenBtn.hasAttribute('data-bound')) {
+    verifyTokenBtn.setAttribute('data-bound', 'true');
+    verifyTokenBtn.addEventListener('click', async () => {
+      const token = loginTokenInput.value.trim();
+      if (!token) {
+        alert('トークンを入力してください');
+        return;
+      }
+
+      verifyTokenBtn.textContent = '認証中...';
+      verifyTokenBtn.disabled = true;
+
+      try {
+        const user = await window.AuthManager.loginWithToken(token);
+        if (user) {
+          // 認証成功
+          loginOverlay.classList.remove('active');
+          // 通知関数があれば使用
+          if (typeof showNotification === 'function') {
+            showNotification('ログインしました');
+          }
+          
+          // 課金チェック
+          const isSubscribed = await window.AuthManager.checkSubscription();
+          if (!isSubscribed) {
+            showSubscriptionOverlay();
+          }
+        }
+      } catch (error) {
+        alert('認証に失敗しました: ' + error.message);
+      } finally {
+        verifyTokenBtn.textContent = 'トークンで認証';
+        verifyTokenBtn.disabled = false;
+      }
+    });
+  }
+
+  // 既存のセッション確認
+  await window.AuthManager.init();
+  const user = window.AuthManager.getUser();
+
+  if (!user) {
+    loginOverlay.classList.add('active');
+  } else {
+    // ログイン済みなら課金チェック
+    const isSubscribed = await window.AuthManager.checkSubscription();
+    if (!isSubscribed) {
+      showSubscriptionOverlay();
+    } else {
+      loginOverlay.classList.remove('active');
+    }
+  }
+}
+
+function showSubscriptionOverlay() {
+  const loginOverlay = document.getElementById('loginOverlay');
+  const loginMessage = document.getElementById('loginMessage');
+  const loginBtn = document.getElementById('loginBtn');
+  const tokenInputDiv = document.querySelector('.input-group-vertical');
+  const separator = document.querySelector('.login-separator');
+
+  if (loginMessage) {
+    loginMessage.innerHTML = 'プランの有効期限切れ、<br>または未契約です。<br>引き続き利用するには契約が必要です。';
+    loginMessage.style.color = 'var(--danger-color)';
+  }
+
+  if (loginBtn) {
+    loginBtn.textContent = 'プランを選択する (LPへ)';
+    const newBtn = loginBtn.cloneNode(true);
+    loginBtn.parentNode.replaceChild(newBtn, loginBtn);
+    
+    newBtn.addEventListener('click', () => {
+        window.AuthManager.subscribe(); 
+    });
+  }
+  
+  // トークン入力は隠す
+  if (tokenInputDiv) tokenInputDiv.style.display = 'none';
+  if (separator) separator.style.display = 'none';
+
+  loginOverlay.classList.add('active');
 }
 
 // プラットフォーム検出
@@ -138,10 +245,28 @@ async function loadEditorState() {
   const savedCategories = await StorageManager.getTemplateCategories();
   const savedDirect = await StorageManager.getTemplatesDirectPaste();
 
+  console.log('[SidePanel] loadEditorState 開始:', {
+    savedTemplates,
+    savedCategories,
+    currentTemplateCategory,
+    savedTemplatesKeys: savedTemplates ? Object.keys(savedTemplates) : [],
+    savedCategoriesLength: savedCategories ? savedCategories.length : 0
+  });
+
   textEditor.value = text;
+  // テキストエディタの高さを調整
+  setTimeout(() => {
+    adjustTextEditorHeight();
+  }, 100);
   currentImages = images || [];
   templates = savedTemplates || {};
   templateCategories = savedCategories || [];
+
+  console.log('[SidePanel] データ読み込み後:', {
+    templates,
+    templateCategories,
+    currentTemplateCategory
+  });
 
   // カテゴリが存在しない場合はデフォルトを設定（通常はStorageManagerがデフォルトを返すはず）
   if (!templateCategories.length) {
@@ -150,14 +275,26 @@ async function loadEditorState() {
       { id: 'medications', name: '薬剤' },
       { id: 'phrases', name: '定型文' }
     ];
+    console.log('[SidePanel] デフォルトカテゴリを設定:', templateCategories);
   }
 
   // 現在のカテゴリが有効か確認
   if (!templateCategories.find(c => c.id === currentTemplateCategory)) {
-    currentTemplateCategory = templateCategories[0].id;
+    currentTemplateCategory = templateCategories[0]?.id || 'diagnoses';
+    console.log('[SidePanel] カテゴリを変更:', currentTemplateCategory);
   }
 
   directTemplatePaste = Boolean(savedDirect);
+  
+  console.log('[SidePanel] loadEditorState 完了:', {
+    templates,
+    templatesKeys: Object.keys(templates),
+    templateCategories,
+    templateCategoriesLength: templateCategories.length,
+    currentTemplateCategory,
+    categoryData: templates[currentTemplateCategory],
+    categoryDataLength: templates[currentTemplateCategory] ? templates[currentTemplateCategory].length : 0
+  });
 }
 
 // テキスト保持トグルの設定
@@ -284,12 +421,34 @@ function switchToTextTab() {
   activateTab('textTab');
 }
 
+// テキストエディタの高さを自動調整
+function adjustTextEditorHeight() {
+  if (!textEditor) return;
+  
+  // 高さをリセットしてスクロール高さを取得
+  textEditor.style.height = 'auto';
+  const scrollHeight = textEditor.scrollHeight;
+  
+  // 最小高さと最大高さを設定（最大は画面の50%程度）
+  const minHeight = 40;
+  const maxHeight = Math.min(window.innerHeight * 0.5, 400);
+  
+  // 高さを設定
+  textEditor.style.height = Math.max(minHeight, Math.min(scrollHeight, maxHeight)) + 'px';
+}
+
 // イベントリスナーの設定
 function setupEventListeners() {
   // テキスト編集
   textEditor.addEventListener('input', () => {
+    adjustTextEditorHeight();
     saveData();
   });
+  
+  // 初期高さを調整
+  if (textEditor) {
+    adjustTextEditorHeight();
+  }
 
   // 画像追加
   addImageBtn.addEventListener('click', () => {
@@ -459,6 +618,7 @@ function setupEventListeners() {
       }
     });
   }
+
 }
 
 // ドラッグ&ドロップ機能の設定
@@ -582,10 +742,10 @@ async function addImageFromData(imageData) {
 async function addImages(files) {
   const validFiles = files.filter(file => ImageManager.validateImageFile(file));
 
-  if (validFiles.length === 0) {
-    alert('有効な画像ファイルを選択してください。');
-    return;
-  }
+    if (validFiles.length === 0) {
+      alert('有効な画像ファイルを選択してください。');
+      return;
+    }
 
   // Xの画像制限（4枚まで）
   const remainingSlots = 4 - currentImages.length;
@@ -665,21 +825,21 @@ async function captureSelectScreenshot() {
 
     // まず、content scriptに選択範囲を指定してもらう
     chrome.runtime.sendMessage({ action: 'startSelectionScreenshot' }, async (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('[SidePanel] 選択範囲スクリーンショットエラー:', chrome.runtime.lastError);
-        showNotification('選択範囲の指定に失敗しました: ' + chrome.runtime.lastError.message);
-        return;
-      }
-
-      if (response && response.success === false) {
-        if (response.error === 'キャンセルされました') {
-          showNotification('キャンセルされました');
+        if (chrome.runtime.lastError) {
+          console.error('[SidePanel] 選択範囲スクリーンショットエラー:', chrome.runtime.lastError);
+          showNotification('選択範囲の指定に失敗しました: ' + chrome.runtime.lastError.message);
           return;
         }
-        console.error('[SidePanel] 選択範囲スクリーンショット失敗:', response);
-        showNotification('選択範囲の指定に失敗しました: ' + (response.error || '不明なエラー'));
-        return;
-      }
+
+        if (response && response.success === false) {
+          if (response.error === 'キャンセルされました') {
+            showNotification('キャンセルされました');
+            return;
+          }
+          console.error('[SidePanel] 選択範囲スクリーンショット失敗:', response);
+          showNotification('選択範囲の指定に失敗しました: ' + (response.error || '不明なエラー'));
+          return;
+        }
 
       if (response && response.success && response.selection) {
         // 選択範囲が取得できたので、スクリーンショットを取得して切り抜く
@@ -857,27 +1017,42 @@ function renderImages() {
 
 // カテゴリタブの表示
 function renderCategoryTabs() {
-  if (!templateCategoryToggle) return;
+  console.log('[SidePanel] renderCategoryTabs 呼び出し:', {
+    templateCategoryToggle: !!templateCategoryToggle,
+    templateCategories,
+    currentTemplateCategory
+  });
+  
+  if (!templateCategoryToggle) {
+    console.error('[SidePanel] templateCategoryToggle要素が見つかりません');
+    return;
+  }
 
   templateCategoryToggle.innerHTML = templateCategories.map(cat => {
     const isActive = cat.id === currentTemplateCategory;
     return `<button class="tab-button small ${isActive ? 'active' : ''}" 
-      data-category="${cat.id}" 
-      role="tab" 
-      aria-selected="${isActive}">${escapeHtml(cat.name)}</button>`;
+    data-category="${cat.id}" 
+    role="tab" 
+    aria-selected="${isActive}">${escapeHtml(cat.name)}</button>`;
   }).join('');
+
+  console.log('[SidePanel] カテゴリタブを生成:', templateCategoryToggle.innerHTML);
 
   // イベントリスナー設定
   templateCategoryToggle.querySelectorAll('.tab-button').forEach(btn => {
     btn.addEventListener('click', () => {
       const catId = btn.getAttribute('data-category');
+      console.log('[SidePanel] カテゴリタブクリック:', catId);
       if (catId) {
         currentTemplateCategory = catId;
+        console.log('[SidePanel] カテゴリを変更:', currentTemplateCategory);
         renderCategoryTabs();
         renderTemplates();
       }
     });
   });
+  
+  console.log('[SidePanel] renderCategoryTabs 完了');
 }
 
 // カテゴリ管理リストの表示（モーダル内）
@@ -980,15 +1155,45 @@ function insertTemplate(text) {
 }
 
 function renderTemplates() {
+  console.log('[SidePanel] renderTemplates 呼び出し:', {
+    currentTemplateCategory,
+    templates,
+    templateList: !!templateList,
+    categoryData: templates[currentTemplateCategory]
+  });
+  
   const items = templates[currentTemplateCategory] || [];
-  if (!templateList) return;
+  console.log('[SidePanel] renderTemplates items:', items);
+  
+  if (!templateList) {
+    console.error('[SidePanel] templateList要素が見つかりません');
+    return;
+  }
+  
   if (!items.length) {
+    console.log('[SidePanel] 定型文が空です。カテゴリ:', currentTemplateCategory);
     templateList.innerHTML = '<p style="color: #999; font-size: 12px;">定型文がありません</p>';
     return;
   }
+  
+  console.log('[SidePanel] 定型文を表示:', items.length, '件');
+  
+  // 10文字以下の場合は省略表示
+  const formatTemplateText = (text) => {
+    if (text.length <= 10) {
+      return text;
+    }
+    return text.substring(0, 10) + '...';
+  };
+  
   templateList.innerHTML = items
-    .map((t, i) => `<span class="template-tag" data-index="${i}">${escapeHtml(t)}</span>`)
+    .map((t, i) => {
+      const displayText = formatTemplateText(t);
+      const fullText = t;
+      return `<span class="template-tag" data-index="${i}" title="${escapeHtml(fullText)}" style="height: fit-content; line-height: 1.2; padding: 2px 10px; display: inline-block; vertical-align: baseline;">${escapeHtml(displayText)}</span>`;
+    })
     .join('');
+  
   templateList.querySelectorAll('.template-tag').forEach(tag => {
     tag.addEventListener('click', () => {
       const idx = parseInt(tag.getAttribute('data-index'));
@@ -997,25 +1202,45 @@ function renderTemplates() {
       handleTemplateClick(text);
     });
   });
+  
+  console.log('[SidePanel] renderTemplates 完了。表示されたタグ数:', templateList.querySelectorAll('.template-tag').length);
 }
 
 function handleTemplateClick(text) {
-  if (!directTemplatePaste) {
+  // トグルボタンの状態を直接確認（変数と同期を取る）
+  const toggleElement = document.getElementById('directTemplatePasteToggle');
+  const isDirectPasteEnabled = toggleElement ? toggleElement.checked : directTemplatePaste;
+  
+  console.log('[SidePanel] handleTemplateClick 呼び出し:', { 
+    text, 
+    directTemplatePaste, 
+    toggleChecked: toggleElement?.checked,
+    isDirectPasteEnabled 
+  });
+  
+  if (!isDirectPasteEnabled) {
+    console.log('[SidePanel] 直接貼り付けOFF - テキストエディタに挿入');
     insertTemplate(text);
     return;
   }
+  
+  console.log('[SidePanel] 直接貼り付けON - webページに貼り付け');
   chrome.runtime.sendMessage({
     action: 'pasteToActiveTab',
     text,
     images: []
   }, async (response) => {
+    console.log('[SidePanel] pasteToActiveTab レスポンス:', response);
     if (chrome.runtime.lastError) {
+      console.error('[SidePanel] pasteToActiveTab エラー:', chrome.runtime.lastError);
       showNotification('直接貼り付けに失敗しました: ' + chrome.runtime.lastError.message);
       return;
     }
     if (response && response.success === false) {
+      console.error('[SidePanel] 貼り付け失敗:', response);
       showNotification('直接貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
     } else {
+      console.log('[SidePanel] 貼り付け成功');
       showNotification('定型文を直接貼り付けました');
       await logClinicalInsertion('paste', {
         text,
@@ -1030,20 +1255,39 @@ function handleTemplateClick(text) {
 }
 
 async function setupTemplateDirectPasteToggle() {
+  console.log('[SidePanel] setupTemplateDirectPasteToggle 開始');
+  const toggleElement = document.getElementById('directTemplatePasteToggle');
+  console.log('[SidePanel] toggleElement:', toggleElement);
+  
+  if (!toggleElement) {
+    console.error('[SidePanel] directTemplatePasteToggle要素が見つかりません');
+    return;
+  }
+  
   try {
     directTemplatePaste = await StorageManager.getTemplatesDirectPaste();
+    console.log('[SidePanel] 直接貼り付け設定を読み込み:', directTemplatePaste);
   } catch (e) {
+    console.warn('[SidePanel] 直接貼り付け設定の読み込みエラー:', e);
     directTemplatePaste = false;
   }
-  if (directTemplatePasteToggle) {
-    directTemplatePasteToggle.checked = directTemplatePaste;
-    directTemplatePasteToggle.addEventListener('change', async (e) => {
-      directTemplatePaste = e.target.checked;
-      await StorageManager.saveTemplatesDirectPaste(directTemplatePaste);
-      const status = directTemplatePaste ? 'ON' : 'OFF';
-      showNotification(`定型文の直接貼り付けを${status}にしました`);
-    });
-  }
+  
+  toggleElement.checked = directTemplatePaste;
+  console.log('[SidePanel] トグルボタンの状態を設定:', directTemplatePaste, 'checked:', toggleElement.checked);
+  
+  // 既存のイベントリスナーを削除してから追加（重複防止）
+  const newToggleElement = toggleElement.cloneNode(true);
+  toggleElement.parentNode.replaceChild(newToggleElement, toggleElement);
+  
+  newToggleElement.addEventListener('change', async (e) => {
+    directTemplatePaste = e.target.checked;
+    console.log('[SidePanel] 直接貼り付け設定を変更:', directTemplatePaste);
+    await StorageManager.saveTemplatesDirectPaste(directTemplatePaste);
+    const status = directTemplatePaste ? 'ON' : 'OFF';
+    showNotification(`定型文の直接貼り付けを${status}にしました`);
+  });
+  
+  console.log('[SidePanel] setupTemplateDirectPasteToggle 完了');
 }
 
 function renderTemplateManageList() {
@@ -1139,15 +1383,15 @@ async function pasteToPage() {
           await clearAll({ skipConfirm: true, skipNotification: true });
           showNotification('ページに貼り付けました（テキストと画像をクリアしました）');
         }
-          await logClinicalInsertion('paste', {
-            text,
-            source: 'text-editor',
-            metadata: {
-              imagesCount: images.length,
-              retainTextAfterPaste,
-              triggeredFrom: 'editor-paste-button'
-            }
-          });
+        await logClinicalInsertion('paste', {
+          text,
+          source: 'text-editor',
+          metadata: {
+            imagesCount: images.length,
+            retainTextAfterPaste,
+            triggeredFrom: 'editor-paste-button'
+          }
+        });
       }
     });
   } catch (error) {
@@ -1277,7 +1521,9 @@ async function logClinicalInsertion(action, { text, source = 'unknown', noteType
 
     await window.ApiClient.logInsertion(payload);
   } catch (error) {
-    console.warn('[SidePanel] logClinicalInsertion でエラー', error);
+    // log-insertionの失敗は非致命的なので、警告のみ（エラーを投げない）
+    console.warn('[SidePanel] logClinicalInsertion でエラー（無視）:', error.message || error);
+    // エラーを再スローしない（AIチャットの動作を妨げない）
   }
 }
 
@@ -1425,8 +1671,6 @@ async function handleAiChatSend() {
     return;
   }
 
-
-
   ensureChatSession(selectedAgent);
 
   const now = new Date().toISOString();
@@ -1543,12 +1787,25 @@ async function handleAiChatSend() {
 
   } catch (error) {
     console.error('[SidePanel] AIチャット送信エラー:', error);
-    assistantMessage.content = `エラー: ${error.message}`;
+
+    // ネットワークエラーの場合は、より詳細なメッセージを表示
+    let errorMessage = error.message || 'AIチャットの送信に失敗しました';
+    if (error.message && (
+      error.message.includes('Failed to fetch') ||
+      error.message.includes('Network error') ||
+      error.message.includes('Network request failed')
+    )) {
+      errorMessage = 'ネットワークエラー: Azure Functionsへの接続に失敗しました。もう一度お試しください。';
+    } else if (error.message && error.message.includes('timed out')) {
+      errorMessage = 'タイムアウト: リクエストがタイムアウトしました。もう一度お試しください。';
+    }
+
+    assistantMessage.content = `エラー: ${errorMessage}`;
     assistantMessage.status = 'failed';
     chatState.updatedAt = new Date().toISOString();
     renderChatMessages();
     await persistChatSession();
-    showNotification('AIチャットの送信に失敗しました');
+    showNotification(errorMessage);
   } finally {
     chatState.isSending = false;
     setSendButtonState(false);
@@ -1574,99 +1831,99 @@ function getDefaultAgents() {
     return window.AiAgentUtils.getDefaultAgents();
   }
   return [
-    {
-      id: 'soap',
-      label: 'SOAP Formatter',
-      name: 'SOAP形式整理エージェント',
-      description: '医療情報をSOAP形式（Subjective, Objective, Assessment, Plan）で整理します。',
-      instructions:
-        '提供された情報をSOAP形式で整理してください。\n\n' +
-        '【S (Subjective) - 主観的所見】\n' +
-        '患者の訴え、症状、病歴、家族歴など、患者や家族から得られた主観的な情報を記載してください。\n\n' +
-        '【O (Objective) - 客観的所見】\n' +
-        '身体所見、検査結果、バイタルサイン、画像所見など、客観的に観察・測定された情報を記載してください。\n\n' +
-        '【A (Assessment) - 評価】\n' +
-        'SとOの情報を統合し、診断や病態の評価、鑑別診断を記載してください。\n\n' +
-        '【P (Plan) - 計画】\n' +
-        '今後の治療計画、検査計画、投薬計画、患者への説明事項、フォローアップ計画を記載してください。\n\n' +
-        '医療用語は適切に使用し、簡潔で読みやすい形式で出力してください。',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 'referral',
-      label: 'Referral Letter Writer',
-      name: '紹介状作成エージェント',
-      description: '適切な形式で紹介状を作成します。',
-      instructions:
-        '提供された情報を基に、適切な形式の紹介状を作成してください。\n\n' +
-        '【記載すべき項目】\n' +
-        '1. 宛先（医療機関名・診療科名・医師名）\n' +
-        '2. 患者情報（氏名、年齢、性別、生年月日）\n' +
-        '3. 紹介の目的・理由\n' +
-        '4. 現病歴・主訴\n' +
-        '5. 現在までの経過・治療内容\n' +
-        '6. 検査結果・所見（関連するもの）\n' +
-        '7. 現在の診断・病名\n' +
-        '8. 依頼事項（専門的な診察、検査、治療など）\n' +
-        '9. 返信の希望（診療情報提供書の返送希望など）\n' +
-        '10. 紹介元の医療機関情報（名称、住所、電話番号、医師名、診療科）\n\n' +
-        '【作成時の注意点】\n' +
-        '- 丁寧で専門的な表現を使用してください\n' +
-        '- 必要な情報を漏れなく記載してください\n' +
-        '- 読みやすく、論理的な構成にしてください\n' +
-        '- 医療用語は適切に使用してください\n' +
-        '- 患者のプライバシーに配慮してください',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 'email',
-      label: 'Email Reply Assistant',
-      name: 'メール返信エージェント',
-      description: '一般的なメール返信を適切な形式で作成します。',
-      instructions:
-        '提供されたメール内容を確認し、適切な形式で返信メールを作成してください。\n\n' +
-        '【返信メールの構成】\n' +
-        '1. 適切な件名（Re: を付けるか、内容に応じた件名）\n' +
-        '2. 挨拶、相手の名前や所属を明記する（適切な敬語を使用）\n' +
-        '3. 受信への感謝や確認\n' +
-        '4. 返信内容（質問への回答、依頼への対応、情報提供など）\n' +
-        '5. 今後のアクションや連絡事項（必要に応じて）\n' +
-        '6. 結びの挨拶\n' +
-        '7. 署名（必要に応じて）\n\n' +
-        '【作成時の注意点】\n' +
-        '- 相手の意図を正確に理解し、適切に応答してください\n' +
-        '- 礼儀正しく、丁寧な表現を使用してください\n' +
-        '- 簡潔で分かりやすい文章にしてください\n' +
-        '- 重要な情報は明確に伝えてください\n' +
-        '- 必要に応じて箇条書きを使用してください\n' +
-        '- 誤解を招く表現は避けてください\n' +
-        '- 返信が遅れた場合は、その旨を簡潔に謝罪してください',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: 'clinical-support',
-      label: 'Clinical Support',
-      name: '診療支援エージェント',
-      description: '患者の診療内容について相談できるエージェントです。',
-      instructions:
-        '提供された患者情報や診療内容について、医学的な観点から分析・助言を行ってください。\n\n' +
-        '【対応内容】\n' +
-        '- 鑑別診断の提案\n' +
-        '- 追加で必要な検査の提案\n' +
-        '- 治療方針の検討\n' +
-        '- 薬剤選択の助言\n' +
-        '- 専門医への紹介タイミングの判断\n' +
-        '- ガイドラインに基づく推奨事項\n\n' +
-        '【回答時の注意点】\n' +
-        '- エビデンスに基づいた情報を提供してください\n' +
-        '- 複数の選択肢がある場合は、それぞれのメリット・デメリットを示してください\n' +
-        '- 緊急性や重症度の評価を含めてください\n' +
-        '- 必要に応じて最新のガイドラインを参照してください\n' +
-        '- 診断や治療の最終判断は医師が行うことを前提としてください\n' +
-        '- 簡潔で実践的なアドバイスを心がけてください',
+      {
+        id: 'soap',
+        label: 'SOAP Formatter',
+        name: 'SOAP形式整理エージェント',
+        description: '医療情報をSOAP形式（Subjective, Objective, Assessment, Plan）で整理します。',
+        instructions:
+          '提供された情報をSOAP形式で整理してください。\n\n' +
+          '【S (Subjective) - 主観的所見】\n' +
+          '患者の訴え、症状、病歴、家族歴など、患者や家族から得られた主観的な情報を記載してください。\n\n' +
+          '【O (Objective) - 客観的所見】\n' +
+          '身体所見、検査結果、バイタルサイン、画像所見など、客観的に観察・測定された情報を記載してください。\n\n' +
+          '【A (Assessment) - 評価】\n' +
+          'SとOの情報を統合し、診断や病態の評価、鑑別診断を記載してください。\n\n' +
+          '【P (Plan) - 計画】\n' +
+          '今後の治療計画、検査計画、投薬計画、患者への説明事項、フォローアップ計画を記載してください。\n\n' +
+          '医療用語は適切に使用し、簡潔で読みやすい形式で出力してください。',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'referral',
+        label: 'Referral Letter Writer',
+        name: '紹介状作成エージェント',
+        description: '適切な形式で紹介状を作成します。',
+        instructions:
+          '提供された情報を基に、適切な形式の紹介状を作成してください。\n\n' +
+          '【記載すべき項目】\n' +
+          '1. 宛先（医療機関名・診療科名・医師名）\n' +
+          '2. 患者情報（氏名、年齢、性別、生年月日）\n' +
+          '3. 紹介の目的・理由\n' +
+          '4. 現病歴・主訴\n' +
+          '5. 現在までの経過・治療内容\n' +
+          '6. 検査結果・所見（関連するもの）\n' +
+          '7. 現在の診断・病名\n' +
+          '8. 依頼事項（専門的な診察、検査、治療など）\n' +
+          '9. 返信の希望（診療情報提供書の返送希望など）\n' +
+          '10. 紹介元の医療機関情報（名称、住所、電話番号、医師名、診療科）\n\n' +
+          '【作成時の注意点】\n' +
+          '- 丁寧で専門的な表現を使用してください\n' +
+          '- 必要な情報を漏れなく記載してください\n' +
+          '- 読みやすく、論理的な構成にしてください\n' +
+          '- 医療用語は適切に使用してください\n' +
+          '- 患者のプライバシーに配慮してください',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'email',
+        label: 'Email Reply Assistant',
+        name: 'メール返信エージェント',
+        description: '一般的なメール返信を適切な形式で作成します。',
+        instructions:
+          '提供されたメール内容を確認し、適切な形式で返信メールを作成してください。\n\n' +
+          '【返信メールの構成】\n' +
+          '1. 適切な件名（Re: を付けるか、内容に応じた件名）\n' +
+          '2. 挨拶、相手の名前や所属を明記する（適切な敬語を使用）\n' +
+          '3. 受信への感謝や確認\n' +
+          '4. 返信内容（質問への回答、依頼への対応、情報提供など）\n' +
+          '5. 今後のアクションや連絡事項（必要に応じて）\n' +
+          '6. 結びの挨拶\n' +
+          '7. 署名（必要に応じて）\n\n' +
+          '【作成時の注意点】\n' +
+          '- 相手の意図を正確に理解し、適切に応答してください\n' +
+          '- 礼儀正しく、丁寧な表現を使用してください\n' +
+          '- 簡潔で分かりやすい文章にしてください\n' +
+          '- 重要な情報は明確に伝えてください\n' +
+          '- 必要に応じて箇条書きを使用してください\n' +
+          '- 誤解を招く表現は避けてください\n' +
+          '- 返信が遅れた場合は、その旨を簡潔に謝罪してください',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      {
+        id: 'clinical-support',
+        label: 'Clinical Support',
+        name: '診療支援エージェント',
+        description: '患者の診療内容について相談できるエージェントです。',
+        instructions:
+          '提供された患者情報や診療内容について、医学的な観点から分析・助言を行ってください。\n\n' +
+          '【対応内容】\n' +
+          '- 鑑別診断の提案\n' +
+          '- 追加で必要な検査の提案\n' +
+          '- 治療方針の検討\n' +
+          '- 薬剤選択の助言\n' +
+          '- 専門医への紹介タイミングの判断\n' +
+          '- ガイドラインに基づく推奨事項\n\n' +
+          '【回答時の注意点】\n' +
+          '- エビデンスに基づいた情報を提供してください\n' +
+          '- 複数の選択肢がある場合は、それぞれのメリット・デメリットを示してください\n' +
+          '- 緊急性や重症度の評価を含めてください\n' +
+          '- 必要に応じて最新のガイドラインを参照してください\n' +
+          '- 診断や治療の最終判断は医師が行うことを前提としてください\n' +
+          '- 簡潔で実践的なアドバイスを心がけてください',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }
@@ -1733,6 +1990,11 @@ function setupStorageObservers() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
 
+    // 認証状態の変更を監視
+    if (changes['authToken'] || changes['user']) {
+      checkAuth();
+    }
+
     if (changes[StorageManager.STORAGE_KEYS.AI_AGENTS]) {
       const defaults = getDefaultAgents();
       aiState.agents = normalizeAgents(changes[StorageManager.STORAGE_KEYS.AI_AGENTS].newValue, defaults);
@@ -1746,8 +2008,6 @@ function setupStorageObservers() {
       renderAgentSelector();
       loadChatHistory();
     }
-
-
 
     if (changes[StorageManager.STORAGE_KEYS.AI_CHAT_SESSIONS]) {
       loadChatHistory();
@@ -2068,6 +2328,7 @@ async function clearCurrentChatSession() {
   resetChatState();
   renderChatMessages();
 }
+
 // 初期化実行
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);

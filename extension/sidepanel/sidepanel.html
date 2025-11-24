@@ -9,6 +9,28 @@
 </head>
 
 <body>
+  <div id="loginOverlay" class="login-overlay">
+    <div class="login-card">
+      <span class="login-logo">KarteAI+</span>
+      <p class="login-description" id="loginMessage">
+        電子カルテ作成をAIで効率化。<br>
+        まずはログインしてください。
+      </p>
+      
+      <button id="loginBtn" class="btn btn-primary btn-large">
+        ログイン / 新規登録 (LPへ)
+      </button>
+
+      <div class="login-separator">または</div>
+
+      <div class="input-group-vertical">
+        <input type="text" id="loginTokenInput" class="input" placeholder="トークンを入力 (LPで発行)">
+        <button id="verifyTokenBtn" class="btn btn-secondary btn-large">
+          トークンで認証
+        </button>
+      </div>
+    </div>
+  </div>
   <div class="container">
     <header class="header">
       <div class="header-left">
@@ -60,7 +82,7 @@
           <div class="text-editor-top-controls">
             <button id="clearAllBtn" class="btn btn-small btn-danger">🗑️ Allクリア</button>
           </div>
-          <textarea id="textEditor" class="text-editor" placeholder="テキストを入力してください..." rows="8"></textarea>
+          <textarea id="textEditor" class="text-editor" placeholder="テキストを入力してください..."></textarea>
           <div class="text-editor-controls">
             <button id="clearTextBtn" class="btn btn-small btn-ghost">クリア</button>
             <div class="text-retention-toggle">
@@ -176,26 +198,19 @@
     </div>
   </div>
 
-  <script src="/utils/storage.js"></script>
-  <script src="/utils/aiAgents.js"></script>
-  <script src="/utils/image.js"></script>
-  <script src="/utils/detector.js"></script>
-  <script src="/utils/adapters/base.js"></script>
-  <script src="/utils/adapters/generic.js"></script>
-  <script src="/utils/adapters/m3_digikar.js"></script>
-  <script src="/utils/adapters/clinics.js"></script>
-  <script src="/utils/adapters/mobacal.js"></script>
-  <script src="/utils/adapters/gmail.js"></script>
-  <script src="/utils/adapters/manager.js"></script>
-  <script src="/utils/auth.js"></script>
-  <script src="/utils/api.js"></script>
-  <script>
-    // Debug: Check if ApiClient is loaded
-    console.log('[DEBUG] ApiClient loaded:', window.ApiClient);
-    if (!window.ApiClient) {
-      console.error('[ERROR] ApiClient is not loaded! Check api.js');
-    }
-  </script>
+  <script src="../utils/storage.js"></script>
+  <script src="../utils/aiAgents.js"></script>
+  <script src="../utils/image.js"></script>
+  <script src="../utils/detector.js"></script>
+  <script src="../utils/adapters/base.js"></script>
+  <script src="../utils/adapters/generic.js"></script>
+  <script src="../utils/adapters/m3_digikar.js"></script>
+  <script src="../utils/adapters/clinics.js"></script>
+  <script src="../utils/adapters/mobacal.js"></script>
+  <script src="../utils/adapters/gmail.js"></script>
+  <script src="../utils/adapters/manager.js"></script>
+  <script src="../utils/auth.js"></script>
+  <script src="../utils/api.js"></script>
   <script src="sidepanel.js"></script>
 </body>
 
