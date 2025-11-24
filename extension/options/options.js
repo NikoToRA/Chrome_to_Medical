@@ -15,6 +15,12 @@ async function initOptions() {
   bindEvents();
   await loadAgents();
   setupStorageWatchers();
+
+  // Auth init
+  if (window.AuthManager) {
+    await window.AuthManager.init();
+    updateAccountUI();
+  }
 }
 
 async function loadAgents() {
@@ -66,6 +72,69 @@ function bindEvents() {
 
   if (agentsList) {
     agentsList.addEventListener('click', handleAgentAction);
+  }
+
+  // Auth event listeners
+  const sendMagicLinkBtn = document.getElementById('sendMagicLinkBtn');
+  if (sendMagicLinkBtn) {
+    sendMagicLinkBtn.addEventListener('click', async () => {
+      const email = document.getElementById('loginEmailInput').value;
+      if (!email) {
+        showToast('メールアドレスを入力してください', 'warning');
+        return;
+      }
+      try {
+        showToast('ログインリンクを送信中...', 'info');
+        await window.AuthManager.sendMagicLink(email);
+        showToast('メールを送信しました。トークンを入力してください。', 'success');
+        document.getElementById('verifySection').removeAttribute('hidden');
+      } catch (e) {
+        showToast('送信に失敗しました: ' + e.message, 'error');
+      }
+    });
+  }
+
+  const verifyTokenBtn = document.getElementById('verifyTokenBtn');
+  if (verifyTokenBtn) {
+    verifyTokenBtn.addEventListener('click', async () => {
+      const token = document.getElementById('loginTokenInput').value;
+      if (!token) {
+        showToast('トークンを入力してください', 'warning');
+        return;
+      }
+      try {
+        showToast('ログイン中...', 'info');
+        await window.AuthManager.loginWithToken(token);
+        updateAccountUI();
+        showToast('ログインしました', 'success');
+      } catch (e) {
+        showToast('ログインに失敗しました: ' + e.message, 'error');
+      }
+    });
+  }
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      await window.AuthManager.logout();
+      updateAccountUI();
+      showToast('ログアウトしました', 'info');
+    });
+  }
+
+  const upgradeBtn = document.getElementById('upgradeBtn');
+  if (upgradeBtn) {
+    upgradeBtn.addEventListener('click', async () => {
+      showToast('決済画面を開いています...', 'info');
+      await window.AuthManager.subscribe();
+    });
+  }
+
+  const manageSubscriptionBtn = document.getElementById('manageSubscriptionBtn');
+  if (manageSubscriptionBtn) {
+    manageSubscriptionBtn.addEventListener('click', async () => {
+      showToast('Stripeのカスタマーポータル機能はまだ実装されていません', 'warning');
+    });
   }
 }
 
@@ -414,4 +483,41 @@ function escapeHtml(unsafe = '') {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+
+function updateAccountUI() {
+  const user = window.AuthManager.getUser();
+  const isSubscribed = window.AuthManager.isSubscribed;
+
+  const loginSection = document.getElementById("loginSection");
+  const accountStatusSection = document.getElementById("accountStatusSection");
+  const userEmailDisplay = document.getElementById("userEmailDisplay");
+  const planStatusDisplay = document.getElementById("planStatusDisplay");
+  const upgradeBtn = document.getElementById("upgradeBtn");
+  const manageSubscriptionBtn = document.getElementById("manageSubscriptionBtn");
+  const freePlanMessage = document.getElementById("freePlanMessage");
+
+  if (user) {
+    loginSection.setAttribute("hidden", "");
+    accountStatusSection.removeAttribute("hidden");
+    userEmailDisplay.textContent = user.email;
+    
+    if (isSubscribed) {
+      planStatusDisplay.textContent = "Pro";
+      planStatusDisplay.classList.add("pro");
+      upgradeBtn.setAttribute("hidden", "");
+      manageSubscriptionBtn.removeAttribute("hidden");
+      freePlanMessage.setAttribute("hidden", "");
+    } else {
+      planStatusDisplay.textContent = "Free";
+      planStatusDisplay.classList.remove("pro");
+      upgradeBtn.removeAttribute("hidden");
+      manageSubscriptionBtn.setAttribute("hidden", "");
+      freePlanMessage.removeAttribute("hidden");
+    }
+  } else {
+    loginSection.removeAttribute("hidden");
+    accountStatusSection.setAttribute("hidden", "");
+  }
 }

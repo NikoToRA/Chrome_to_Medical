@@ -7,7 +7,7 @@ class ClinicsAdapter extends EmrAdapter {
     }
 
     matches(url) {
-        return url.includes('clinics-karte.com') || url.includes('medley.jp');
+        return url.includes('clinics-karte.com') || url.includes('medley.jp') || url.includes('karte.medley.life');
     }
 
     async pasteText(text) {

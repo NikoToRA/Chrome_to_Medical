@@ -37,6 +37,9 @@ function resolveAzureConfig(rawEndpoint) {
     return config;
 }
 
+const { requireAuth } = require('../lib/auth');
+const { getSubscription } = require('../lib/table');
+
 module.exports = async function (context, req) {
     context.log('[CHAT] Request received');
 
@@ -50,6 +53,22 @@ module.exports = async function (context, req) {
     }
 
     const { messages, system, model: requestedModel } = req.body;
+
+    // 1.5 Authenticate and authorize
+    try {
+        const { email } = await requireAuth(context, req);
+        // Check subscription status by email
+        const sub = await getSubscription(email);
+        const status = sub?.status || 'inactive';
+        const active = ['active', 'trialing'].includes(status);
+        if (!active) {
+            context.res = { status: 402, body: { error: 'Subscription inactive' } };
+            return;
+        }
+    } catch (e) {
+        context.res = { status: e.status || 401, body: { error: e.message } };
+        return;
+    }
 
     // 2. Initialize OpenAI Client
     const rawEndpoint = process.env.AZURE_OPENAI_ENDPOINT;

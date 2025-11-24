@@ -1,5 +1,6 @@
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+const { requireAuth } = require('../lib/auth');
 
 module.exports = async function (context, req) {
     context.log('Create Checkout Session processed a request.');
@@ -9,7 +10,7 @@ module.exports = async function (context, req) {
         return;
     }
 
-    const { email, returnUrl } = req.body;
+    const { email, returnUrl } = req.body || {};
 
     if (!email) {
         context.res = { status: 400, body: "Email is required" };
@@ -17,6 +18,17 @@ module.exports = async function (context, req) {
     }
 
     try {
+        // If Authorization provided, ensure email matches the authenticated identity
+        try {
+            const { email: authEmail } = await requireAuth(context, req);
+            if (email && email.toLowerCase() !== authEmail.toLowerCase()) {
+                context.res = { status: 403, body: "Email mismatch" };
+                return;
+            }
+        } catch (_) {
+            // no auth header: allow as long as email is provided
+        }
+
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             customer_email: email,
@@ -28,6 +40,12 @@ module.exports = async function (context, req) {
                 },
             ],
             mode: 'subscription',
+            subscription_data: {
+                trial_period_days: 14,
+                metadata: {
+                    email: email // Store email in subscription metadata too
+                }
+            },
             success_url: `${returnUrl}?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: returnUrl,
         });

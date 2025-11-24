@@ -133,43 +133,25 @@ function findEditableElementInDocument(doc, visited = new WeakSet()) {
  * プラットフォーム検出（簡易版）
  */
 function detectPlatform() {
-  const url = window.location.href;
+  try {
+    if (window.PlatformDetector && typeof window.PlatformDetector.detectFromURL === 'function') {
+      const byUrl = window.PlatformDetector.detectFromURL(window.location.href);
+      if (byUrl) return byUrl;
+    }
+  } catch (_) {}
+
   const hostname = window.location.hostname.toLowerCase();
 
-  // X (旧Twitter)
-  if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
-    return 'x';
-  }
-
-  // Gmail
-  if (hostname.includes('mail.google.com') || hostname.includes('gmail.com')) {
-    return 'gmail';
-  }
-
-  // Facebook
-  if (hostname.includes('facebook.com')) {
-    return 'facebook';
-  }
-
-  // MicroCMS
-  if (hostname.includes('microcms.io')) {
-    return 'microcms';
-  }
-
-  // Notion
-  if (hostname.includes('notion.so') || hostname.includes('notion.site')) {
-    return 'notion';
-  }
-
-  // CLINICS（ドメインに clinics を含む場合を暫定判定）
-  if (hostname.includes('clinics')) {
-    return 'clinics';
-  }
-
-  // Google Docs (無効化: 貼り付けが不安定なため一旦機能を停止)
-  // if (hostname.includes('docs.google.com')) {
-  //   return 'google-docs';
-  // }
+  // Minimal fallbacks when detector is unavailable
+  if (hostname.includes('clinics-karte.com') || hostname.includes('medley.jp')) return 'clinics';
+  if (hostname.includes('digikar.co.jp') || hostname.includes('karte.m3.com')) return 'm3_digikar';
+  if (hostname.includes('mobacal.net')) return 'mobacal';
+  if (hostname.includes('docs.google.com')) return 'google-docs';
+  if (hostname.includes('notion.so') || hostname.includes('notion.site')) return 'notion';
+  if (hostname.includes('facebook.com')) return 'facebook';
+  if (hostname.includes('mail.google.com') || hostname.includes('gmail.com')) return 'gmail';
+  if (hostname.includes('twitter.com') || hostname.includes('x.com')) return 'x';
+  if (hostname.includes('microcms.io')) return 'microcms';
 
   return null;
 }

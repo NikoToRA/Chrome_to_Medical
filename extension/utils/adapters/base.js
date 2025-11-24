@@ -36,6 +36,15 @@ class EmrAdapter {
         console.log(`[${this.name}] Pasting image...`);
         return false;
     }
+
+    /**
+     * Extract context data from the current EMR page (reserved for future use).
+     * Should be executed in content-script context when implemented.
+     * @returns {Promise<Object>} Context object (e.g., patient name, ID, department)
+     */
+    async extractContext() {
+        return {};
+    }
 }
 
 // Export for usage in other files (if using modules, but here we use global scope for extension)

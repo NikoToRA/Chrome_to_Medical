@@ -1,4 +1,5 @@
 const { getSubscription } = require('../lib/table');
+const { requireAuth } = require('../lib/auth');
 
 module.exports = async function (context, req) {
     context.log('Check Subscription processed a request.');
@@ -8,10 +9,12 @@ module.exports = async function (context, req) {
         return;
     }
 
-    const { email } = req.body;
-
-    if (!email) {
-        context.res = { status: 400, body: "Email is required" };
+    // AuthN: use email from JWT instead of client-provided value
+    let email;
+    try {
+        ({ email } = await requireAuth(context, req));
+    } catch (e) {
+        context.res = { status: e.status || 401, body: { error: e.message } };
         return;
     }
 
@@ -34,7 +37,7 @@ module.exports = async function (context, req) {
 
         context.res = {
             body: {
-                active: status === 'active',
+                active: ['active', 'trialing'].includes(status),
                 status,
                 expiry
             }

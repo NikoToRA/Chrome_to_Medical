@@ -13,9 +13,13 @@
         "test": "echo \"No test specified\" && exit 1"
     },
     "dependencies": {
-        "openai": "^4.77.0",
         "@azure/data-tables": "^13.0.0",
         "@azure/storage-blob": "^12.11.0",
-        "stripe": "^17.5.0"
+        "@sendgrid/mail": "^8.1.6",
+        "jsonwebtoken": "^9.0.2",
+        "node-fetch": "^2.7.0",
+        "openai": "^4.77.0",
+        "stripe": "^17.5.0",
+        "uuid": "^13.0.0"
     }
 }

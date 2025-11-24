@@ -23,7 +23,68 @@
     </header>
 
     <main class="options-main">
+      <!-- アカウント管理セクション -->
+      <section class="card card-account">
+        <div class="card-header">
+          <div>
+            <h2>アカウント</h2>
+            <p class="card-subtitle">ログインとサブスクリプション管理</p>
+          </div>
+        </div>
 
+        <!-- 未ログイン状態 -->
+        <div id="loginSection" class="account-content">
+          <div class="login-box">
+            <h3>ログイン</h3>
+            <p class="description-text">登録済みの方は、メールアドレスを入力してログインしてください。</p>
+            <div class="input-group-vertical">
+              <input type="email" id="loginEmailInput" class="input" placeholder="メールアドレス" required>
+              <button id="sendMagicLinkBtn" class="btn btn-primary">ログインリンクを送信</button>
+            </div>
+            <p class="register-link">
+              まだ登録していない方は <a href="https://karte-ai-plus.vercel.app" target="_blank"
+                rel="noopener noreferrer">こちらから登録</a>
+            </p>
+          </div>
+
+          <div id="verifySection" class="login-box" hidden>
+            <h3>認証コードの入力</h3>
+            <p class="description-text">メールに記載されたトークンを入力してください。</p>
+            <div class="input-group-vertical">
+              <input type="text" id="loginTokenInput" class="input" placeholder="トークンを貼り付け" required>
+              <button id="verifyTokenBtn" class="btn btn-primary">ログイン</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ログイン済み状態 -->
+        <div id="accountStatusSection" class="account-content" hidden>
+          <div class="account-info-box">
+            <h3>アカウント情報</h3>
+            <div class="account-info-grid">
+              <div class="info-item">
+                <span class="label">メールアドレス</span>
+                <span id="userEmailDisplay" class="value"></span>
+              </div>
+              <div class="info-item">
+                <span class="label">プラン</span>
+                <span id="planStatusDisplay" class="value badge">Free</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="subscriptionActions" class="subscription-box">
+            <h3>サブスクリプション</h3>
+            <p id="freePlanMessage" class="description-text">AI機能を利用するにはProプランへのアップグレードが必要です。</p>
+            <button id="upgradeBtn" class="btn btn-primary btn-large">契約する (14日間無料体験)</button>
+            <button id="manageSubscriptionBtn" class="btn btn-secondary" hidden>サブスクリプション管理 (解約など)</button>
+          </div>
+
+          <div class="logout-box">
+            <button id="logoutBtn" class="btn btn-ghost btn-danger">ログアウト</button>
+          </div>
+        </div>
+      </section>
 
       <section class="card card-agents">
         <div class="card-header">
@@ -40,8 +101,10 @@
 
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="/utils/storage.js"></script>
-  <script src="/utils/aiAgents.js"></script>
+  <script src="../utils/storage.js"></script>
+  <script src="../utils/aiAgents.js"></script>
+  <script src="../utils/auth.js"></script>
+  <script src="../utils/api.js"></script>
   <script src="options.js"></script>
 </body>
 

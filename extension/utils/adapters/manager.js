@@ -12,6 +12,9 @@ class EmrAdapterManager {
         if (window.M3DigikarAdapter) this.adapters.push(new M3DigikarAdapter());
         if (window.ClinicsAdapter) this.adapters.push(new ClinicsAdapter());
         if (window.MobacalAdapter) this.adapters.push(new MobacalAdapter());
+        if (window.MedicomHopeAdapter) this.adapters.push(new MedicomHopeAdapter());
+        if (window.BrainBoxAdapter) this.adapters.push(new BrainBoxAdapter());
+        if (window.MapsAdapter) this.adapters.push(new MapsAdapter());
         if (window.GmailAdapter) this.adapters.push(new GmailAdapter());
     }
 

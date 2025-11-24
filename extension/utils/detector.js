@@ -13,6 +13,24 @@ class PlatformDetector {
     const urlObj = new URL(url);
     const hostname = urlObj.hostname.toLowerCase();
 
+    // EMR (電子カルテ) domains first (from EMR_DOMAINS mapping if available)
+    try {
+      const domains = (typeof window !== 'undefined' && window.EMR_DOMAINS) ? window.EMR_DOMAINS : null;
+      if (domains) {
+        for (const [key, list] of Object.entries(domains)) {
+          if (!Array.isArray(list)) continue;
+          if (list.some(d => d && hostname.includes(d.toLowerCase()))) {
+            return key;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Fallback to a few known patterns (in case EMR_DOMAINS not loaded)
+    if (hostname.includes('clinics-karte.com') || hostname.includes('medley.jp')) return 'clinics';
+    if (hostname.includes('digikar.co.jp') || hostname.includes('karte.m3.com')) return 'm3_digikar';
+    if (hostname.includes('mobacal.net')) return 'mobacal';
+
     // X (旧Twitter)
     if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
       return 'x';
@@ -127,6 +145,12 @@ class PlatformDetector {
    */
   static getPlatformName(platform) {
     const names = {
+      'clinics': 'CLINICS',
+      'm3_digikar': 'm3 デジカル',
+      'mobacal': 'モバカル',
+      'medicom_hope': 'Medicom-HRf/HOPE (仮)',
+      'brainbox': 'Brain Box (仮)',
+      'maps': 'MAps (仮)',
       'x': 'X (旧Twitter)',
       'facebook': 'Facebook',
       'gmail': 'Gmail',
@@ -146,4 +170,3 @@ class PlatformDetector {
 if (typeof window !== 'undefined') {
   window.PlatformDetector = PlatformDetector;
 }
-

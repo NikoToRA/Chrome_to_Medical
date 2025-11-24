@@ -32,7 +32,7 @@ git clone https://github.com/NikoToRA/Chrome_to_Medical.git
 2. Chromeで `chrome://extensions/` を開く
 3. 「デベロッパーモード」を有効にする
 4. 「パッケージ化されていない拡張機能を読み込む」をクリック
-5. `Chrome_to_Medical` ディレクトリを選択
+5. `Chrome_to_Medical/extension/` ディレクトリを選択
 
 ### Chrome Web Store版（予定）
 
@@ -93,25 +93,37 @@ Chrome Web Storeでの公開を準備中です。
 
 ```
 Chrome_to_Medical/
-├── manifest.json          # 拡張機能の設定ファイル
-├── background.js          # バックグラウンドスクリプト
-├── sidepanel/            # サイドパネルUI
-│   ├── sidepanel.html
-│   ├── sidepanel.css
-│   └── sidepanel.js
-├── content/              # コンテンツスクリプト
-│   ├── platforms/        # プラットフォーム別ハンドラー
-│   │   └── generic.js   # 汎用ハンドラー
-│   └── content.js       # メインコンテンツスクリプト
-├── options/              # 設定画面
-│   ├── options.html
-│   ├── options.css
-│   └── options.js
-├── utils/                # ユーティリティ
-│   ├── aiAgents.js      # AI関連処理
-│   ├── storage.js       # ストレージ管理
-│   └── templates.js     # テンプレート管理
-└── icons/                # アイコンファイル
+├── extension/               # Chrome拡張機能（Web Store用）
+│   ├── manifest.json        # 拡張機能の設定ファイル
+│   ├── background.js        # バックグラウンドスクリプト
+│   ├── sidepanel/          # サイドパネルUI
+│   │   ├── sidepanel.html
+│   │   ├── sidepanel.css
+│   │   └── sidepanel.js
+│   ├── content/            # コンテンツスクリプト
+│   │   ├── platforms/      # プラットフォーム別ハンドラー
+│   │   └── content.js     # メインコンテンツスクリプト
+│   ├── options/            # 設定画面
+│   ├── utils/              # ユーティリティ
+│   ├── offscreen/          # オフスクリーンドキュメント
+│   ├── defaults/           # デフォルト設定
+│   └── icons/              # アイコンファイル
+├── landing-page/           # ランディングページ（React）
+├── azure-functions/        # Azure Functions（バックエンドAPI）
+├── scripts/                # セットアップスクリプト
+│   ├── setup_azure.sh     # Azure環境セットアップ
+│   └── SET_ENV_VARS.sh    # 環境変数設定
+├── docs/                   # ドキュメント
+│   ├── ARCHITECTURE.md    # アーキテクチャ設計
+│   ├── AZURE_SETUP.md     # Azure構築ガイド
+│   ├── DEPLOYMENT_GUIDE.md
+│   └── WEBSTORE_PUBLICATION_GUIDE.md
+├── logs/                   # 開発ログ
+│   ├── backlog.md
+│   └── ...
+├── README.md              # このファイル
+├── PRIVACY.md             # プライバシーポリシー
+└── SECURITY.md            # セキュリティポリシー
 ```
 
 ## 開発
