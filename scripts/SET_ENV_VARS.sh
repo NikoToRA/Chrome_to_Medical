@@ -1,23 +1,25 @@
 #!/bin/bash
 
-# Azure Function App Name
-APP_NAME="func-karte-ai-1763705952"
-RESOURCE_GROUP="rg-karte-ai"
+# Load environment variables from .env file
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_FILE="$PROJECT_ROOT/.env"
 
-# Secrets - PLEASE FILL THESE IN
-# You can get SendGrid Key from SendGrid Dashboard
-# You can generate a random string for JWT_SECRET
-# You can get Stripe keys from Stripe Dashboard
-SENDGRID_API_KEY=""
-JWT_SECRET=""
-STRIPE_SECRET_KEY=""
-STRIPE_PRICE_ID=""
-STRIPE_WEBHOOK_SECRET=""
+if [ ! -f "$ENV_FILE" ]; then
+    echo "Error: .env file not found at $ENV_FILE"
+    echo "Please copy .env.example to .env and fill in your values."
+    exit 1
+fi
+
+# Source the .env file
+set -a
+source "$ENV_FILE"
+set +a
 
 # Check if variables are set
 if [ -z "$SENDGRID_API_KEY" ] || [ -z "$JWT_SECRET" ] || [ -z "$STRIPE_SECRET_KEY" ] || [ -z "$STRIPE_PRICE_ID" ] || [ -z "$STRIPE_WEBHOOK_SECRET" ]; then
-    echo "Error: Please edit this script and fill in the secret variables before running."
-    echo "Open 'SET_ENV_VARS.sh' in your editor."
+    echo "Error: Please edit .env file and fill in the secret variables before running."
+    echo "Open '.env' in your editor."
     exit 1
 fi
 
