@@ -18,6 +18,10 @@ export async function registerAndPayment(userData) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             email: userData.email,
+            name: userData.name,
+            facilityName: userData.facilityName,
+            address: userData.address,
+            phone: userData.phone,
             returnUrl: `${window.location.origin}/success`
         })
     });

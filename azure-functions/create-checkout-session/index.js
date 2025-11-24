@@ -10,7 +10,7 @@ module.exports = async function (context, req) {
         return;
     }
 
-    const { email, returnUrl } = req.body || {};
+    const { email, returnUrl, name, facilityName, address, phone } = req.body || {};
 
     if (!email) {
         context.res = { status: 400, body: "Email is required" };
@@ -32,6 +32,8 @@ module.exports = async function (context, req) {
         const session = await stripe.checkout.sessions.create({
             payment_method_types: ['card'],
             customer_email: email,
+            customer_creation: 'always',
+            billing_address_collection: 'required',
             line_items: [
                 {
                     // Replace with your actual Price ID from Stripe Dashboard
@@ -43,8 +45,19 @@ module.exports = async function (context, req) {
             subscription_data: {
                 trial_period_days: 14,
                 metadata: {
-                    email: email // Store email in subscription metadata too
+                    email: email, // Store email in subscription metadata too
+                    name: name || '',
+                    facilityName: facilityName || '',
+                    address: address || '',
+                    phone: phone || ''
                 }
+            },
+            metadata: {
+                email: email,
+                name: name || '',
+                facilityName: facilityName || '',
+                address: address || '',
+                phone: phone || ''
             },
             success_url: `${returnUrl}?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: returnUrl,
