@@ -8,6 +8,26 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('KarteAI+ 拡張機能がインストールされました');
 });
 
+// Accept login from LP (externally_connectable)
+chrome.runtime.onMessageExternal.addListener((request, sender, sendResponse) => {
+  if (!request || typeof request !== 'object') return;
+  if (request.action === 'loginWithToken' && request.token) {
+    (async () => {
+      try {
+        await chrome.storage.local.set({ authToken: request.token, user: null });
+        // Optionally notify sidepanel to refresh auth state
+        try {
+          chrome.runtime.sendMessage({ action: 'authUpdated' });
+        } catch (_) {}
+        sendResponse({ success: true });
+      } catch (e) {
+        sendResponse({ success: false, error: e?.message || 'Failed to store token' });
+      }
+    })();
+    return true; // async response
+  }
+});
+
 // サイドパネルからタブ情報を取得するためのメッセージハンドラ
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('[Background] メッセージ受信:', request);

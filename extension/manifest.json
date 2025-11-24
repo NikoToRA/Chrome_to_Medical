@@ -17,6 +17,12 @@
   "background": {
     "service_worker": "background.js"
   },
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:5173/*",
+      "https://*.karte-ai-plus.com/*"
+    ]
+  },
   "action": {
     "default_title": "KarteAI+ を開く"
   },

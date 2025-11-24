@@ -21,7 +21,8 @@ module.exports = async function (context, req) {
         // Generate long-lived session token
         const sessionToken = jwt.sign({ email, type: 'session' }, secret, { expiresIn: '14d' });
 
-        // Return HTML with the token
+        // Return HTML with the token and attempt to deliver to extension
+        const extensionId = process.env.EXTENSION_ID || '';
         const html = `
         <html>
             <head>
@@ -30,6 +31,7 @@ module.exports = async function (context, req) {
                     body { font-family: sans-serif; text-align: center; padding: 50px; }
                     .token-box { background: #f0f0f0; padding: 20px; margin: 20px auto; max-width: 600px; word-break: break-all; }
                     button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+                    .hint { color: #666; font-size: 14px; }
                 </style>
             </head>
             <body>
@@ -37,6 +39,7 @@ module.exports = async function (context, req) {
                 <p>Please copy the token below and paste it into the extension.</p>
                 <div class="token-box" id="token">${sessionToken}</div>
                 <button onclick="copyToken()">Copy Token</button>
+                <p class="hint">If the extension is installed, we will try to sign you in automatically.</p>
                 <script>
                     function copyToken() {
                         const token = document.getElementById('token').innerText;
@@ -44,6 +47,15 @@ module.exports = async function (context, req) {
                             alert('Copied!');
                         });
                     }
+                    (function(){
+                      var extId = ${extensionId ? '`' + '${extensionId}' + '`' : '""'};
+                      if (!extId || !(window.chrome && chrome.runtime && chrome.runtime.sendMessage)) return;
+                      try {
+                        chrome.runtime.sendMessage(extId, { action: 'loginWithToken', token: '${sessionToken}' }, function(resp){
+                          // No-op; fallback is manual copy
+                        });
+                      } catch (e) {}
+                    })();
                 </script>
             </body>
         </html>
