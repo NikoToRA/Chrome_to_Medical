@@ -1,11 +1,11 @@
 const { TableClient } = require("@azure/data-tables");
-const sgMail = require('@sendgrid/mail');
+const { sendEmail } = require('../lib/email');
 
 const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-const sendgridKey = process.env.SENDGRID_API_KEY;
-
+const sendgridKey = process.env.SENDGRID_API_KEY; // optional fallback
+let sgMail = null;
 if (sendgridKey) {
-    sgMail.setApiKey(sendgridKey);
+    try { sgMail = require('@sendgrid/mail'); sgMail.setApiKey(sendgridKey); } catch (_) {}
 }
 
 module.exports = async function (context, myTimer) {
@@ -33,18 +33,19 @@ module.exports = async function (context, myTimer) {
             if (expiry >= twoDaysLater && expiry < threeDaysLater) {
                 const email = entity.email;
                 if (email) {
-                    const msg = {
-                        to: email,
-                        from: 'no-reply@karte-ai-plus.com',
-                        subject: 'Karte AI+ Trial Ending Soon',
-                        text: 'Your trial ends in 2 days. Please add a payment method to continue.',
-                        html: '<p>Your trial ends in 2 days. Please add a payment method to continue.</p>'
-                    };
-                    if (sendgridKey) {
-                        await sgMail.send(msg);
+                    const subject = 'Karte AI+ Trial Ending Soon';
+                    const text = 'Your trial ends in 2 days. You will be charged unless you cancel.';
+                    const html = '<p>Your trial ends in 2 days. You will be charged unless you cancel.</p>';
+                    try {
+                        await sendEmail({ to: email, subject, text, html });
                         context.log(`Sent reminder to ${email}`);
-                    } else {
-                        context.log(`Mock sent reminder to ${email}`);
+                    } catch (e) {
+                        if (sgMail) {
+                            await sgMail.send({ to: email, from: 'no-reply@karte-ai-plus.com', subject, text, html });
+                            context.log(`Sent reminder (fallback) to ${email}`);
+                        } else {
+                            context.log(`Reminder (not sent) to ${email} – email not configured`);
+                        }
                     }
                 }
             }

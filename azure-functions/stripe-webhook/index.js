@@ -211,8 +211,45 @@ module.exports = async function (context, req) {
                     amount: invoice.amount_paid || invoice.amount_due
                 });
 
-                // 請求書情報を保存（必要に応じて）
-                // ここではログのみ記録
+                // Optional: Email invoice via ACS/SendGrid if configured
+                try {
+                    const { sendEmail } = require('../lib/email');
+                    let email = invoice.customer_email || null;
+                    if (!email && customerId) {
+                        try {
+                            const customer = await stripe.customers.retrieve(customerId);
+                            email = customer.email;
+                        } catch (_) {}
+                    }
+                    if (email && (process.env.EMAIL_SEND_INVOICES === 'true')) {
+                        const hostedUrl = invoice.hosted_invoice_url;
+                        const pdfUrl = invoice.invoice_pdf;
+                        const subject = invoice.status === 'paid'
+                          ? 'Karte AI+ Invoice (Payment Succeeded)'
+                          : 'Karte AI+ Invoice (Payment Failed)';
+                        const text = `Invoice ${invoice.number || invoice.id}\nAmount: ${(invoice.amount_paid || invoice.amount_due)/100} ${invoice.currency}\n${hostedUrl || pdfUrl || ''}`;
+                        const html = `<p>Invoice <b>${invoice.number || invoice.id}</b></p>
+                                      <p>Amount: <b>${(invoice.amount_paid || invoice.amount_due)/100} ${invoice.currency.toUpperCase()}</b></p>
+                                      ${hostedUrl ? `<p><a href="${hostedUrl}">View Invoice</a></p>` : ''}
+                                      ${pdfUrl ? `<p><a href="${pdfUrl}">Download PDF</a></p>` : ''}`;
+                        try {
+                            await sendEmail({ to: email, subject, text, html });
+                            context.log(`Invoice email sent to ${email}`);
+                        } catch (e) {
+                            try {
+                                const sgKey = process.env.SENDGRID_API_KEY;
+                                if (sgKey) {
+                                    const sg = require('@sendgrid/mail');
+                                    sg.setApiKey(sgKey);
+                                    await sg.send({ to: email, from: 'no-reply@karte-ai-plus.com', subject, text, html });
+                                    context.log(`Invoice email (fallback) sent to ${email}`);
+                                }
+                            } catch (_) {}
+                        }
+                    }
+                } catch (e) {
+                    context.log('Invoice email send skipped or failed:', e.message);
+                }
 
                 break;
             }

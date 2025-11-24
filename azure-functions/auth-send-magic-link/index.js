@@ -1,12 +1,12 @@
 const jwt = require('jsonwebtoken');
-const sgMail = require('@sendgrid/mail');
 const { getUser } = require('../lib/table');
+const { sendEmail } = require('../lib/email');
 
 const secret = process.env.JWT_SECRET;
-const sendgridKey = process.env.SENDGRID_API_KEY;
-
+const sendgridKey = process.env.SENDGRID_API_KEY; // fallback only
+let sgMail = null;
 if (sendgridKey) {
-    sgMail.setApiKey(sendgridKey);
+    try { sgMail = require('@sendgrid/mail'); sgMail.setApiKey(sendgridKey); } catch (_) {}
 }
 
 module.exports = async function (context, req) {
@@ -46,19 +46,19 @@ module.exports = async function (context, req) {
     const baseUrl = `${protocol}://${host}`;
     const magicLink = `${baseUrl}/api/auth-verify-token?token=${token}`;
 
-    const msg = {
-        to: email,
-        from: 'no-reply@karte-ai-plus.com', // Replace with verified sender
-        subject: 'Karte AI+ Login Link',
-        text: `Click here to login: ${magicLink}`,
-        html: `<p>Click here to login:</p><a href="${magicLink}">Login to Karte AI+</a>`
-    };
+    const subject = 'Karte AI+ Login Link';
+    const text = `Click here to login: ${magicLink}`;
+    const html = `<p>Click here to login:</p><a href="${magicLink}">Login to Karte AI+</a>`;
 
     try {
-        if (sendgridKey) {
-            await sgMail.send(msg);
-        } else {
-            context.log("SendGrid Key missing. Magic Link:", magicLink);
+        try {
+            await sendEmail({ to: email, subject, text, html });
+        } catch (e) {
+            if (sgMail) {
+                await sgMail.send({ to: email, from: 'no-reply@karte-ai-plus.com', subject, text, html });
+            } else {
+                context.log("[auth-send-magic-link] Email not configured. Magic Link:", magicLink);
+            }
         }
 
         context.res = {
