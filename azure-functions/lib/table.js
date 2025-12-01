@@ -43,7 +43,37 @@ async function getSubscription(email) {
     }
 }
 
+async function upsertUser(email, data) {
+    const client = await getTableClient('Users');
+    const rowKey = Buffer.from(email).toString('base64');
+
+    const entity = {
+        partitionKey: "User",
+        rowKey: rowKey,
+        email: email,
+        ...data,
+        updatedAt: new Date().toISOString()
+    };
+
+    await client.upsertEntity(entity, "Merge");
+}
+
+async function getUser(email) {
+    const client = await getTableClient('Users');
+    const rowKey = Buffer.from(email).toString('base64');
+
+    try {
+        const entity = await client.getEntity("User", rowKey);
+        return entity;
+    } catch (e) {
+        if (e.statusCode === 404) return null;
+        throw e;
+    }
+}
+
 module.exports = {
     upsertSubscription,
-    getSubscription
+    getSubscription,
+    upsertUser,
+    getUser
 };
