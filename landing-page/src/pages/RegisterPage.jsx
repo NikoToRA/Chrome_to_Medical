@@ -135,7 +135,7 @@ export default function RegisterPage() {
                     <button
                         type="submit"
                         className="submit-button"
-                        disabled={loading}
+                        disabled={loading || success}
                     >
                         {loading ? '処理中...' : '無料で登録する'}
                     </button>

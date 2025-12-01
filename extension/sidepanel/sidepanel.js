@@ -82,6 +82,38 @@ async function init() {
   renderImages();
 }
 
+// サブスクリプション確認（AI機能実行前）
+async function checkSubscriptionBeforeAI() {
+  if (!window.AuthManager) {
+    showNotification('認証システムが初期化されていません');
+    return false;
+  }
+
+  const user = window.AuthManager.getUser();
+  if (!user) {
+    showNotification('ログインが必要です');
+    const loginOverlay = document.getElementById('loginOverlay');
+    if (loginOverlay) {
+      loginOverlay.classList.add('active');
+    }
+    return false;
+  }
+
+  try {
+    const isSubscribed = await window.AuthManager.checkSubscription();
+    if (!isSubscribed) {
+      showNotification('有効なサブスクリプションが必要です');
+      showSubscriptionOverlay();
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('[SidePanel] サブスクリプション確認エラー:', error);
+    showNotification('サブスクリプション確認に失敗しました');
+    return false;
+  }
+}
+
 // 認証チェック
 async function checkAuth() {
   console.log('[SidePanel] 認証チェック開始');
@@ -1709,6 +1741,11 @@ async function handleAiChatSend() {
     return;
   }
 
+  // サブスクリプション確認
+  if (!await checkSubscriptionBeforeAI()) {
+    return;
+  }
+
   if (!agentSelector) {
     showNotification('エージェント選択UIが初期化されていません');
     return;
@@ -2299,6 +2336,11 @@ async function sendLatestAssistantMessageToEditor() {
 }
 
 async function pasteLatestAssistantMessageDirect() {
+  // サブスクリプション確認
+  if (!await checkSubscriptionBeforeAI()) {
+    return;
+  }
+
   const latestAssistant = [...chatState.messages]
     .reverse()
     .find((message) => message.role === 'assistant' && message.status === 'delivered' && message.content);
