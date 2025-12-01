@@ -24,13 +24,16 @@ class EmailService {
         }
 
         const displayName = userName || email.split('@')[0];
-        
+
+        // Generate Customer Portal link
+        const portalUrl = await this.generatePortalUrl(email);
+
         const emailContent = {
             senderAddress: this.senderEmail,
             content: {
                 subject: "【重要】お試し期間がまもなく終了します",
-                plainText: this.getTrialWarningPlainText(displayName),
-                html: this.getTrialWarningHtml(displayName)
+                plainText: this.getTrialWarningPlainText(displayName, portalUrl),
+                html: this.getTrialWarningHtml(displayName, portalUrl)
             },
             recipients: {
                 to: [{ address: email, displayName: displayName }]
@@ -91,7 +94,34 @@ class EmailService {
         }
     }
 
-    getTrialWarningPlainText(name) {
+    async generatePortalUrl(email) {
+        // Call create-portal-session API to get customer portal URL
+        try {
+            const functionUrl = process.env.FUNCTION_APP_URL || 'https://func-karte-ai-1763705952.azurewebsites.net';
+            const response = await fetch(`${functionUrl}/api/create-portal-session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+
+            if (!response.ok) {
+                console.error('Failed to create portal session:', await response.text());
+                return null;
+            }
+
+            const data = await response.json();
+            return data.url;
+        } catch (error) {
+            console.error('Error generating portal URL:', error);
+            return null;
+        }
+    }
+
+    getTrialWarningPlainText(name, portalUrl) {
+        const cancelSection = portalUrl
+            ? `\n\n継続を希望されない場合は、以下のリンクからキャンセルしてください：\n${portalUrl}\n`
+            : '\n\n継続を希望されない場合は、サポートまでお問い合わせください。\n';
+
         return `${name} 様
 
 この度は、Karte AI Plusをご利用いただき、誠にありがとうございます。
@@ -100,7 +130,7 @@ class EmailService {
 現在、登録から10日が経過しており、あと4日でお試し期間が終了いたします。
 
 このままご利用を継続される場合、お試し期間終了後、自動的に有料プランへ移行いたします。
-
+${cancelSection}
 ご不明な点がございましたら、お気軽にお問い合わせください。
 
 今後ともよろしくお願いいたします。
@@ -111,7 +141,13 @@ ${companyConfig.address}
 お問い合わせ: ${companyConfig.email || 'support@wonder-drill.com'}`;
     }
 
-    getTrialWarningHtml(name) {
+    getTrialWarningHtml(name, portalUrl) {
+        const cancelButton = portalUrl
+            ? `<div style="text-align: center; margin: 30px 0;">
+                <a href="${portalUrl}" style="display: inline-block; background-color: #dc3545; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">サブスクリプションをキャンセル</a>
+            </div>`
+            : '';
+
         return `<!DOCTYPE html>
 <html>
 <head>
@@ -133,17 +169,23 @@ ${companyConfig.address}
         <div class="content">
             <p>${name} 様</p>
             <p>この度は、Karte AI Plusをご利用いただき、誠にありがとうございます。</p>
-            
+
             <div class="warning">
                 <strong>【重要】お試し期間がまもなく終了します</strong>
                 <p>お試し期間（2週間）がまもなく終了いたします。<br>
                 現在、登録から10日が経過しており、あと4日でお試し期間が終了いたします。</p>
             </div>
-            
+
             <p>このままご利用を継続される場合、お試し期間終了後、自動的に有料プランへ移行いたします。</p>
-            
+
+            ${cancelButton}
+
+            <p style="font-size: 14px; color: #666; text-align: center;">
+                継続を希望されない場合は、上記ボタンからサブスクリプションをキャンセルしてください。
+            </p>
+
             <p>ご不明な点がございましたら、お気軽にお問い合わせください。</p>
-            
+
             <p>今後ともよろしくお願いいたします。</p>
         </div>
         <div class="footer">
