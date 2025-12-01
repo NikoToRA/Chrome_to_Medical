@@ -71,9 +71,178 @@ async function init() {
   setupTextRetentionToggle();
   await setupTemplateDirectPasteToggle();
   setupJstTimeDisplay();
+  setupAuthTokenListener();
+  await checkAuthAndUpdateUI();
   renderCategoryTabs();
   renderTemplates();
   renderImages();
+}
+
+// 認証状態をチェックしてUIを更新
+async function checkAuthAndUpdateUI() {
+  if (window.AuthManager) {
+    const token = await window.AuthManager.getToken();
+    const user = window.AuthManager.getUser();
+    
+    if (!token || !user) {
+      // トークンがない場合、ログインを促す
+      showAuthRequiredUI();
+    } else {
+      // トークンがある場合、認証UIを非表示
+      hideAuthRequiredUI();
+      // 購読状態を確認
+      await window.AuthManager.checkSubscription();
+    }
+  }
+}
+
+// 認証が必要な場合のUIを表示
+function showAuthRequiredUI() {
+  // AIチャットタブを無効化
+  const aiTab = document.querySelector('[data-tab-target="aiTab"]');
+  const aiTabContent = document.querySelector('[data-tab="aiTab"]');
+  
+  if (aiTabContent) {
+    let authOverlay = document.getElementById('authRequiredOverlay');
+    if (!authOverlay) {
+      authOverlay = document.createElement('div');
+      authOverlay.id = 'authRequiredOverlay';
+      authOverlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.95);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        padding: 20px;
+        text-align: center;
+      `;
+      authOverlay.innerHTML = `
+        <h2 style="margin-bottom: 20px; color: #333;">🔒 ログインが必要です</h2>
+        <p style="margin-bottom: 20px; color: #666;">AI機能を使用するには、ログインが必要です。</p>
+        
+        <div style="width: 100%; max-width: 400px; margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #333; font-weight: bold;">
+            トークンを入力（手動ログイン）
+          </label>
+          <textarea 
+            id="manualTokenInput" 
+            placeholder="JWTトークンを貼り付けてください"
+            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; font-family: monospace; resize: vertical; min-height: 80px;"
+          ></textarea>
+          <button id="submitTokenBtn" class="btn btn-primary" style="margin-top: 10px; width: 100%; padding: 10px;">
+            トークンを送信
+          </button>
+        </div>
+        
+        <div style="width: 100%; max-width: 400px; padding-top: 20px; border-top: 1px solid #eee;">
+          <button id="goToLoginBtn" class="btn btn-secondary" style="padding: 12px 24px; font-size: 14px; width: 100%;">
+            Landing Pageでログイン
+          </button>
+          <p style="margin-top: 15px; font-size: 12px; color: #999; text-align: center;">
+            決済完了後、自動的にログインされます
+          </p>
+        </div>
+      `;
+      aiTabContent.style.position = 'relative';
+      aiTabContent.appendChild(authOverlay);
+      
+      // ログインボタンのイベント
+      document.getElementById('goToLoginBtn').addEventListener('click', () => {
+        window.open('https://stkarteai1763705952.z11.web.core.windows.net', '_blank');
+      });
+      
+      // トークン送信ボタンのイベント
+      const submitTokenBtn = document.getElementById('submitTokenBtn');
+      const manualTokenInput = document.getElementById('manualTokenInput');
+      
+      if (submitTokenBtn && manualTokenInput) {
+        submitTokenBtn.addEventListener('click', async () => {
+          const token = manualTokenInput.value.trim();
+          if (!token) {
+            showNotification('トークンを入力してください', 'error');
+            return;
+          }
+          
+          try {
+            // トークンからメールアドレスを抽出
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const email = payload.email || payload.sub || 'unknown@example.com';
+            
+            // AuthManagerにトークンを設定
+            if (window.AuthManager) {
+              await window.AuthManager.setToken(token, email);
+              window.AuthManager.user = { id: email, email: email };
+              
+              // 購読状態を確認
+              await window.AuthManager.checkSubscription();
+              
+              showNotification('ログインに成功しました！', 'success');
+              hideAuthRequiredUI();
+              
+              // ストレージにも保存（background.jsと同期）
+              chrome.storage.local.set({
+                authToken: token,
+                userEmail: email
+              });
+            }
+          } catch (error) {
+            console.error('[SidePanel] トークン処理エラー:', error);
+            showNotification('トークンの形式が正しくありません: ' + error.message, 'error');
+          }
+        });
+      }
+    }
+  }
+}
+
+// 認証UIを非表示
+function hideAuthRequiredUI() {
+  const authOverlay = document.getElementById('authRequiredOverlay');
+  if (authOverlay) {
+    authOverlay.remove();
+  }
+}
+
+// 認証トークン受信リスナー
+function setupAuthTokenListener() {
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'authTokenReceived' && request.token && request.email) {
+      console.log('[SidePanel] ✅ 認証トークンを受信しました:', request.email);
+      
+      // AuthManagerにトークンを設定
+      if (window.AuthManager) {
+        window.AuthManager.setToken(request.token, request.email).then(() => {
+          // ユーザー情報を更新
+          window.AuthManager.user = { id: request.email, email: request.email };
+          // 購読状態を確認
+          window.AuthManager.checkSubscription().then(() => {
+            console.log('[SidePanel] ✅ 認証完了、購読状態を確認しました');
+            showNotification('ログインに成功しました！', 'success');
+            // 認証UIを非表示
+            hideAuthRequiredUI();
+            // UIを再チェック
+            checkAuthAndUpdateUI();
+          });
+        });
+      }
+      
+      sendResponse({ success: true });
+    }
+  });
+  
+  // ストレージ変更を監視（他のタブやbackground.jsからの変更を検知）
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.authToken) {
+      console.log('[SidePanel] ストレージからトークン変更を検知');
+      checkAuthAndUpdateUI();
+    }
+  });
 }
 
 // プラットフォーム検出
@@ -1049,7 +1218,7 @@ function renderTemplates() {
   });
 }
 
-function handleTemplateClick(text) {
+async function handleTemplateClick(text) {
   if (!directTemplatePaste) {
     insertTemplate(text);
     return;
@@ -1058,7 +1227,7 @@ function handleTemplateClick(text) {
     action: 'pasteToActiveTab',
     text,
     images: []
-  }, (response) => {
+  }, async (response) => {
     if (chrome.runtime.lastError) {
       showNotification('直接貼り付けに失敗しました: ' + chrome.runtime.lastError.message);
       return;
@@ -1067,6 +1236,48 @@ function handleTemplateClick(text) {
       showNotification('直接貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
     } else {
       showNotification('定型文を直接貼り付けました');
+      
+      // 貼り付け操作をログに記録
+      try {
+        let userId = null;
+        if (window.AuthManager) {
+          const user = window.AuthManager.getUser();
+          if (user) {
+            userId = user.id || user.email || null;
+          }
+        }
+        
+        let tabContext = null;
+        try {
+          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (tabs && tabs.length > 0) {
+            tabContext = {
+              title: tabs[0].title,
+              url: tabs[0].url,
+              id: tabs[0].id
+            };
+          }
+        } catch (tabError) {
+          console.warn('[SidePanel] タブ情報取得エラー:', tabError);
+        }
+        
+        await window.ApiClient.logInsertion({
+          userId: userId || 'anonymous',
+          action: 'paste',
+          content: text,
+          metadata: {
+            source: 'template-direct',
+            templateCategory: currentTemplateCategory,
+            triggeredFrom: 'template-tag',
+            tabTitle: tabContext?.title || null,
+            tabUrl: tabContext?.url || null,
+            tabId: tabContext?.id || null,
+            timestamp: new Date().toISOString()
+          }
+        });
+      } catch (logError) {
+        console.warn('[SidePanel] ログ保存エラー（無視）:', logError);
+      }
     }
   });
 }
@@ -1181,6 +1392,50 @@ async function pasteToPage() {
           await clearAll({ skipConfirm: true, skipNotification: true });
           showNotification('ページに貼り付けました（テキストと画像をクリアしました）');
         }
+        
+        // 貼り付け操作をログに記録
+        try {
+          let userId = null;
+          if (window.AuthManager) {
+            const user = window.AuthManager.getUser();
+            if (user) {
+              userId = user.id || user.email || null;
+            }
+          }
+          
+          // 現在のタブ情報を取得
+          let tabContext = null;
+          try {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tabs && tabs.length > 0) {
+              tabContext = {
+                title: tabs[0].title,
+                url: tabs[0].url,
+                id: tabs[0].id
+              };
+            }
+          } catch (tabError) {
+            console.warn('[SidePanel] タブ情報取得エラー:', tabError);
+          }
+          
+          await window.ApiClient.logInsertion({
+            userId: userId || 'anonymous',
+            action: 'paste',
+            content: text,
+            metadata: {
+              source: 'text-editor',
+              imagesCount: images.length,
+              retainTextAfterPaste,
+              triggeredFrom: 'editor-paste-button',
+              tabTitle: tabContext?.title || null,
+              tabUrl: tabContext?.url || null,
+              tabId: tabContext?.id || null,
+              timestamp: new Date().toISOString()
+            }
+          });
+        } catch (logError) {
+          console.warn('[SidePanel] ログ保存エラー（無視）:', logError);
+        }
       }
     });
   } catch (error) {
@@ -1272,6 +1527,21 @@ window.removeImage = removeImage;
 async function handleAiChatSend() {
   if (chatState.isSending) {
     return;
+  }
+
+  // 認証チェック
+  if (window.AuthManager) {
+    const token = await window.AuthManager.getToken();
+    if (!token) {
+      showNotification('ログインが必要です。Landing Pageでログインしてください。', 'error');
+      // AIタブに切り替えて認証UIを表示
+      const aiTab = document.querySelector('[data-tab-target="aiTab"]');
+      if (aiTab) {
+        aiTab.click();
+      }
+      await checkAuthAndUpdateUI();
+      return;
+    }
   }
 
   const message = aiChatInput?.value.trim();
@@ -1371,6 +1641,15 @@ async function handleAiChatSend() {
 
     // Save log
     try {
+      // Get user ID from AuthManager
+      let userId = null;
+      if (window.AuthManager) {
+        const user = window.AuthManager.getUser();
+        if (user) {
+          userId = user.id || user.email || null;
+        }
+      }
+      
       await window.ApiClient.saveLog(
         'ai_chat',
         {
@@ -1379,7 +1658,7 @@ async function handleAiChatSend() {
           inputLength: message.length,
           outputLength: replyText.length
         },
-        'user' // TODO: Use actual user ID if available
+        userId
       );
     } catch (logError) {
       console.error('[SidePanel] ログ保存エラー:', logError);
@@ -1842,7 +2121,7 @@ async function pasteLatestAssistantMessageDirect() {
     action: 'pasteToActiveTab',
     text: latestAssistant.content,
     images: []
-  }, (response) => {
+  }, async (response) => {
     if (chrome.runtime.lastError) {
       showNotification('直接貼り付けに失敗しました: ' + chrome.runtime.lastError.message);
       return;
@@ -1851,6 +2130,48 @@ async function pasteLatestAssistantMessageDirect() {
       showNotification('直接貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
     } else {
       showNotification('AI応答を直接貼り付けました');
+      
+      // 貼り付け操作をログに記録
+      try {
+        let userId = null;
+        if (window.AuthManager) {
+          const user = window.AuthManager.getUser();
+          if (user) {
+            userId = user.id || user.email || null;
+          }
+        }
+        
+        let tabContext = null;
+        try {
+          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (tabs && tabs.length > 0) {
+            tabContext = {
+              title: tabs[0].title,
+              url: tabs[0].url,
+              id: tabs[0].id
+            };
+          }
+        } catch (tabError) {
+          console.warn('[SidePanel] タブ情報取得エラー:', tabError);
+        }
+        
+        await window.ApiClient.logInsertion({
+          userId: userId || 'anonymous',
+          action: 'paste',
+          content: latestAssistant.content,
+          metadata: {
+            source: 'ai-assistant',
+            agentId: chatState.agentId || null,
+            triggeredFrom: 'ai-direct-paste-button',
+            tabTitle: tabContext?.title || null,
+            tabUrl: tabContext?.url || null,
+            tabId: tabContext?.id || null,
+            timestamp: new Date().toISOString()
+          }
+        });
+      } catch (logError) {
+        console.warn('[SidePanel] ログ保存エラー（無視）:', logError);
+      }
     }
   });
 }
@@ -1924,6 +2245,12 @@ function setupJstTimeDisplay() {
   setInterval(() => {
     updateJstTimeDisplay();
   }, 1000);
+}
+
+// Debug: Check if ApiClient is loaded
+console.log('[DEBUG] ApiClient loaded:', window.ApiClient);
+if (!window.ApiClient) {
+  console.error('[ERROR] ApiClient is not loaded! Check api.js');
 }
 
 // 初期化実行

@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chrome to Medical</title>
+  <title>KarteAI+</title>
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 
@@ -158,9 +158,21 @@
         <button class="modal-close" id="closeTemplateModal">&times;</button>
       </div>
       <div class="modal-body">
-        <!-- カテゴリ管理 -->
-        <div class="category-manage-section"
-          style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #eee;">
+        <!-- 定型文管理（上） -->
+        <div class="template-manage-controls" style="margin-bottom: 20px;">
+          <label class="field-label" for="templateCategorySelect">カテゴリ選択</label>
+          <select id="templateCategorySelect" class="input">
+            <!-- Options will be injected -->
+          </select>
+        </div>
+        <div class="template-input-group" style="margin-bottom: 15px;">
+          <input type="text" id="newTemplateInput" class="input" placeholder="定型文を入力">
+          <button id="addTemplateBtn" class="btn btn-primary">追加</button>
+        </div>
+        <div id="templateManageList" class="template-manage-list" style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #eee;"></div>
+
+        <!-- カテゴリ管理（下） -->
+        <div class="category-manage-section">
           <h3 style="font-size: 14px; margin-bottom: 10px; color: #666;">カテゴリ管理</h3>
           <div class="template-input-group" style="margin-bottom: 10px;">
             <input type="text" id="newCategoryInput" class="input" placeholder="新しいカテゴリ名">
@@ -168,19 +180,6 @@
           </div>
           <div id="categoryList" class="category-list" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
         </div>
-
-        <!-- 定型文管理 -->
-        <div class="template-manage-controls">
-          <label class="field-label" for="templateCategorySelect">カテゴリ選択</label>
-          <select id="templateCategorySelect" class="input">
-            <!-- Options will be injected -->
-          </select>
-        </div>
-        <div class="template-input-group">
-          <input type="text" id="newTemplateInput" class="input" placeholder="定型文を入力">
-          <button id="addTemplateBtn" class="btn btn-primary">追加</button>
-        </div>
-        <div id="templateManageList" class="template-manage-list"></div>
       </div>
     </div>
   </div>
@@ -198,13 +197,6 @@
   <script src="../utils/adapters/gmail.js"></script>
   <script src="../utils/adapters/manager.js"></script>
   <script src="../utils/auth.js"></script>
-  <script>
-    // Debug: Check if ApiClient is loaded
-    console.log('[DEBUG] ApiClient loaded:', window.ApiClient);
-    if (!window.ApiClient) {
-      console.error('[ERROR] ApiClient is not loaded! Check api.js');
-    }
-  </script>
   <script src="sidepanel.js"></script>
 </body>
 
