@@ -1,13 +1,7 @@
 const jwt = require('jsonwebtoken');
-const { getUser } = require('../lib/table');
 const { sendEmail } = require('../lib/email');
 
 const secret = process.env.JWT_SECRET;
-const sendgridKey = process.env.SENDGRID_API_KEY; // fallback only
-let sgMail = null;
-if (sendgridKey) {
-    try { sgMail = require('@sendgrid/mail'); sgMail.setApiKey(sendgridKey); } catch (_) {}
-}
 
 module.exports = async function (context, req) {
     // Handle CORS preflight
@@ -149,23 +143,14 @@ Karte AI+
 `;
 
     try {
-        try {
-            await sendEmail({ to: email, subject, text, html });
-        } catch (e) {
-            if (sgMail) {
-                await sgMail.send({ to: email, from: 'no-reply@karte-ai-plus.com', subject, text, html });
-            } else {
-                context.log("[auth-send-magic-link] Email not configured. Magic Link:", magicLink);
-            }
-        }
-
+        await sendEmail({ to: email, subject, text, html });
         context.res = {
             status: 200,
             headers: { 'Access-Control-Allow-Origin': '*' },
             body: { message: "Magic link sent" }
         };
     } catch (error) {
-        context.log.error(error);
+        context.log.error("[auth-send-magic-link] Failed to send email:", error);
         context.res = {
             status: 500,
             headers: { 'Access-Control-Allow-Origin': '*' },

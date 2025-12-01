@@ -35,27 +35,7 @@ export default function RegisterPage() {
             setLoading(false);
         } catch (err) {
             console.error('[RegisterPage] エラー発生:', err);
-            // エラーメッセージを改善
-            let errorMessage = err.message || '登録に失敗しました';
-            
-            // ネットワークエラーの場合
-            if (err.message && err.message.includes('ネットワークエラー')) {
-                errorMessage = 'サーバーに接続できませんでした。インターネット接続を確認してください。';
-            }
-            // タイムアウトエラーの場合
-            else if (err.message && err.message.includes('タイムアウト')) {
-                errorMessage = 'リクエストがタイムアウトしました。もう一度お試しください。';
-            }
-            // サーバーエラーの場合
-            else if (err.status === 500) {
-                errorMessage = 'サーバーエラーが発生しました。しばらくしてからもう一度お試しください。';
-            }
-            // バリデーションエラーの場合
-            else if (err.status === 400) {
-                errorMessage = '入力データに問題があります。すべての項目を正しく入力してください。';
-            }
-
-            setError(errorMessage);
+            setError(err.message || '登録に失敗しました');
             setLoading(false);
         }
     };

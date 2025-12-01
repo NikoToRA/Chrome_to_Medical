@@ -5,16 +5,24 @@ import './SuccessPage.css';
 export default function SuccessPage() {
     const [searchParams] = useSearchParams();
     const [email, setEmail] = useState('');
-    const sessionId = searchParams.get('session_id');
+    const [copied, setCopied] = useState(false);
+    const token = searchParams.get('token');
 
     useEffect(() => {
-        // セッションIDからユーザー情報を取得する場合はここで処理
-        // 現状はメールアドレスはローカルストレージから取得
         const savedEmail = localStorage.getItem('userEmail');
         if (savedEmail) {
             setEmail(savedEmail);
         }
-    }, [sessionId]);
+    }, []);
+
+    const copyToken = () => {
+        if (token) {
+            navigator.clipboard.writeText(token).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 3000);
+            });
+        }
+    };
 
     return (
         <div className="success-page">
@@ -29,7 +37,17 @@ export default function SuccessPage() {
                 {email && (
                     <div className="email-info">
                         <p>登録メールアドレス: <strong>{email}</strong></p>
-                        <p className="small-text">ログイン用のメールをお送りしました。メールボックスをご確認ください。</p>
+                    </div>
+                )}
+
+                {token && (
+                    <div className="token-section">
+                        <h3>認証トークン</h3>
+                        <p className="token-description">以下のトークンをChrome拡張機能で使用してログインできます。</p>
+                        <div className="token-box">{token}</div>
+                        <button onClick={copyToken} className="copy-button">
+                            {copied ? '✓ コピーしました' : 'トークンをコピー'}
+                        </button>
                     </div>
                 )}
 
