@@ -1,0 +1,20 @@
+# Chrome拡張機能に含めないファイル・ディレクトリ
+azure-functions/
+landing-page/
+logs/
+docs/
+scripts/
+*.md
+.git/
+.env
+.gitignore
+.cursorignore
+setup_azure.sh
+Chrome_to_X.code-workspace
+claude.md
+backlog.md
+tmp-root-certs.pem
+SECURITY.md
+PRIVACY.md
+README.md
+

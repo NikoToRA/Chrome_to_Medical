@@ -42,6 +42,9 @@ const openSettingsBtn = document.getElementById('openSettingsBtn');
 const retainTextToggle = document.getElementById('retainTextToggle');
 const clearChatBtn = document.getElementById('clearChatBtn');
 const directTemplatePasteToggle = document.getElementById('directTemplatePasteToggle');
+// 日時UI
+const currentDateTimeDisplay = document.getElementById('currentDateTimeDisplay');
+const insertDateTimeBtn = document.getElementById('insertDateTimeBtn');
 // 状態管理
 let currentImages = [];
 let templates = { diagnoses: [], medications: [], phrases: [] };
@@ -61,6 +64,9 @@ let directTemplatePaste = false;
 
 // 初期化
 async function init() {
+  // 認証チェック
+  await checkAuth();
+
   await Promise.all([loadEditorState(), loadAiState()]);
   await detectPlatform();
   setupTabNavigation();
@@ -70,179 +76,153 @@ async function init() {
   setupStorageObservers();
   setupTextRetentionToggle();
   await setupTemplateDirectPasteToggle();
-  setupJstTimeDisplay();
-  setupAuthTokenListener();
-  await checkAuthAndUpdateUI();
+  setupDateTime();
   renderCategoryTabs();
   renderTemplates();
   renderImages();
 }
 
-// 認証状態をチェックしてUIを更新
-async function checkAuthAndUpdateUI() {
-  if (window.AuthManager) {
-    const token = await window.AuthManager.getToken();
-    const user = window.AuthManager.getUser();
-    
-    if (!token || !user) {
-      // トークンがない場合、ログインを促す
-      showAuthRequiredUI();
-    } else {
-      // トークンがある場合、認証UIを非表示
-      hideAuthRequiredUI();
-      // 購読状態を確認
-      await window.AuthManager.checkSubscription();
-    }
-  }
-}
-
-// 認証が必要な場合のUIを表示
-function showAuthRequiredUI() {
-  // AIチャットタブを無効化
-  const aiTab = document.querySelector('[data-tab-target="aiTab"]');
-  const aiTabContent = document.querySelector('[data-tab="aiTab"]');
+// 認証チェック
+async function checkAuth() {
+  console.log('[SidePanel] 認証チェック開始');
   
-  if (aiTabContent) {
-    let authOverlay = document.getElementById('authRequiredOverlay');
-    if (!authOverlay) {
-      authOverlay = document.createElement('div');
-      authOverlay.id = 'authRequiredOverlay';
-      authOverlay.style.cssText = `
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(255, 255, 255, 0.95);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        z-index: 1000;
-        padding: 20px;
-        text-align: center;
-      `;
-      authOverlay.innerHTML = `
-        <h2 style="margin-bottom: 20px; color: #333;">🔒 ログインが必要です</h2>
-        <p style="margin-bottom: 20px; color: #666;">AI機能を使用するには、ログインが必要です。</p>
-        
-        <div style="width: 100%; max-width: 400px; margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #333; font-weight: bold;">
-            トークンを入力（手動ログイン）
-          </label>
-          <textarea 
-            id="manualTokenInput" 
-            placeholder="JWTトークンを貼り付けてください"
-            style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; font-family: monospace; resize: vertical; min-height: 80px;"
-          ></textarea>
-          <button id="submitTokenBtn" class="btn btn-primary" style="margin-top: 10px; width: 100%; padding: 10px;">
-            トークンを送信
-          </button>
-        </div>
-        
-        <div style="width: 100%; max-width: 400px; padding-top: 20px; border-top: 1px solid #eee;">
-          <button id="goToLoginBtn" class="btn btn-secondary" style="padding: 12px 24px; font-size: 14px; width: 100%;">
-            Landing Pageでログイン
-          </button>
-          <p style="margin-top: 15px; font-size: 12px; color: #999; text-align: center;">
-            決済完了後、自動的にログインされます
-          </p>
-        </div>
-      `;
-      aiTabContent.style.position = 'relative';
-      aiTabContent.appendChild(authOverlay);
-      
-      // ログインボタンのイベント
-      document.getElementById('goToLoginBtn').addEventListener('click', () => {
-        window.open('https://stkarteai1763705952.z11.web.core.windows.net', '_blank');
-      });
-      
-      // トークン送信ボタンのイベント
-      const submitTokenBtn = document.getElementById('submitTokenBtn');
-      const manualTokenInput = document.getElementById('manualTokenInput');
-      
-      if (submitTokenBtn && manualTokenInput) {
-        submitTokenBtn.addEventListener('click', async () => {
-          const token = manualTokenInput.value.trim();
-          if (!token) {
-            showNotification('トークンを入力してください', 'error');
-            return;
+  if (!window.AuthManager) {
+    console.error('[SidePanel] AuthManager not found');
+    return;
+  }
+
+  const loginOverlay = document.getElementById('loginOverlay');
+  const loginBtn = document.getElementById('loginBtn');
+  const verifyTokenBtn = document.getElementById('verifyTokenBtn');
+  const loginTokenInput = document.getElementById('loginTokenInput');
+  const loginMessage = document.getElementById('loginMessage');
+
+  // イベントリスナー設定（初回のみ）
+  if (loginBtn && !loginBtn.hasAttribute('data-bound')) {
+    loginBtn.setAttribute('data-bound', 'true');
+    loginBtn.addEventListener('click', () => {
+      window.open('https://karte-ai-plus.vercel.app/login', '_blank');
+    });
+  }
+
+  if (verifyTokenBtn && !verifyTokenBtn.hasAttribute('data-bound')) {
+    verifyTokenBtn.setAttribute('data-bound', 'true');
+    verifyTokenBtn.addEventListener('click', async () => {
+      const token = loginTokenInput.value.trim();
+      if (!token) {
+        alert('トークンを入力してください');
+        return;
+      }
+
+      verifyTokenBtn.textContent = '認証中...';
+      verifyTokenBtn.disabled = true;
+      loginMessage.textContent = '認証中...';
+      loginMessage.style.color = 'var(--primary-color)';
+
+      try {
+        console.log('[SidePanel] トークン認証開始');
+        const user = await window.AuthManager.loginWithToken(token);
+        if (user) {
+          console.log('[SidePanel] 認証成功:', user.email);
+          // 認証成功
+          loginOverlay.classList.remove('active');
+          // 通知関数があれば使用
+          if (typeof showNotification === 'function') {
+            showNotification('ログインしました');
           }
-          
+
+          // 課金チェック
           try {
-            // トークンからメールアドレスを抽出
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            const email = payload.email || payload.sub || 'unknown@example.com';
-            
-            // AuthManagerにトークンを設定
-            if (window.AuthManager) {
-              await window.AuthManager.setToken(token, email);
-              window.AuthManager.user = { id: email, email: email };
-              
-              // 購読状態を確認
-              await window.AuthManager.checkSubscription();
-              
-              showNotification('ログインに成功しました！', 'success');
-              hideAuthRequiredUI();
-              
-              // ストレージにも保存（background.jsと同期）
-              chrome.storage.local.set({
-                authToken: token,
-                userEmail: email
-              });
+            const isSubscribed = await window.AuthManager.checkSubscription();
+            if (!isSubscribed) {
+              showSubscriptionOverlay();
             }
-          } catch (error) {
-            console.error('[SidePanel] トークン処理エラー:', error);
-            showNotification('トークンの形式が正しくありません: ' + error.message, 'error');
+          } catch (subError) {
+            console.error('[SidePanel] サブスクリプション確認エラー:', subError);
+            // 認証は成功しているので、オーバーレイは非表示のまま
           }
-        });
+        }
+      } catch (error) {
+        console.error('[SidePanel] 認証エラー:', error);
+        const errorMessage = error.message || '認証に失敗しました';
+        loginMessage.textContent = `認証エラー: ${errorMessage}`;
+        loginMessage.style.color = 'var(--danger-color)';
+        alert('認証に失敗しました: ' + errorMessage);
+      } finally {
+        verifyTokenBtn.textContent = 'トークンで認証';
+        verifyTokenBtn.disabled = false;
+      }
+    });
+  }
+
+  // 既存のセッション確認
+  try {
+    console.log('[SidePanel] AuthManager初期化を待機');
+    await window.AuthManager.ensureInitialized();
+    console.log('[SidePanel] AuthManager初期化完了');
+    
+    const user = window.AuthManager.getUser();
+    console.log('[SidePanel] 現在のユーザー:', user ? user.email : 'なし');
+
+    if (!user) {
+      console.log('[SidePanel] ユーザー未ログイン - ログインオーバーレイを表示');
+      loginOverlay.classList.add('active');
+      loginMessage.textContent = '電子カルテ作成をAIで効率化。<br>まずはログインしてください。';
+      loginMessage.style.color = '';
+    } else {
+      console.log('[SidePanel] ユーザーログイン済み - サブスクリプション確認');
+      // ログイン済みなら課金チェック
+      try {
+        const isSubscribed = await window.AuthManager.checkSubscription();
+        if (!isSubscribed) {
+          console.log('[SidePanel] サブスクリプション未契約 - オーバーレイ表示');
+          showSubscriptionOverlay();
+        } else {
+          console.log('[SidePanel] サブスクリプション有効 - オーバーレイ非表示');
+          loginOverlay.classList.remove('active');
+        }
+      } catch (subError) {
+        console.error('[SidePanel] サブスクリプション確認エラー:', subError);
+        // エラーでもログイン状態は維持
+        loginOverlay.classList.remove('active');
       }
     }
+  } catch (error) {
+    console.error('[SidePanel] 認証チェックエラー:', error);
+    // エラー時はログイン画面を表示
+    loginOverlay.classList.add('active');
+    loginMessage.textContent = '認証チェック中にエラーが発生しました。<br>再度ログインしてください。';
+    loginMessage.style.color = 'var(--danger-color)';
   }
 }
 
-// 認証UIを非表示
-function hideAuthRequiredUI() {
-  const authOverlay = document.getElementById('authRequiredOverlay');
-  if (authOverlay) {
-    authOverlay.remove();
-  }
-}
+function showSubscriptionOverlay() {
+  const loginOverlay = document.getElementById('loginOverlay');
+  const loginMessage = document.getElementById('loginMessage');
+  const loginBtn = document.getElementById('loginBtn');
+  const tokenInputDiv = document.querySelector('.input-group-vertical');
+  const separator = document.querySelector('.login-separator');
 
-// 認証トークン受信リスナー
-function setupAuthTokenListener() {
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.action === 'authTokenReceived' && request.token && request.email) {
-      console.log('[SidePanel] ✅ 認証トークンを受信しました:', request.email);
-      
-      // AuthManagerにトークンを設定
-      if (window.AuthManager) {
-        window.AuthManager.setToken(request.token, request.email).then(() => {
-          // ユーザー情報を更新
-          window.AuthManager.user = { id: request.email, email: request.email };
-          // 購読状態を確認
-          window.AuthManager.checkSubscription().then(() => {
-            console.log('[SidePanel] ✅ 認証完了、購読状態を確認しました');
-            showNotification('ログインに成功しました！', 'success');
-            // 認証UIを非表示
-            hideAuthRequiredUI();
-            // UIを再チェック
-            checkAuthAndUpdateUI();
-          });
-        });
-      }
-      
-      sendResponse({ success: true });
-    }
-  });
-  
-  // ストレージ変更を監視（他のタブやbackground.jsからの変更を検知）
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'local' && changes.authToken) {
-      console.log('[SidePanel] ストレージからトークン変更を検知');
-      checkAuthAndUpdateUI();
-    }
-  });
+  if (loginMessage) {
+    loginMessage.innerHTML = 'プランの有効期限切れ、<br>または未契約です。<br>引き続き利用するには契約が必要です。';
+    loginMessage.style.color = 'var(--danger-color)';
+  }
+
+  if (loginBtn) {
+    loginBtn.textContent = 'プランを選択する (LPへ)';
+    const newBtn = loginBtn.cloneNode(true);
+    loginBtn.parentNode.replaceChild(newBtn, loginBtn);
+
+    newBtn.addEventListener('click', () => {
+      window.AuthManager.subscribe();
+    });
+  }
+
+  // トークン入力は隠す
+  if (tokenInputDiv) tokenInputDiv.style.display = 'none';
+  if (separator) separator.style.display = 'none';
+
+  loginOverlay.classList.add('active');
 }
 
 // プラットフォーム検出
@@ -308,10 +288,28 @@ async function loadEditorState() {
   const savedCategories = await StorageManager.getTemplateCategories();
   const savedDirect = await StorageManager.getTemplatesDirectPaste();
 
+  console.log('[SidePanel] loadEditorState 開始:', {
+    savedTemplates,
+    savedCategories,
+    currentTemplateCategory,
+    savedTemplatesKeys: savedTemplates ? Object.keys(savedTemplates) : [],
+    savedCategoriesLength: savedCategories ? savedCategories.length : 0
+  });
+
   textEditor.value = text;
+  // テキストエディタの高さを調整
+  setTimeout(() => {
+    adjustTextEditorHeight();
+  }, 100);
   currentImages = images || [];
   templates = savedTemplates || {};
   templateCategories = savedCategories || [];
+
+  console.log('[SidePanel] データ読み込み後:', {
+    templates,
+    templateCategories,
+    currentTemplateCategory
+  });
 
   // カテゴリが存在しない場合はデフォルトを設定（通常はStorageManagerがデフォルトを返すはず）
   if (!templateCategories.length) {
@@ -320,14 +318,26 @@ async function loadEditorState() {
       { id: 'medications', name: '薬剤' },
       { id: 'phrases', name: '定型文' }
     ];
+    console.log('[SidePanel] デフォルトカテゴリを設定:', templateCategories);
   }
 
   // 現在のカテゴリが有効か確認
   if (!templateCategories.find(c => c.id === currentTemplateCategory)) {
-    currentTemplateCategory = templateCategories[0].id;
+    currentTemplateCategory = templateCategories[0]?.id || 'diagnoses';
+    console.log('[SidePanel] カテゴリを変更:', currentTemplateCategory);
   }
 
   directTemplatePaste = Boolean(savedDirect);
+
+  console.log('[SidePanel] loadEditorState 完了:', {
+    templates,
+    templatesKeys: Object.keys(templates),
+    templateCategories,
+    templateCategoriesLength: templateCategories.length,
+    currentTemplateCategory,
+    categoryData: templates[currentTemplateCategory],
+    categoryDataLength: templates[currentTemplateCategory] ? templates[currentTemplateCategory].length : 0
+  });
 }
 
 // テキスト保持トグルの設定
@@ -454,12 +464,34 @@ function switchToTextTab() {
   activateTab('textTab');
 }
 
+// テキストエディタの高さを自動調整
+function adjustTextEditorHeight() {
+  if (!textEditor) return;
+
+  // 高さをリセットしてスクロール高さを取得
+  textEditor.style.height = 'auto';
+  const scrollHeight = textEditor.scrollHeight;
+
+  // 最小高さと最大高さを設定（最大は画面の50%程度）
+  const minHeight = 40;
+  const maxHeight = Math.min(window.innerHeight * 0.5, 400);
+
+  // 高さを設定
+  textEditor.style.height = Math.max(minHeight, Math.min(scrollHeight, maxHeight)) + 'px';
+}
+
 // イベントリスナーの設定
 function setupEventListeners() {
   // テキスト編集
   textEditor.addEventListener('input', () => {
+    adjustTextEditorHeight();
     saveData();
   });
+
+  // 初期高さを調整
+  if (textEditor) {
+    adjustTextEditorHeight();
+  }
 
   // 画像追加
   addImageBtn.addEventListener('click', () => {
@@ -524,30 +556,6 @@ function setupEventListeners() {
   if (newCategoryInput) {
     newCategoryInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') addCategory();
-    });
-  }
-
-  // 日本時間貼り付けボタン（定型文エリアの下）- カルテに直接貼り付け
-  const pasteJstTimeBtn = document.getElementById('pasteJstTimeBtn');
-  if (pasteJstTimeBtn) {
-    pasteJstTimeBtn.addEventListener('click', () => {
-      const jstTime = getJstTimeString();
-      // カルテに直接貼り付け
-      chrome.runtime.sendMessage({
-        action: 'pasteToActiveTab',
-        text: jstTime,
-        images: []
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          showNotification('日本時間の貼り付けに失敗しました: ' + chrome.runtime.lastError.message);
-          return;
-        }
-        if (response && response.success === false) {
-          showNotification('日本時間の貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
-        } else {
-          showNotification('日本時間をカルテに貼り付けました');
-        }
-      });
     });
   }
 
@@ -653,6 +661,7 @@ function setupEventListeners() {
       }
     });
   }
+
 }
 
 // ドラッグ&ドロップ機能の設定
@@ -1049,33 +1058,45 @@ function renderImages() {
   });
 }
 
-// カテゴリの色定義は不要（CSS変数で管理）
-
-// カテゴリタブの表示（色分け対応 - 6色）
+// カテゴリタブの表示
 function renderCategoryTabs() {
-  if (!templateCategoryToggle) return;
+  console.log('[SidePanel] renderCategoryTabs 呼び出し:', {
+    templateCategoryToggle: !!templateCategoryToggle,
+    templateCategories,
+    currentTemplateCategory
+  });
+
+  if (!templateCategoryToggle) {
+    console.error('[SidePanel] templateCategoryToggle要素が見つかりません');
+    return;
+  }
 
   templateCategoryToggle.innerHTML = templateCategories.map((cat, index) => {
     const isActive = cat.id === currentTemplateCategory;
     const categoryClass = `category-${index}`;
-    
     return `<button class="tab-button small ${categoryClass} ${isActive ? 'active' : ''}" 
-      data-category="${cat.id}" 
-      role="tab" 
-      aria-selected="${isActive}">${escapeHtml(cat.name)}</button>`;
+    data-category="${cat.id}" 
+    role="tab" 
+    aria-selected="${isActive}">${escapeHtml(cat.name)}</button>`;
   }).join('');
+
+  console.log('[SidePanel] カテゴリタブを生成:', templateCategoryToggle.innerHTML);
 
   // イベントリスナー設定
   templateCategoryToggle.querySelectorAll('.tab-button').forEach(btn => {
     btn.addEventListener('click', () => {
       const catId = btn.getAttribute('data-category');
+      console.log('[SidePanel] カテゴリタブクリック:', catId);
       if (catId) {
         currentTemplateCategory = catId;
+        console.log('[SidePanel] カテゴリを変更:', currentTemplateCategory);
         renderCategoryTabs();
         renderTemplates();
       }
     });
   });
+
+  console.log('[SidePanel] renderCategoryTabs 完了');
 }
 
 // カテゴリ管理リストの表示（モーダル内）
@@ -1105,10 +1126,9 @@ async function addCategory() {
   const name = (newCategoryInput?.value || '').trim();
   if (!name) return;
 
-  // カテゴリ数の上限（最大6個）
-  // デフォルトカテゴリ3つ（diagnoses, medications, phrases）＋ユーザー作成カテゴリで合計6まで
+  // 6カテゴリ制限
   if (templateCategories.length >= 6) {
-    showNotification('カテゴリは最大6個までです');
+    showNotification('カテゴリは最大6つまでです');
     return;
   }
 
@@ -1157,12 +1177,6 @@ async function addTemplate() {
   const val = (newTemplateInput?.value || '').trim();
   if (!val) return;
 
-  // 1定型文は最大6文字まで
-  if (val.length > 6) {
-    showNotification('1つの定型文は最大6文字までです');
-    return;
-  }
-
   // 配列が存在しない場合は初期化
   if (!templates[cat]) templates[cat] = [];
 
@@ -1191,17 +1205,33 @@ function insertTemplate(text) {
 }
 
 function renderTemplates() {
+  console.log('[SidePanel] renderTemplates 呼び出し:', {
+    currentTemplateCategory,
+    templates,
+    templateList: !!templateList,
+    categoryData: templates[currentTemplateCategory]
+  });
+
   const items = templates[currentTemplateCategory] || [];
-  if (!templateList) return;
+  console.log('[SidePanel] renderTemplates items:', items);
+
+  if (!templateList) {
+    console.error('[SidePanel] templateList要素が見つかりません');
+    return;
+  }
+
   if (!items.length) {
+    console.log('[SidePanel] 定型文が空です。カテゴリ:', currentTemplateCategory);
     templateList.innerHTML = '<p style="color: #999; font-size: 12px;">定型文がありません</p>';
     return;
   }
 
+  console.log('[SidePanel] 定型文を表示:', items.length, '件');
+
   // カテゴリのインデックスを取得（色分け用）
   const categoryIndex = templateCategories.findIndex(cat => cat.id === currentTemplateCategory);
   const categoryClass = categoryIndex >= 0 ? `category-${categoryIndex}` : '';
-  
+
   // 10文字以下の場合は省略表示
   const formatTemplateText = (text) => {
     if (text.length <= 10) {
@@ -1209,8 +1239,7 @@ function renderTemplates() {
     }
     return text.substring(0, 10) + '...';
   };
-  
-  // 画面上は全ての定型文を表示（個数制限なし）
+
   templateList.innerHTML = items
     .map((t, i) => {
       const displayText = formatTemplateText(t);
@@ -1218,7 +1247,7 @@ function renderTemplates() {
       return `<span class="template-tag ${categoryClass}" data-index="${i}" title="${escapeHtml(fullText)}">${escapeHtml(displayText)}</span>`;
     })
     .join('');
-    
+
   templateList.querySelectorAll('.template-tag').forEach(tag => {
     tag.addEventListener('click', () => {
       const idx = parseInt(tag.getAttribute('data-index'));
@@ -1227,87 +1256,92 @@ function renderTemplates() {
       handleTemplateClick(text);
     });
   });
+
+  console.log('[SidePanel] renderTemplates 完了。表示されたタグ数:', templateList.querySelectorAll('.template-tag').length);
 }
 
-async function handleTemplateClick(text) {
-  if (!directTemplatePaste) {
+function handleTemplateClick(text) {
+  // トグルボタンの状態を直接確認（変数と同期を取る）
+  const toggleElement = document.getElementById('directTemplatePasteToggle');
+  const isDirectPasteEnabled = toggleElement ? toggleElement.checked : directTemplatePaste;
+
+  console.log('[SidePanel] handleTemplateClick 呼び出し:', {
+    text,
+    directTemplatePaste,
+    toggleChecked: toggleElement?.checked,
+    isDirectPasteEnabled
+  });
+
+  if (!isDirectPasteEnabled) {
+    console.log('[SidePanel] 直接貼り付けOFF - テキストエディタに挿入');
     insertTemplate(text);
     return;
   }
+
+  console.log('[SidePanel] 直接貼り付けON - webページに貼り付け');
   chrome.runtime.sendMessage({
     action: 'pasteToActiveTab',
     text,
     images: []
   }, async (response) => {
+    console.log('[SidePanel] pasteToActiveTab レスポンス:', response);
     if (chrome.runtime.lastError) {
+      console.error('[SidePanel] pasteToActiveTab エラー:', chrome.runtime.lastError);
       showNotification('直接貼り付けに失敗しました: ' + chrome.runtime.lastError.message);
       return;
     }
     if (response && response.success === false) {
+      console.error('[SidePanel] 貼り付け失敗:', response);
       showNotification('直接貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
     } else {
+      console.log('[SidePanel] 貼り付け成功');
       showNotification('定型文を直接貼り付けました');
-      
-      // 貼り付け操作をログに記録
-      try {
-        let userId = null;
-        if (window.AuthManager) {
-          const user = window.AuthManager.getUser();
-          if (user) {
-            userId = user.id || user.email || null;
-          }
+      await logClinicalInsertion('paste', {
+        text,
+        source: 'template-direct',
+        metadata: {
+          templateCategory: currentTemplateCategory,
+          triggeredFrom: 'template-tag'
         }
-        
-        let tabContext = null;
-        try {
-          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tabs && tabs.length > 0) {
-            tabContext = {
-              title: tabs[0].title,
-              url: tabs[0].url,
-              id: tabs[0].id
-            };
-          }
-        } catch (tabError) {
-          console.warn('[SidePanel] タブ情報取得エラー:', tabError);
-        }
-        
-        await window.ApiClient.logInsertion({
-          userId: userId || 'anonymous',
-          action: 'paste',
-          content: text,
-          metadata: {
-            source: 'template-direct',
-            templateCategory: currentTemplateCategory,
-            triggeredFrom: 'template-tag',
-            tabTitle: tabContext?.title || null,
-            tabUrl: tabContext?.url || null,
-            tabId: tabContext?.id || null,
-            timestamp: new Date().toISOString()
-          }
-        });
-      } catch (logError) {
-        console.warn('[SidePanel] ログ保存エラー（無視）:', logError);
-      }
+      });
     }
   });
 }
 
 async function setupTemplateDirectPasteToggle() {
+  console.log('[SidePanel] setupTemplateDirectPasteToggle 開始');
+  const toggleElement = document.getElementById('directTemplatePasteToggle');
+  console.log('[SidePanel] toggleElement:', toggleElement);
+
+  if (!toggleElement) {
+    console.error('[SidePanel] directTemplatePasteToggle要素が見つかりません');
+    return;
+  }
+
   try {
     directTemplatePaste = await StorageManager.getTemplatesDirectPaste();
+    console.log('[SidePanel] 直接貼り付け設定を読み込み:', directTemplatePaste);
   } catch (e) {
+    console.warn('[SidePanel] 直接貼り付け設定の読み込みエラー:', e);
     directTemplatePaste = false;
   }
-  if (directTemplatePasteToggle) {
-    directTemplatePasteToggle.checked = directTemplatePaste;
-    directTemplatePasteToggle.addEventListener('change', async (e) => {
-      directTemplatePaste = e.target.checked;
-      await StorageManager.saveTemplatesDirectPaste(directTemplatePaste);
-      const status = directTemplatePaste ? 'ON' : 'OFF';
-      showNotification(`定型文の直接貼り付けを${status}にしました`);
-    });
-  }
+
+  toggleElement.checked = directTemplatePaste;
+  console.log('[SidePanel] トグルボタンの状態を設定:', directTemplatePaste, 'checked:', toggleElement.checked);
+
+  // 既存のイベントリスナーを削除してから追加（重複防止）
+  const newToggleElement = toggleElement.cloneNode(true);
+  toggleElement.parentNode.replaceChild(newToggleElement, toggleElement);
+
+  newToggleElement.addEventListener('change', async (e) => {
+    directTemplatePaste = e.target.checked;
+    console.log('[SidePanel] 直接貼り付け設定を変更:', directTemplatePaste);
+    await StorageManager.saveTemplatesDirectPaste(directTemplatePaste);
+    const status = directTemplatePaste ? 'ON' : 'OFF';
+    showNotification(`定型文の直接貼り付けを${status}にしました`);
+  });
+
+  console.log('[SidePanel] setupTemplateDirectPasteToggle 完了');
 }
 
 function renderTemplateManageList() {
@@ -1403,50 +1437,15 @@ async function pasteToPage() {
           await clearAll({ skipConfirm: true, skipNotification: true });
           showNotification('ページに貼り付けました（テキストと画像をクリアしました）');
         }
-        
-        // 貼り付け操作をログに記録
-        try {
-          let userId = null;
-          if (window.AuthManager) {
-            const user = window.AuthManager.getUser();
-            if (user) {
-              userId = user.id || user.email || null;
-            }
+        await logClinicalInsertion('paste', {
+          text,
+          source: 'text-editor',
+          metadata: {
+            imagesCount: images.length,
+            retainTextAfterPaste,
+            triggeredFrom: 'editor-paste-button'
           }
-          
-          // 現在のタブ情報を取得
-          let tabContext = null;
-          try {
-            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (tabs && tabs.length > 0) {
-              tabContext = {
-                title: tabs[0].title,
-                url: tabs[0].url,
-                id: tabs[0].id
-              };
-            }
-          } catch (tabError) {
-            console.warn('[SidePanel] タブ情報取得エラー:', tabError);
-          }
-          
-          await window.ApiClient.logInsertion({
-            userId: userId || 'anonymous',
-            action: 'paste',
-            content: text,
-            metadata: {
-              source: 'text-editor',
-              imagesCount: images.length,
-              retainTextAfterPaste,
-              triggeredFrom: 'editor-paste-button',
-              tabTitle: tabContext?.title || null,
-              tabUrl: tabContext?.url || null,
-              tabId: tabContext?.id || null,
-              timestamp: new Date().toISOString()
-            }
-          });
-        } catch (logError) {
-          console.warn('[SidePanel] ログ保存エラー（無視）:', logError);
-        }
+        });
       }
     });
   } catch (error) {
@@ -1462,13 +1461,20 @@ async function copyEditorText() {
     showNotification('コピーするテキストがありません');
     return;
   }
-  chrome.runtime.sendMessage({ action: 'writeToClipboard', text }, (response) => {
+  chrome.runtime.sendMessage({ action: 'writeToClipboard', text }, async (response) => {
     if (chrome.runtime.lastError) {
       showNotification('コピーに失敗しました: ' + chrome.runtime.lastError.message);
       return;
     }
     if (response && response.success) {
       showNotification('テキストをコピーしました');
+      await logClinicalInsertion('copy', {
+        text,
+        source: 'text-editor',
+        metadata: {
+          triggeredFrom: 'copy-editor-button'
+        }
+      });
     } else {
       showNotification('コピーに失敗しました');
     }
@@ -1531,6 +1537,164 @@ function showNotification(message) {
   }, 2000);
 }
 
+const CLINICAL_USER_ID_STORAGE_KEY = 'karteClinicalUserId';
+let cachedClinicalUserId = null;
+
+async function logClinicalInsertion(action, { text, source = 'unknown', noteType, metadata = {} } = {}) {
+  try {
+    if (!text || !text.trim()) {
+      return;
+    }
+
+    if (!window.ApiClient || typeof window.ApiClient.logInsertion !== 'function') {
+      console.warn('[SidePanel] ApiClient.logInsertion が利用できません');
+      return;
+    }
+
+    const [userId, tabContext] = await Promise.all([
+      getClinicalUserId(),
+      getActiveTabContext()
+    ]);
+
+    const payload = {
+      userId: userId || 'anonymous',
+      action: action || 'unknown',
+      noteType: noteType || detectNoteType(text),
+      content: text,
+      metadata: {
+        source,
+        tabTitle: tabContext?.title || null,
+        tabUrl: tabContext?.url || null,
+        tabId: tabContext?.id || null,
+        recordedFrom: 'sidepanel',
+        extensionVersion: chrome?.runtime?.getManifest?.().version || null,
+        timestamp: new Date().toISOString(),
+        ...metadata
+      }
+    };
+
+    await window.ApiClient.logInsertion(payload);
+  } catch (error) {
+    // log-insertionの失敗は非致命的なので、警告のみ（エラーを投げない）
+    console.warn('[SidePanel] logClinicalInsertion でエラー（無視）:', error.message || error);
+    // エラーを再スローしない（AIチャットの動作を妨げない）
+  }
+}
+
+async function getClinicalUserId() {
+  if (cachedClinicalUserId) {
+    return cachedClinicalUserId;
+  }
+
+  const stored = await chromeStorageLocalGet(CLINICAL_USER_ID_STORAGE_KEY);
+  if (stored) {
+    cachedClinicalUserId = stored;
+    return stored;
+  }
+
+  const newId = generateClinicalUserId();
+  await chromeStorageLocalSet({ [CLINICAL_USER_ID_STORAGE_KEY]: newId });
+  cachedClinicalUserId = newId;
+  return newId;
+}
+
+function generateClinicalUserId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `user-${crypto.randomUUID()}`;
+  }
+  return `user-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function chromeStorageLocalGet(key) {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get([key], (result) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[SidePanel] chrome.storage.local.get エラー:', chrome.runtime.lastError);
+          resolve(null);
+          return;
+        }
+        resolve(result?.[key] || null);
+      });
+    } catch (error) {
+      console.warn('[SidePanel] chromeStorageLocalGet でエラー', error);
+      resolve(null);
+    }
+  });
+}
+
+function chromeStorageLocalSet(data) {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.set(data, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('[SidePanel] chrome.storage.local.set エラー:', chrome.runtime.lastError);
+        }
+        resolve();
+      });
+    } catch (error) {
+      console.warn('[SidePanel] chromeStorageLocalSet でエラー', error);
+      resolve();
+    }
+  });
+}
+
+async function getActiveTabContext() {
+  if (!chrome?.tabs?.query) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    try {
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[SidePanel] chrome.tabs.query エラー:', chrome.runtime.lastError);
+          resolve(null);
+          return;
+        }
+        if (!tabs || tabs.length === 0) {
+          resolve(null);
+          return;
+        }
+        const tab = tabs[0];
+        resolve({
+          id: tab.id,
+          url: tab.url,
+          title: tab.title
+        });
+      });
+    } catch (error) {
+      console.warn('[SidePanel] getActiveTabContext でエラー', error);
+      resolve(null);
+    }
+  });
+}
+
+function detectNoteType(text = '') {
+  if (!text.trim()) {
+    return 'empty';
+  }
+
+  const hasS = /(^|\n)\s*S\s*[:：]/i.test(text);
+  const hasO = /(^|\n)\s*O\s*[:：]/i.test(text);
+  const hasA = /(^|\n)\s*A\s*[:：]/i.test(text);
+  const hasP = /(^|\n)\s*P\s*[:：]/i.test(text);
+
+  if (hasS && hasO && hasA && hasP) {
+    return 'soap';
+  }
+
+  if (/処方|投与|内服|頓用|Rx/i.test(text)) {
+    return 'prescription-like';
+  }
+
+  if (/同意|説明| consent /i.test(text)) {
+    return 'consent-note';
+  }
+
+  return text.length > 800 ? 'long-form' : 'free-text';
+}
+
 // グローバル関数は不要になったが、念のため残しておく
 window.removeImage = removeImage;
 
@@ -1538,21 +1702,6 @@ window.removeImage = removeImage;
 async function handleAiChatSend() {
   if (chatState.isSending) {
     return;
-  }
-
-  // 認証チェック
-  if (window.AuthManager) {
-    const token = await window.AuthManager.getToken();
-    if (!token) {
-      showNotification('ログインが必要です。Landing Pageでログインしてください。', 'error');
-      // AIタブに切り替えて認証UIを表示
-      const aiTab = document.querySelector('[data-tab-target="aiTab"]');
-      if (aiTab) {
-        aiTab.click();
-      }
-      await checkAuthAndUpdateUI();
-      return;
-    }
   }
 
   const message = aiChatInput?.value.trim();
@@ -1576,8 +1725,6 @@ async function handleAiChatSend() {
     return;
   }
 
-
-
   ensureChatSession(selectedAgent);
 
   const now = new Date().toISOString();
@@ -1592,6 +1739,19 @@ async function handleAiChatSend() {
   chatState.messages.push(userMessage);
   chatState.updatedAt = now;
   renderChatMessages();
+
+  logClinicalInsertion('ai_prompt', {
+    text: message,
+    source: 'ai-chat',
+    metadata: {
+      agentId: selectedAgent.id,
+      agentName: selectedAgent.name || selectedAgent.label || '',
+      conversationId: chatState.sessionId,
+      messageId: userMessage.id,
+      role: 'user',
+      totalMessages: chatState.messages.length
+    }
+  });
 
   if (aiChatInput) {
     aiChatInput.value = '';
@@ -1650,17 +1810,21 @@ async function handleAiChatSend() {
     renderChatMessages();
     await persistChatSession();
 
+    logClinicalInsertion('ai_response', {
+      text: replyText,
+      source: 'ai-chat',
+      metadata: {
+        agentId: selectedAgent.id,
+        agentName: selectedAgent.name || selectedAgent.label || '',
+        conversationId: chatState.sessionId,
+        messageId: assistantMessage.id,
+        role: 'assistant',
+        usage: response.usage || null
+      }
+    });
+
     // Save log
     try {
-      // Get user ID from AuthManager
-      let userId = null;
-      if (window.AuthManager) {
-        const user = window.AuthManager.getUser();
-        if (user) {
-          userId = user.id || user.email || null;
-        }
-      }
-      
       await window.ApiClient.saveLog(
         'ai_chat',
         {
@@ -1669,7 +1833,7 @@ async function handleAiChatSend() {
           inputLength: message.length,
           outputLength: replyText.length
         },
-        userId
+        'user' // TODO: Use actual user ID if available
       );
     } catch (logError) {
       console.error('[SidePanel] ログ保存エラー:', logError);
@@ -1677,12 +1841,25 @@ async function handleAiChatSend() {
 
   } catch (error) {
     console.error('[SidePanel] AIチャット送信エラー:', error);
-    assistantMessage.content = `エラー: ${error.message}`;
+
+    // ネットワークエラーの場合は、より詳細なメッセージを表示
+    let errorMessage = error.message || 'AIチャットの送信に失敗しました';
+    if (error.message && (
+      error.message.includes('Failed to fetch') ||
+      error.message.includes('Network error') ||
+      error.message.includes('Network request failed')
+    )) {
+      errorMessage = 'ネットワークエラー: Azure Functionsへの接続に失敗しました。もう一度お試しください。';
+    } else if (error.message && error.message.includes('timed out')) {
+      errorMessage = 'タイムアウト: リクエストがタイムアウトしました。もう一度お試しください。';
+    }
+
+    assistantMessage.content = `エラー: ${errorMessage}`;
     assistantMessage.status = 'failed';
     chatState.updatedAt = new Date().toISOString();
     renderChatMessages();
     await persistChatSession();
-    showNotification('AIチャットの送信に失敗しました');
+    showNotification(errorMessage);
   } finally {
     chatState.isSending = false;
     setSendButtonState(false);
@@ -1867,6 +2044,11 @@ function setupStorageObservers() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
 
+    // 認証状態の変更を監視
+    if (changes['authToken'] || changes['user']) {
+      checkAuth();
+    }
+
     if (changes[StorageManager.STORAGE_KEYS.AI_AGENTS]) {
       const defaults = getDefaultAgents();
       aiState.agents = normalizeAgents(changes[StorageManager.STORAGE_KEYS.AI_AGENTS].newValue, defaults);
@@ -1880,8 +2062,6 @@ function setupStorageObservers() {
       renderAgentSelector();
       loadChatHistory();
     }
-
-
 
     if (changes[StorageManager.STORAGE_KEYS.AI_CHAT_SESSIONS]) {
       loadChatHistory();
@@ -2141,48 +2321,14 @@ async function pasteLatestAssistantMessageDirect() {
       showNotification('直接貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
     } else {
       showNotification('AI応答を直接貼り付けました');
-      
-      // 貼り付け操作をログに記録
-      try {
-        let userId = null;
-        if (window.AuthManager) {
-          const user = window.AuthManager.getUser();
-          if (user) {
-            userId = user.id || user.email || null;
-          }
+      await logClinicalInsertion('paste', {
+        text: latestAssistant.content,
+        source: 'ai-assistant',
+        metadata: {
+          agentId: chatState.agentId || null,
+          triggeredFrom: 'ai-direct-paste-button'
         }
-        
-        let tabContext = null;
-        try {
-          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-          if (tabs && tabs.length > 0) {
-            tabContext = {
-              title: tabs[0].title,
-              url: tabs[0].url,
-              id: tabs[0].id
-            };
-          }
-        } catch (tabError) {
-          console.warn('[SidePanel] タブ情報取得エラー:', tabError);
-        }
-        
-        await window.ApiClient.logInsertion({
-          userId: userId || 'anonymous',
-          action: 'paste',
-          content: latestAssistant.content,
-          metadata: {
-            source: 'ai-assistant',
-            agentId: chatState.agentId || null,
-            triggeredFrom: 'ai-direct-paste-button',
-            tabTitle: tabContext?.title || null,
-            tabUrl: tabContext?.url || null,
-            tabId: tabContext?.id || null,
-            timestamp: new Date().toISOString()
-          }
-        });
-      } catch (logError) {
-        console.warn('[SidePanel] ログ保存エラー（無視）:', logError);
-      }
+      });
     }
   });
 }
@@ -2200,13 +2346,21 @@ async function copyLatestAssistantMessage() {
   chrome.runtime.sendMessage({
     action: 'writeToClipboard',
     text: latestAssistant.content
-  }, (response) => {
+  }, async (response) => {
     if (chrome.runtime.lastError) {
       showNotification('コピーに失敗しました: ' + chrome.runtime.lastError.message);
       return;
     }
     if (response && response.success) {
       showNotification('AI応答をコピーしました');
+      await logClinicalInsertion('copy', {
+        text: latestAssistant.content,
+        source: 'ai-assistant',
+        metadata: {
+          agentId: chatState.agentId || null,
+          triggeredFrom: 'copy-ai-button'
+        }
+      });
     } else {
       showNotification('コピーに失敗しました');
     }
@@ -2229,39 +2383,78 @@ async function clearCurrentChatSession() {
   renderChatMessages();
 }
 
-// 日本時間表示機能
-function getJstTimeString() {
-  const now = new Date();
-  const jstTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
-  const year = jstTime.getFullYear();
-  const month = String(jstTime.getMonth() + 1).padStart(2, '0');
-  const day = String(jstTime.getDate()).padStart(2, '0');
-  const hours = String(jstTime.getHours()).padStart(2, '0');
-  const minutes = String(jstTime.getMinutes()).padStart(2, '0');
-  return `${year}/${month}/${day} ${hours}:${minutes}`;
-}
+// 日時機能のセットアップ
+function setupDateTime() {
+  // 現在の日時を表示する関数
+  function updateDateTime() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
 
-function updateJstTimeDisplay() {
-  const jstTimeDisplay = document.getElementById('jstTimeDisplay');
-  if (jstTimeDisplay) {
-    jstTimeDisplay.textContent = getJstTimeString();
+    const dateTimeString = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+    if (currentDateTimeDisplay) {
+      currentDateTimeDisplay.textContent = dateTimeString;
+    }
   }
-}
 
-function setupJstTimeDisplay() {
   // 初回表示
-  updateJstTimeDisplay();
-  
-  // 1秒ごとに更新
-  setInterval(() => {
-    updateJstTimeDisplay();
-  }, 1000);
-}
+  updateDateTime();
 
-// Debug: Check if ApiClient is loaded
-console.log('[DEBUG] ApiClient loaded:', window.ApiClient);
-if (!window.ApiClient) {
-  console.error('[ERROR] ApiClient is not loaded! Check api.js');
+  // 1秒ごとに更新
+  setInterval(updateDateTime, 1000);
+
+  // 日時挿入ボタンのイベントリスナー
+  if (insertDateTimeBtn) {
+    insertDateTimeBtn.addEventListener('click', async () => {
+      const dateTimeText = currentDateTimeDisplay.textContent;
+
+      // directTemplatePasteがONの場合は直接カルテに挿入
+      if (directTemplatePaste) {
+        try {
+          chrome.runtime.sendMessage({
+            action: 'pasteToActiveTab',
+            text: dateTimeText,
+            images: []
+          }, async (response) => {
+            if (chrome.runtime.lastError) {
+              console.error('[DateTime] メッセージ送信エラー:', chrome.runtime.lastError);
+              showNotification('日時の挿入に失敗しました');
+            } else if (response && response.success === false) {
+              console.error('[DateTime] 挿入失敗:', response);
+              showNotification('日時の挿入に失敗しました');
+            } else {
+              showNotification('日時を挿入しました');
+              await logClinicalInsertion('paste', {
+                text: dateTimeText,
+                source: 'datetime-insert',
+                metadata: {
+                  directPaste: true,
+                  triggeredFrom: 'datetime-insert-button'
+                }
+              });
+            }
+          });
+        } catch (error) {
+          console.error('[DateTime] 挿入エラー:', error);
+          showNotification('日時の挿入に失敗しました');
+        }
+      } else {
+        // テキストエディタに追加
+        if (textEditor.value) {
+          textEditor.value += '\n' + dateTimeText;
+        } else {
+          textEditor.value = dateTimeText;
+        }
+        adjustTextEditorHeight();
+        saveData();
+        showNotification('日時をテキストエディタに追加しました');
+      }
+    });
+  }
 }
 
 // 初期化実行
