@@ -28,6 +28,10 @@ const newCategoryInput = document.getElementById('newCategoryInput');
 const addCategoryBtn = document.getElementById('addCategoryBtn');
 const categoryList = document.getElementById('categoryList');
 const platformIndicator = document.getElementById('platformIndicator');
+// テキスト編集タブの定型文作成UI
+const quickTemplateCategorySelect = document.getElementById('quickTemplateCategorySelect');
+const quickTemplateInput = document.getElementById('quickTemplateInput');
+const quickAddTemplateBtn = document.getElementById('quickAddTemplateBtn');
 const tabButtons = document.querySelectorAll('.tab-button');
 const tabPanels = document.querySelectorAll('.tab-content[role="tabpanel"]');
 const sendAiToTextBtn = document.getElementById('sendAiToTextBtn');
@@ -328,6 +332,9 @@ async function loadEditorState() {
   }
 
   directTemplatePaste = Boolean(savedDirect);
+  
+  // クイック作成のカテゴリセレクトを初期化
+  renderQuickTemplateCategorySelect();
 }
 
 // テキスト保持トグルの設定
@@ -524,6 +531,17 @@ function setupEventListeners() {
   if (newCategoryInput) {
     newCategoryInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') addCategory();
+    });
+  }
+
+  // テキスト編集タブのクイック定型文作成イベント
+  if (quickAddTemplateBtn) {
+    quickAddTemplateBtn.addEventListener('click', () => addQuickTemplate());
+  }
+
+  if (quickTemplateInput) {
+    quickTemplateInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') addQuickTemplate();
     });
   }
 
@@ -1055,14 +1073,24 @@ function renderImages() {
 function renderCategoryTabs() {
   if (!templateCategoryToggle) return;
 
+  // カテゴリ名を6文字まで表示、それ以上は省略表示
+  const formatCategoryName = (name) => {
+    if (name.length <= 6) {
+      return name;
+    }
+    return name.substring(0, 6) + '...';
+  };
+
   templateCategoryToggle.innerHTML = templateCategories.map((cat, index) => {
     const isActive = cat.id === currentTemplateCategory;
     const categoryClass = `category-${index}`;
+    const displayName = formatCategoryName(cat.name);
     
     return `<button class="tab-button small ${categoryClass} ${isActive ? 'active' : ''}" 
       data-category="${cat.id}" 
       role="tab" 
-      aria-selected="${isActive}">${escapeHtml(cat.name)}</button>`;
+      aria-selected="${isActive}"
+      title="${escapeHtml(cat.name)}">${escapeHtml(displayName)}</button>`;
   }).join('');
 
   // イベントリスナー設定
@@ -1073,23 +1101,53 @@ function renderCategoryTabs() {
         currentTemplateCategory = catId;
         renderCategoryTabs();
         renderTemplates();
+        renderQuickTemplateCategorySelect(); // クイック作成のセレクトも更新
       }
     });
   });
+  
+  // クイック作成のセレクトも更新
+  renderQuickTemplateCategorySelect();
+}
+
+// テキスト編集タブの定型文作成用カテゴリセレクトの更新
+function renderQuickTemplateCategorySelect() {
+  if (!quickTemplateCategorySelect) return;
+  
+  const currentSelect = quickTemplateCategorySelect.value;
+  quickTemplateCategorySelect.innerHTML = templateCategories.map(cat =>
+    `<option value="${cat.id}" ${cat.id === (currentSelect || currentTemplateCategory) ? 'selected' : ''}>${escapeHtml(cat.name)}</option>`
+  ).join('');
+  
+  // 値が空または無効な場合は現在のカテゴリを選択
+  if (!quickTemplateCategorySelect.value) {
+    quickTemplateCategorySelect.value = currentTemplateCategory;
+  }
 }
 
 // カテゴリ管理リストの表示（モーダル内）
 function renderCategoryManagement() {
   if (!categoryList) return;
 
-  categoryList.innerHTML = templateCategories.map(cat => `
-    <div class="category-tag" style="display: inline-flex; align-items: center; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
-      <span>${escapeHtml(cat.name)}</span>
+  // カテゴリ名を6文字まで表示、それ以上は省略表示
+  const formatCategoryName = (name) => {
+    if (name.length <= 6) {
+      return name;
+    }
+    return name.substring(0, 6) + '...';
+  };
+
+  categoryList.innerHTML = templateCategories.map(cat => {
+    const displayName = formatCategoryName(cat.name);
+    return `
+    <div class="category-tag" style="display: inline-flex; align-items: center; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px;" title="${escapeHtml(cat.name)}">
+      <span>${escapeHtml(displayName)}</span>
       ${['diagnoses', 'medications', 'phrases'].includes(cat.id) ? '' : `
         <button class="delete-cat-btn" data-id="${cat.id}" style="border: none; background: none; cursor: pointer; margin-left: 4px; color: #999;">&times;</button>
       `}
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   // 削除ボタンのイベント
   categoryList.querySelectorAll('.delete-cat-btn').forEach(btn => {
@@ -1124,6 +1182,8 @@ async function addCategory() {
 
   // 管理画面のセレクトボックスも更新
   renderTemplateManageList();
+  // クイック作成のセレクトも更新
+  renderQuickTemplateCategorySelect();
 }
 
 // カテゴリ削除
@@ -1149,19 +1209,15 @@ async function deleteCategory(id) {
   renderTemplates();
   renderCategoryManagement();
   renderTemplateManageList();
+  // クイック作成のセレクトも更新
+  renderQuickTemplateCategorySelect();
 }
 
-// 定型文 追加
+// 定型文 追加（管理画面用）
 async function addTemplate() {
   const cat = templateCategorySelect?.value || currentTemplateCategory;
   const val = (newTemplateInput?.value || '').trim();
   if (!val) return;
-
-  // 1定型文は最大6文字まで
-  if (val.length > 6) {
-    showNotification('1つの定型文は最大6文字までです');
-    return;
-  }
 
   // 配列が存在しない場合は初期化
   if (!templates[cat]) templates[cat] = [];
@@ -1173,6 +1229,30 @@ async function addTemplate() {
   newTemplateInput.value = '';
   renderTemplateManageList();
   if (cat === currentTemplateCategory) renderTemplates();
+}
+
+// 定型文 追加（テキスト編集タブのクイック作成用）
+async function addQuickTemplate() {
+  const cat = quickTemplateCategorySelect?.value || currentTemplateCategory;
+  const val = (quickTemplateInput?.value || '').trim();
+  if (!val) return;
+
+  // 配列が存在しない場合は初期化
+  if (!templates[cat]) templates[cat] = [];
+
+  const arr = templates[cat];
+  arr.push(val);
+  templates[cat] = arr;
+  await StorageManager.saveTemplates(templates);
+  quickTemplateInput.value = '';
+  
+  // UI更新
+  renderTemplateManageList();
+  if (cat === currentTemplateCategory) {
+    renderTemplates();
+  }
+  
+  showNotification('定型文を追加しました');
 }
 
 // 定型文の挿入（ハッシュタグは付けない）
@@ -1202,12 +1282,12 @@ function renderTemplates() {
   const categoryIndex = templateCategories.findIndex(cat => cat.id === currentTemplateCategory);
   const categoryClass = categoryIndex >= 0 ? `category-${categoryIndex}` : '';
   
-  // 10文字以下の場合は省略表示
+  // 6文字まで表示、それ以上は省略表示
   const formatTemplateText = (text) => {
-    if (text.length <= 10) {
+    if (text.length <= 6) {
       return text;
     }
-    return text.substring(0, 10) + '...';
+    return text.substring(0, 6) + '...';
   };
   
   // 画面上は全ての定型文を表示（個数制限なし）
@@ -1333,17 +1413,28 @@ function renderTemplateManageList() {
     templateManageList.innerHTML = '<p style="color: #999; text-align: center; padding: 16px;">定型文がありません</p>';
     return;
   }
+  // 定型文を6文字まで表示、それ以上は省略表示
+  const formatTemplateText = (text) => {
+    if (text.length <= 6) {
+      return text;
+    }
+    return text.substring(0, 6) + '...';
+  };
+
   templateManageList.innerHTML = arr
-    .map((t, i) => `
+    .map((t, i) => {
+      const displayText = formatTemplateText(t);
+      return `
       <div class="template-manage-item" data-index="${i}">
-        <span class="template-text">${escapeHtml(t)}</span>
+        <span class="template-text" title="${escapeHtml(t)}">${escapeHtml(displayText)}</span>
         <div class="actions">
           <button class="btn btn-ghost" data-action="up" title="上へ">▲</button>
           <button class="btn btn-ghost" data-action="down" title="下へ">▼</button>
           <button class="btn btn-secondary" data-action="delete" title="削除">削除</button>
         </div>
       </div>
-    `)
+    `;
+    })
     .join('');
   templateManageList.querySelectorAll('.template-manage-item .btn').forEach(btn => {
     btn.addEventListener('click', async () => {

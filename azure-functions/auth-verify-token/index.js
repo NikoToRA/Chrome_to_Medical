@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const Stripe = require('stripe');
 const { createErrorPage, createTokenDisplayPage } = require('../lib/error-pages');
+const { getSubscription } = require('../lib/table');
 
 const secret = process.env.JWT_SECRET;
 const stripe = process.env.STRIPE_SECRET_KEY ? Stripe(process.env.STRIPE_SECRET_KEY) : null;
@@ -25,20 +26,63 @@ module.exports = async function (context, req) {
         // Generate long-lived session token
         const sessionToken = jwt.sign({ email, type: 'session' }, secret, { expiresIn: '14d' });
 
+        // Check for duplicate registration (unless it's a test email with +test)
+        const isTestEmail = email.includes('+test@');
+
+        if (!isTestEmail) {
+            try {
+                const existingSubscription = await getSubscription(email);
+
+                if (existingSubscription) {
+                    const isActive = (
+                        (existingSubscription.status === 'active' || existingSubscription.status === 'trialing') &&
+                        existingSubscription.currentPeriodEnd &&
+                        new Date(existingSubscription.currentPeriodEnd) > new Date()
+                    );
+
+                    if (isActive) {
+                        context.log('[AuthVerifyToken] Duplicate registration blocked:', { email });
+
+                        context.res = {
+                            status: 409,
+                            headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+                            body: createErrorPage({
+                                title: '既に登録済みです',
+                                icon: 'ℹ️',
+                                message: 'このメールアドレスは既に登録されています',
+                                details: `
+                                    既にアクティブな購読が存在します。<br/><br/>
+                                    拡張機能にログインして、ご利用を開始してください。<br/><br/>
+                                    購読情報を確認したい場合は、拡張機能の「設定」から「サブスクリプション管理」をご確認ください。
+                                `
+                            })
+                        };
+                        return;
+                    }
+                }
+            } catch (dbError) {
+                context.log.warn('[AuthVerifyToken] Failed to check existing subscription:', dbError.message);
+                // DB エラーの場合は処理を続行（重複チェック失敗でユーザーを止めない）
+            }
+        } else {
+            context.log('[AuthVerifyToken] Test email detected, skipping duplicate check:', { email });
+        }
+
         // Check if Stripe is configured and we should redirect to Checkout
         const hasStripe = !!stripe;
         const hasPriceId = !!process.env.STRIPE_PRICE_ID;
         const hasSuccessUrl = !!process.env.SUCCESS_PAGE_URL;
         const shouldRedirectToCheckout = hasStripe && hasPriceId && hasSuccessUrl;
-        
+
         context.log('[AuthVerifyToken] Configuration check:', {
             hasStripe,
             hasPriceId,
             hasSuccessUrl,
             shouldRedirectToCheckout,
-            email
+            email,
+            isTestEmail
         });
-        
+
         if (shouldRedirectToCheckout) {
             // Create Stripe Checkout session and redirect
             try {
