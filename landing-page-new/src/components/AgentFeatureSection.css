@@ -1,0 +1,238 @@
+.agent-feature-section {
+    background-color: #F8F9FA;
+    overflow: hidden;
+}
+
+.feature-layout.reverse {
+    grid-template-columns: 1fr 1fr;
+}
+
+.feature-badge.orange {
+    background: #FFF3E0;
+    color: #FF9800;
+}
+
+.highlight-orange {
+    color: #FF9800;
+    position: relative;
+    display: inline-block;
+}
+
+.highlight-orange::after {
+    content: '';
+    position: absolute;
+    bottom: 5px;
+    left: 0;
+    width: 100%;
+    height: 10px;
+    background: rgba(255, 152, 0, 0.2);
+    z-index: -1;
+}
+
+.agent-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
+}
+
+.agent-card {
+    background: var(--white);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: transform var(--transition-base);
+}
+
+.agent-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.agent-icon {
+    font-size: 2rem;
+    margin-bottom: var(--space-2);
+}
+
+.agent-card h4 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-1);
+    color: var(--gray-900);
+}
+
+.agent-card p {
+    font-size: var(--text-sm);
+    color: var(--gray-600);
+    margin: 0;
+}
+
+.custom-note {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px dashed var(--gray-400);
+    padding: var(--space-4);
+    border-radius: var(--radius-lg);
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+}
+
+.note-icon {
+    font-size: 1.5rem;
+}
+
+.custom-note p {
+    font-size: var(--text-sm);
+    color: var(--gray-700);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Visual Animation */
+.agents-visual {
+    position: relative;
+    width: 450px;
+    /* Increased from 300px */
+    height: 450px;
+    /* Increased from 300px */
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.center-placeholder {
+    width: 150px;
+    /* Increased from 100px */
+    height: 150px;
+    /* Increased from 100px */
+    background: #E3F2FD;
+    border: 2px dashed #4A90E2;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    animation: pulse 2s infinite;
+    text-align: center;
+}
+
+.placeholder-text {
+    font-size: 18px;
+    /* Increased from 12px */
+    color: #4A90E2;
+    font-weight: bold;
+    line-height: 1.2;
+}
+
+.orbit-ring {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border: 2px dashed #E0E0E0;
+    border-radius: 50%;
+    animation: spin 20s linear infinite;
+}
+
+.orbit-agent {
+    position: absolute;
+    width: 75px;
+    /* Increased from 50px */
+    height: 75px;
+    /* Increased from 50px */
+    background: var(--white);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.25rem;
+    /* Increased from 1.5rem */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    animation: orbit 10s linear infinite;
+}
+
+.agent-1 {
+    animation-delay: 0s;
+}
+
+.agent-2 {
+    animation-delay: -2.5s;
+}
+
+.agent-3 {
+    animation-delay: -5s;
+}
+
+.agent-4 {
+    animation-delay: -7.5s;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes orbit {
+    0% {
+        transform: rotate(0deg) translateX(180px) rotate(0deg);
+        /* Increased from 120px */
+    }
+
+    100% {
+        transform: rotate(360deg) translateX(180px) rotate(-360deg);
+        /* Increased from 120px */
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .feature-layout.reverse {
+        grid-template-columns: 1fr;
+    }
+
+    .feature-visual {
+        margin-bottom: var(--space-8);
+    }
+
+    .agents-visual {
+        width: 350px;
+        /* Increased from 250px */
+        height: 350px;
+        /* Increased from 250px */
+    }
+
+    @keyframes orbit {
+        0% {
+            transform: rotate(0deg) translateX(140px) rotate(0deg);
+            /* Increased from 100px */
+        }
+
+        100% {
+            transform: rotate(360deg) translateX(140px) rotate(-360deg);
+            /* Increased from 100px */
+        }
+    }
+}
