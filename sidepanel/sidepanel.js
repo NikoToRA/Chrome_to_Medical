@@ -889,7 +889,7 @@ function renderCategoryTabs() {
   templateCategoryToggle.innerHTML = templateCategories.map((cat, index) => {
     const isActive = cat.id === currentTemplateCategory;
     const categoryClass = `category-${index}`;
-    
+
     return `<button class="tab-button small ${categoryClass} ${isActive ? 'active' : ''}" 
       data-category="${cat.id}" 
       role="tab" 
@@ -916,9 +916,7 @@ function renderCategoryManagement() {
   categoryList.innerHTML = templateCategories.map(cat => `
     <div class="category-tag" style="display: inline-flex; align-items: center; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
       <span>${escapeHtml(cat.name)}</span>
-      ${['diagnoses', 'medications', 'phrases'].includes(cat.id) ? '' : `
         <button class="delete-cat-btn" data-id="${cat.id}" style="border: none; background: none; cursor: pointer; margin-left: 4px; color: #999;">&times;</button>
-      `}
     </div>
   `).join('');
 
@@ -1015,14 +1013,14 @@ function renderTemplates() {
     templateList.innerHTML = '<p style="color: #999; font-size: 12px;">定型文がありません</p>';
     return;
   }
-  
+
   // 6個に制限
   const displayItems = items.slice(0, 6);
-  
+
   // カテゴリのインデックスを取得（色分け用）
   const categoryIndex = templateCategories.findIndex(cat => cat.id === currentTemplateCategory);
   const categoryClass = categoryIndex >= 0 ? `category-${categoryIndex}` : '';
-  
+
   // 10文字以下の場合は省略表示
   const formatTemplateText = (text) => {
     if (text.length <= 10) {
@@ -1030,7 +1028,7 @@ function renderTemplates() {
     }
     return text.substring(0, 10) + '...';
   };
-  
+
   templateList.innerHTML = displayItems
     .map((t, i) => {
       const displayText = formatTemplateText(t);
@@ -1038,7 +1036,7 @@ function renderTemplates() {
       return `<span class="template-tag ${categoryClass}" data-index="${i}" title="${escapeHtml(fullText)}">${escapeHtml(displayText)}</span>`;
     })
     .join('');
-    
+
   templateList.querySelectorAll('.template-tag').forEach(tag => {
     tag.addEventListener('click', () => {
       const idx = parseInt(tag.getAttribute('data-index'));
@@ -1075,7 +1073,7 @@ async function setupTemplateDirectPasteToggle() {
   try {
     directTemplatePaste = await StorageManager.getTemplatesDirectPaste();
   } catch (e) {
-    directTemplatePaste = false;
+    directTemplatePaste = true;
   }
   if (directTemplatePasteToggle) {
     directTemplatePasteToggle.checked = directTemplatePaste;
@@ -1919,7 +1917,7 @@ function updateJstTimeDisplay() {
 function setupJstTimeDisplay() {
   // 初回表示
   updateJstTimeDisplay();
-  
+
   // 1秒ごとに更新
   setInterval(() => {
     updateJstTimeDisplay();

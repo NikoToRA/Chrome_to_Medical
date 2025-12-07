@@ -87,7 +87,7 @@ async function checkAuthAndUpdateUI() {
   if (window.AuthManager) {
     const token = await window.AuthManager.getToken();
     const user = window.AuthManager.getUser();
-    
+
     if (!token || !user) {
       // トークンがない場合、ログインを促す
       showAuthRequiredUI();
@@ -105,7 +105,7 @@ function showAuthRequiredUI() {
   // AIチャットタブを無効化
   const aiTab = document.querySelector('[data-tab-target="aiTab"]');
   const aiTabContent = document.querySelector('[data-tab="aiTab"]');
-  
+
   if (aiTabContent) {
     let authOverlay = document.getElementById('authRequiredOverlay');
     if (!authOverlay) {
@@ -155,16 +155,16 @@ function showAuthRequiredUI() {
       `;
       aiTabContent.style.position = 'relative';
       aiTabContent.appendChild(authOverlay);
-      
+
       // ログインボタンのイベント
       document.getElementById('goToLoginBtn').addEventListener('click', () => {
         window.open('https://stkarteai1763705952.z11.web.core.windows.net', '_blank');
       });
-      
+
       // トークン送信ボタンのイベント
       const submitTokenBtn = document.getElementById('submitTokenBtn');
       const manualTokenInput = document.getElementById('manualTokenInput');
-      
+
       if (submitTokenBtn && manualTokenInput) {
         submitTokenBtn.addEventListener('click', async () => {
           const token = manualTokenInput.value.trim();
@@ -172,23 +172,23 @@ function showAuthRequiredUI() {
             showNotification('トークンを入力してください', 'error');
             return;
           }
-          
+
           try {
             // トークンからメールアドレスを抽出
             const payload = JSON.parse(atob(token.split('.')[1]));
             const email = payload.email || payload.sub || 'unknown@example.com';
-            
+
             // AuthManagerにトークンを設定
             if (window.AuthManager) {
               await window.AuthManager.setToken(token, email);
               window.AuthManager.user = { id: email, email: email };
-              
+
               // 購読状態を確認
               await window.AuthManager.checkSubscription();
-              
+
               showNotification('ログインに成功しました！', 'success');
               hideAuthRequiredUI();
-              
+
               // ストレージにも保存（background.jsと同期）
               chrome.storage.local.set({
                 authToken: token,
@@ -218,7 +218,7 @@ function setupAuthTokenListener() {
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'authTokenReceived' && request.token && request.email) {
       console.log('[SidePanel] ✅ 認証トークンを受信しました:', request.email);
-      
+
       // AuthManagerにトークンを設定
       if (window.AuthManager) {
         window.AuthManager.setToken(request.token, request.email).then(() => {
@@ -235,11 +235,11 @@ function setupAuthTokenListener() {
           });
         });
       }
-      
+
       sendResponse({ success: true });
     }
   });
-  
+
   // ストレージ変更を監視（他のタブやbackground.jsからの変更を検知）
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && changes.authToken) {
@@ -332,7 +332,7 @@ async function loadEditorState() {
   }
 
   directTemplatePaste = Boolean(savedDirect);
-  
+
   // クイック作成のカテゴリセレクトを初期化
   renderQuickTemplateCategorySelect();
 }
@@ -1085,7 +1085,7 @@ function renderCategoryTabs() {
     const isActive = cat.id === currentTemplateCategory;
     const categoryClass = `category-${index}`;
     const displayName = formatCategoryName(cat.name);
-    
+
     return `<button class="tab-button small ${categoryClass} ${isActive ? 'active' : ''}" 
       data-category="${cat.id}" 
       role="tab" 
@@ -1105,7 +1105,7 @@ function renderCategoryTabs() {
       }
     });
   });
-  
+
   // クイック作成のセレクトも更新
   renderQuickTemplateCategorySelect();
 }
@@ -1113,12 +1113,12 @@ function renderCategoryTabs() {
 // テキスト編集タブの定型文作成用カテゴリセレクトの更新
 function renderQuickTemplateCategorySelect() {
   if (!quickTemplateCategorySelect) return;
-  
+
   const currentSelect = quickTemplateCategorySelect.value;
   quickTemplateCategorySelect.innerHTML = templateCategories.map(cat =>
     `<option value="${cat.id}" ${cat.id === (currentSelect || currentTemplateCategory) ? 'selected' : ''}>${escapeHtml(cat.name)}</option>`
   ).join('');
-  
+
   // 値が空または無効な場合は現在のカテゴリを選択
   if (!quickTemplateCategorySelect.value) {
     quickTemplateCategorySelect.value = currentTemplateCategory;
@@ -1142,9 +1142,7 @@ function renderCategoryManagement() {
     return `
     <div class="category-tag" style="display: inline-flex; align-items: center; background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px;" title="${escapeHtml(cat.name)}">
       <span>${escapeHtml(displayName)}</span>
-      ${['diagnoses', 'medications', 'phrases'].includes(cat.id) ? '' : `
         <button class="delete-cat-btn" data-id="${cat.id}" style="border: none; background: none; cursor: pointer; margin-left: 4px; color: #999;">&times;</button>
-      `}
     </div>
   `;
   }).join('');
@@ -1245,13 +1243,13 @@ async function addQuickTemplate() {
   templates[cat] = arr;
   await StorageManager.saveTemplates(templates);
   quickTemplateInput.value = '';
-  
+
   // UI更新
   renderTemplateManageList();
   if (cat === currentTemplateCategory) {
     renderTemplates();
   }
-  
+
   showNotification('定型文を追加しました');
 }
 
@@ -1281,7 +1279,7 @@ function renderTemplates() {
   // カテゴリのインデックスを取得（色分け用）
   const categoryIndex = templateCategories.findIndex(cat => cat.id === currentTemplateCategory);
   const categoryClass = categoryIndex >= 0 ? `category-${categoryIndex}` : '';
-  
+
   // 6文字まで表示、それ以上は省略表示
   const formatTemplateText = (text) => {
     if (text.length <= 6) {
@@ -1289,7 +1287,7 @@ function renderTemplates() {
     }
     return text.substring(0, 6) + '...';
   };
-  
+
   // 画面上は全ての定型文を表示（個数制限なし）
   templateList.innerHTML = items
     .map((t, i) => {
@@ -1298,7 +1296,7 @@ function renderTemplates() {
       return `<span class="template-tag ${categoryClass}" data-index="${i}" title="${escapeHtml(fullText)}">${escapeHtml(displayText)}</span>`;
     })
     .join('');
-    
+
   templateList.querySelectorAll('.template-tag').forEach(tag => {
     tag.addEventListener('click', () => {
       const idx = parseInt(tag.getAttribute('data-index'));
@@ -1327,7 +1325,7 @@ async function handleTemplateClick(text) {
       showNotification('直接貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
     } else {
       showNotification('定型文を直接貼り付けました');
-      
+
       // 貼り付け操作をログに記録
       try {
         let userId = null;
@@ -1337,7 +1335,7 @@ async function handleTemplateClick(text) {
             userId = user.id || user.email || null;
           }
         }
-        
+
         let tabContext = null;
         try {
           const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -1351,7 +1349,7 @@ async function handleTemplateClick(text) {
         } catch (tabError) {
           console.warn('[SidePanel] タブ情報取得エラー:', tabError);
         }
-        
+
         await window.ApiClient.logInsertion({
           userId: userId || 'anonymous',
           action: 'paste',
@@ -1377,7 +1375,7 @@ async function setupTemplateDirectPasteToggle() {
   try {
     directTemplatePaste = await StorageManager.getTemplatesDirectPaste();
   } catch (e) {
-    directTemplatePaste = false;
+    directTemplatePaste = true;
   }
   if (directTemplatePasteToggle) {
     directTemplatePasteToggle.checked = directTemplatePaste;
@@ -1494,7 +1492,7 @@ async function pasteToPage() {
           await clearAll({ skipConfirm: true, skipNotification: true });
           showNotification('ページに貼り付けました（テキストと画像をクリアしました）');
         }
-        
+
         // 貼り付け操作をログに記録
         try {
           let userId = null;
@@ -1504,7 +1502,7 @@ async function pasteToPage() {
               userId = user.id || user.email || null;
             }
           }
-          
+
           // 現在のタブ情報を取得
           let tabContext = null;
           try {
@@ -1519,7 +1517,7 @@ async function pasteToPage() {
           } catch (tabError) {
             console.warn('[SidePanel] タブ情報取得エラー:', tabError);
           }
-          
+
           await window.ApiClient.logInsertion({
             userId: userId || 'anonymous',
             action: 'paste',
@@ -1751,7 +1749,7 @@ async function handleAiChatSend() {
           userId = user.id || user.email || null;
         }
       }
-      
+
       await window.ApiClient.saveLog(
         'ai_chat',
         {
@@ -2232,7 +2230,7 @@ async function pasteLatestAssistantMessageDirect() {
       showNotification('直接貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
     } else {
       showNotification('AI応答を直接貼り付けました');
-      
+
       // 貼り付け操作をログに記録
       try {
         let userId = null;
@@ -2242,7 +2240,7 @@ async function pasteLatestAssistantMessageDirect() {
             userId = user.id || user.email || null;
           }
         }
-        
+
         let tabContext = null;
         try {
           const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -2256,7 +2254,7 @@ async function pasteLatestAssistantMessageDirect() {
         } catch (tabError) {
           console.warn('[SidePanel] タブ情報取得エラー:', tabError);
         }
-        
+
         await window.ApiClient.logInsertion({
           userId: userId || 'anonymous',
           action: 'paste',
@@ -2342,7 +2340,7 @@ function updateJstTimeDisplay() {
 function setupJstTimeDisplay() {
   // 初回表示
   updateJstTimeDisplay();
-  
+
   // 1秒ごとに更新
   setInterval(() => {
     updateJstTimeDisplay();
