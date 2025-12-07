@@ -22,6 +22,7 @@ module.exports = async function (context, req) {
     try {
         const decoded = jwt.verify(token, secret);
         const email = decoded.email;
+        let isActive = false; // Initialize to avoid ReferenceError
 
         // Generate long-lived session token
         const sessionToken = jwt.sign({ email, type: 'session' }, secret, { expiresIn: '14d' });
@@ -34,30 +35,16 @@ module.exports = async function (context, req) {
                 const existingSubscription = await getSubscription(email);
 
                 if (existingSubscription) {
-                    const isActive = (
+                    isActive = (
                         (existingSubscription.status === 'active' || existingSubscription.status === 'trialing') &&
                         existingSubscription.currentPeriodEnd &&
                         new Date(existingSubscription.currentPeriodEnd) > new Date()
                     );
 
                     if (isActive) {
-                        context.log('[AuthVerifyToken] Duplicate registration blocked:', { email });
-
-                        context.res = {
-                            status: 409,
-                            headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
-                            body: createErrorPage({
-                                title: '既に登録済みです',
-                                icon: 'ℹ️',
-                                message: 'このメールアドレスは既に登録されています',
-                                details: `
-                                    既にアクティブな購読が存在します。<br/><br/>
-                                    拡張機能にログインして、ご利用を開始してください。<br/><br/>
-                                    購読情報を確認したい場合は、拡張機能の「設定」から「サブスクリプション管理」をご確認ください。
-                                `
-                            })
-                        };
-                        return;
+                        context.log('[AuthVerifyToken] Active user logging in:', { email });
+                        // active but logging in again -> allow it, just skip checkout redirect
+                        // "Duplicate registration blocked" block removed.
                     }
                 }
             } catch (dbError) {
@@ -83,98 +70,105 @@ module.exports = async function (context, req) {
             isTestEmail
         });
 
-        if (shouldRedirectToCheckout) {
-            // Create Stripe Checkout session and redirect
-            try {
-                const successUrl = `${process.env.SUCCESS_PAGE_URL}?token=${encodeURIComponent(sessionToken)}`;
-                const cancelUrl = process.env.CANCEL_PAGE_URL || `${process.env.SUCCESS_PAGE_URL.replace('/success', '/cancel')}`;
+        if (!isActive) {
+            if (shouldRedirectToCheckout) {
+                // Create Stripe Checkout session and redirect
+                try {
+                    const successUrl = `${process.env.SUCCESS_PAGE_URL}?token=${encodeURIComponent(sessionToken)}`;
+                    const cancelUrl = process.env.CANCEL_PAGE_URL || `${process.env.SUCCESS_PAGE_URL.replace('/success', '/cancel')}`;
 
-                context.log('[AuthVerifyToken] Creating Stripe Checkout session:', {
-                    email,
-                    successUrl: successUrl.substring(0, 100) + '...', // Log partial URL for security
-                    cancelUrl: cancelUrl.substring(0, 100) + '...',
-                    priceId: process.env.STRIPE_PRICE_ID
-                });
+                    context.log('[AuthVerifyToken] Creating Stripe Checkout session:', {
+                        email,
+                        successUrl: successUrl.substring(0, 100) + '...', // Log partial URL for security
+                        cancelUrl: cancelUrl.substring(0, 100) + '...',
+                        priceId: process.env.STRIPE_PRICE_ID
+                    });
 
-                const session = await stripe.checkout.sessions.create({
-                    customer_email: email,
-                    payment_method_types: ['card'],
-                    billing_address_collection: 'required',
-                    line_items: [
-                        {
-                            price: process.env.STRIPE_PRICE_ID,
-                            quantity: 1,
+                    const session = await stripe.checkout.sessions.create({
+                        customer_email: email,
+                        payment_method_types: ['card'],
+                        billing_address_collection: 'required',
+                        line_items: [
+                            {
+                                price: process.env.STRIPE_PRICE_ID,
+                                quantity: 1,
+                            },
+                        ],
+                        mode: 'subscription',
+                        subscription_data: {
+                            trial_period_days: 14,
+                            metadata: {
+                                email: email,
+                                sessionToken: sessionToken
+                            }
                         },
-                    ],
-                    mode: 'subscription',
-                    subscription_data: {
-                        trial_period_days: 14,
                         metadata: {
                             email: email,
                             sessionToken: sessionToken
+                        },
+                        success_url: successUrl,
+                        cancel_url: cancelUrl,
+                    });
+
+                    context.log('[AuthVerifyToken] Stripe Checkout session created successfully:', {
+                        sessionId: session.id,
+                        hasUrl: !!session.url
+                    });
+
+                    // Redirect to Stripe Checkout
+                    context.res = {
+                        status: 302,
+                        headers: {
+                            'Location': session.url,
+                            'Cache-Control': 'no-store'
                         }
-                    },
-                    metadata: {
-                        email: email,
-                        sessionToken: sessionToken
-                    },
-                    success_url: successUrl,
-                    cancel_url: cancelUrl,
-                });
+                    };
+                    return;
+                } catch (stripeError) {
+                    context.log.error('[AuthVerifyToken] Stripe Checkout session creation failed:', {
+                        message: stripeError.message,
+                        type: stripeError.type,
+                        code: stripeError.code,
+                        statusCode: stripeError.statusCode,
+                        stack: stripeError.stack
+                    });
 
-                context.log('[AuthVerifyToken] Stripe Checkout session created successfully:', {
-                    sessionId: session.id,
-                    hasUrl: !!session.url
-                });
+                    context.res = {
+                        status: 500,
+                        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+                        body: createTokenDisplayPage({
+                            title: '⚠️ 決済画面の作成に失敗しました',
+                            message: 'Stripe Checkoutセッションの作成中にエラーが発生しました。<br/>以下のトークンを使用して、手動でログインしてください。',
+                            token: sessionToken
+                        })
+                    };
+                    return;
+                }
+            } else {
+                // Not active AND missing config -> Error
+                const missingConfig = [];
+                if (!hasStripe) missingConfig.push('STRIPE_SECRET_KEY');
+                if (!hasPriceId) missingConfig.push('STRIPE_PRICE_ID');
+                if (!hasSuccessUrl) missingConfig.push('SUCCESS_PAGE_URL');
 
-                // Redirect to Stripe Checkout
-                context.res = {
-                    status: 302,
-                    headers: {
-                        'Location': session.url,
-                        'Cache-Control': 'no-store'
-                    }
-                };
-                return;
-            } catch (stripeError) {
-                context.log.error('[AuthVerifyToken] Stripe Checkout session creation failed:', {
-                    message: stripeError.message,
-                    type: stripeError.type,
-                    code: stripeError.code,
-                    statusCode: stripeError.statusCode,
-                    stack: stripeError.stack
-                });
-                
+                context.log.warn('[AuthVerifyToken] Missing configuration:', missingConfig);
+
                 context.res = {
                     status: 500,
                     headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
                     body: createTokenDisplayPage({
-                        title: '⚠️ 決済画面の作成に失敗しました',
-                        message: 'Stripe Checkoutセッションの作成中にエラーが発生しました。<br/>以下のトークンを使用して、手動でログインしてください。',
+                        title: '⚠️ 設定が不完全です',
+                        message: `以下の環境変数が設定されていません:<br/><strong>${missingConfig.join(', ')}</strong><br/><br/>以下のトークンを使用して、手動でログインしてください。`,
                         token: sessionToken
                     })
                 };
                 return;
             }
-        } else {
-            const missingConfig = [];
-            if (!hasStripe) missingConfig.push('STRIPE_SECRET_KEY');
-            if (!hasPriceId) missingConfig.push('STRIPE_PRICE_ID');
-            if (!hasSuccessUrl) missingConfig.push('SUCCESS_PAGE_URL');
-
-            context.log.warn('[AuthVerifyToken] Missing configuration:', missingConfig);
-
-            context.res = {
-                status: 500,
-                headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
-                body: createTokenDisplayPage({
-                    title: '⚠️ 設定が不完全です',
-                    message: `以下の環境変数が設定されていません:<br/><strong>${missingConfig.join(', ')}</strong><br/><br/>以下のトークンを使用して、手動でログインしてください。`,
-                    token: sessionToken
-                })
-            };
-            return;
         }
+
+        // If we are here, it means isActive === true.
+        // Proceed to return HTML with token (Login Successful).
+
 
         // Fallback: Return HTML with the token and attempt to deliver to extension
         const extensionId = process.env.EXTENSION_ID || '';

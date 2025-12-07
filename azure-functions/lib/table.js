@@ -3,16 +3,31 @@ const { TableClient, AzureNamedKeyCredential } = require("@azure/data-tables");
 const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
 
 async function getTableClient(tableName) {
+    console.log(`[TableClient] Initializing for table: ${tableName}`);
     if (!connectionString) {
+        console.error("[TableClient] Connection string missing");
         throw new Error("Azure Storage Connection String not found");
     }
-    const client = TableClient.fromConnectionString(connectionString, tableName);
     try {
-        await client.createTable();
-    } catch (e) {
-        // Table might already exist
+        const client = TableClient.fromConnectionString(connectionString, tableName);
+        console.log(`[TableClient] Client created for ${tableName}`);
+
+        try {
+            await client.createTable();
+            console.log(`[TableClient] ensureTable created/verified for ${tableName}`);
+        } catch (e) {
+            if (e.statusCode === 409) {
+                // Table already exists, ignore
+                console.log(`[TableClient] Table ${tableName} already exists`);
+            } else {
+                console.warn(`[TableClient] createTable warning for ${tableName}:`, e.message);
+            }
+        }
+        return client;
+    } catch (error) {
+        console.error(`[TableClient] Critical error in getTableClient for ${tableName}:`, error);
+        throw error;
     }
-    return client;
 }
 
 async function upsertSubscription(email, data) {

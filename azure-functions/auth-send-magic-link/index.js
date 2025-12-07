@@ -142,6 +142,9 @@ Karte AI+
 </html>
 `;
 
+    const allowFakeSuccess = String(process.env.ALLOW_FAKE_EMAIL_SUCCESS || '').toLowerCase() === 'true';
+    const returnMagicLink = String(process.env.RETURN_MAGIC_LINK || '').toLowerCase() === 'true';
+
     try {
         await sendEmail({ to: email, subject, text, html });
         context.res = {
@@ -151,10 +154,24 @@ Karte AI+
         };
     } catch (error) {
         context.log.error("[auth-send-magic-link] Failed to send email:", error);
-        context.res = {
-            status: 500,
-            headers: { 'Access-Control-Allow-Origin': '*' },
-            body: "Failed to send email"
-        };
+
+        if (allowFakeSuccess) {
+            // 開発用フォールバック: メール送信に失敗しても成功扱い
+            context.log.warn("[auth-send-magic-link] ALLOW_FAKE_EMAIL_SUCCESS is enabled. Returning 200 despite email failure.");
+            context.res = {
+                status: 200,
+                headers: { 'Access-Control-Allow-Origin': '*' },
+                body: Object.assign(
+                    { message: "Magic link generated (email send skipped)" },
+                    returnMagicLink ? { magicLink } : {}
+                )
+            };
+        } else {
+            context.res = {
+                status: 500,
+                headers: { 'Access-Control-Allow-Origin': '*' },
+                body: "Failed to send email"
+            };
+        }
     }
 };
