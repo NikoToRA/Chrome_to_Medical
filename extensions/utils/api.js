@@ -42,11 +42,26 @@ class ApiClient {
                 clearTimeout(id);
 
                 if (!response.ok) {
+                    let errorMessage = `API Error: ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        if (errorData && errorData.error) {
+                            errorMessage += ` - ${errorData.error}`;
+                        } else if (errorData && errorData.message) {
+                            errorMessage += ` - ${errorData.message}`;
+                        }
+                    } catch (e) {
+                        // ignore JSON parse error, use status text
+                        if (response.statusText) {
+                            errorMessage += ` (${response.statusText})`;
+                        }
+                    }
+
                     // Handle specific HTTP errors
                     if (response.status === 504 || response.status === 503) {
                         throw new Error(`Server Busy (Status: ${response.status})`);
                     }
-                    throw new Error(`API Error: ${response.status}`);
+                    throw new Error(errorMessage);
                 }
 
                 return await response.json();
@@ -85,7 +100,7 @@ class ApiClient {
                 userId = user.id || user.email || null;
             }
         }
-        
+
         // Fire and forget for logs? Or wait?
         // Usually better to not block UI.
         this.post('/save-log', { userId: userId || 'anonymous', type, content: metadata, metadata }).catch(console.error);
@@ -100,15 +115,19 @@ class ApiClient {
                 userId = user.id || user.email || null;
             }
         }
-        
+
         // Update payload with actual userId
         const finalPayload = {
             ...payload,
             userId: userId || 'anonymous'
         };
-        
+
         // Fire and forget for logs - don't block UI
         this.post('/log-insertion', finalPayload).catch(console.error);
+    }
+
+    async cancelSubscription(email) {
+        return this.post('/cancel-subscription', { email });
     }
 }
 
