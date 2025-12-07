@@ -32,13 +32,13 @@ async function getTableClient(tableName) {
 
 async function upsertSubscription(email, data) {
     const client = await getTableClient('Subscriptions');
-    // Use email as RowKey (sanitized)
-    const rowKey = Buffer.from(email).toString('base64');
+    const safeEmail = (email || '').toLowerCase(); // Normalize
+    const rowKey = Buffer.from(safeEmail).toString('base64');
 
     const entity = {
         partitionKey: "Subscription",
         rowKey: rowKey,
-        email: email,
+        email: safeEmail,
         ...data
     };
 
@@ -47,7 +47,8 @@ async function upsertSubscription(email, data) {
 
 async function getSubscription(email) {
     const client = await getTableClient('Subscriptions');
-    const rowKey = Buffer.from(email).toString('base64');
+    const safeEmail = (email || '').toLowerCase(); // Normalize
+    const rowKey = Buffer.from(safeEmail).toString('base64');
 
     try {
         const entity = await client.getEntity("Subscription", rowKey);
@@ -60,12 +61,13 @@ async function getSubscription(email) {
 
 async function upsertUser(email, data) {
     const client = await getTableClient('Users');
-    const rowKey = Buffer.from(email).toString('base64');
+    const safeEmail = (email || '').toLowerCase(); // Normalize
+    const rowKey = Buffer.from(safeEmail).toString('base64');
 
     const entity = {
         partitionKey: "User",
         rowKey: rowKey,
-        email: email,
+        email: safeEmail,
         ...data,
         updatedAt: new Date().toISOString()
     };
@@ -75,7 +77,8 @@ async function upsertUser(email, data) {
 
 async function getUser(email) {
     const client = await getTableClient('Users');
-    const rowKey = Buffer.from(email).toString('base64');
+    const safeEmail = (email || '').toLowerCase(); // Normalize
+    const rowKey = Buffer.from(safeEmail).toString('base64');
 
     try {
         const entity = await client.getEntity("User", rowKey);
