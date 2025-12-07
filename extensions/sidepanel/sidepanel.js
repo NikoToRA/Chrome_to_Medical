@@ -634,6 +634,19 @@ function setupEventListeners() {
     });
   }
 
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      if (window.AuthManager) {
+        if (confirm('ログアウトしますか？')) {
+          await window.AuthManager.logout();
+          showNotification('ログアウトしました', 'success');
+          checkAuthAndUpdateUI();
+        }
+      }
+    });
+  }
+
   if (aiChatForm) {
     aiChatForm.addEventListener('submit', (e) => {
       e.preventDefault();
