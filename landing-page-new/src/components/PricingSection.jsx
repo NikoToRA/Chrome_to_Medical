@@ -101,7 +101,7 @@ function PricingSection() {
                             <li>導入・設定完全サポート</li>
                         </ul>
 
-                        <a href="/contact" className="btn btn-outline btn-full">
+                        <a href="https://wonder-drill.com/contact" className="btn btn-outline btn-full" target="_blank" rel="noopener noreferrer">
                             サポートを申し込む
                         </a>
                     </motion.div>

@@ -8,7 +8,7 @@ export const PRICING = {
 }
 
 // Update CTA URL to support instant purchase
-export const CTA_URL = 'https://stkarteai1763705952.z11.web.core.windows.net/'
+export const CTA_URL = '/register/'
 export const PURCHASE_URL = '/purchase' // Direct purchase option
 export const DEMO_URL = '/demo'
 export const CONTACT_URL = 'mailto:support@wonder-drill.com'

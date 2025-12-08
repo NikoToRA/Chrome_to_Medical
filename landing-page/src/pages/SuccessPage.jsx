@@ -30,7 +30,7 @@ export default function SuccessPage() {
                 <div className="success-icon">🎉</div>
                 <h1>登録が完了しました！</h1>
                 <p className="success-subtitle">
-                    Karte AI+ へようこそ！<br/>
+                    Karte AI+ へようこそ！<br />
                     14日間の無料トライアルが開始されました。
                 </p>
 
@@ -71,7 +71,7 @@ export default function SuccessPage() {
 
                 <div className="actions">
                     <a
-                        href="https://chrome.google.com/webstore"
+                        href="https://chromewebstore.google.com/detail/karte-ai+/hggikgjlgfkbgkpcanglcinpggofdigl?hl=ja"
                         className="install-button"
                         target="_blank"
                         rel="noopener noreferrer"
@@ -79,7 +79,7 @@ export default function SuccessPage() {
                         Chrome拡張機能をインストール
                     </a>
                     <p className="help-text">
-                        ご質問やサポートが必要な場合は、<br/>
+                        ご質問やサポートが必要な場合は、<br />
                         <a href="mailto:support@karte-ai-plus.com">support@karte-ai-plus.com</a> までお問い合わせください。
                     </p>
                 </div>

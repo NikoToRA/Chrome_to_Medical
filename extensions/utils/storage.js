@@ -275,7 +275,7 @@ class StorageManager {
    * @returns {Promise<boolean>}
    */
   static async getTemplatesDirectPaste() {
-    return this.get(this.STORAGE_KEYS.TEMPLATES_DIRECT_PASTE, false);
+    return this.get(this.STORAGE_KEYS.TEMPLATES_DIRECT_PASTE, true);
   }
 
 

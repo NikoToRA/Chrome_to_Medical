@@ -1,71 +1,70 @@
 const jwt = require('jsonwebtoken');
-const { sendEmail } = require('../lib/email');
-
-const secret = process.env.JWT_SECRET;
 
 module.exports = async function (context, req) {
-    // Handle CORS preflight
-    if (req.method === 'OPTIONS') {
-        context.res = {
-            status: 204,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-            }
-        };
-        return;
-    }
+    try {
+        // Lazy load to catch initialization errors
+        const { sendEmail } = require('../lib/email');
+        const secret = process.env.JWT_SECRET;
 
-    const { email, name, facilityName, address, phone } = req.body || {};
-
-    if (!secret) {
-        context.res = {
-            status: 500,
-            headers: { 'Access-Control-Allow-Origin': '*' },
-            body: "Server misconfigured: JWT secret not set"
-        };
-        return;
-    }
-
-    if (!email) {
-        context.res = {
-            status: 400,
-            headers: { 'Access-Control-Allow-Origin': '*' },
-            body: "Email is required"
-        };
-        return;
-    }
-
-    // Save user profile if provided
-    if (name || facilityName || address || phone) {
-        try {
-            const { upsertUser } = require('../lib/table');
-            await upsertUser(email, { name, facilityName, address, phone });
-        } catch (e) {
-            context.log.error("Failed to save user profile", e);
-            // Continue to send link even if save fails? 
-            // Maybe better to fail so they try again? 
-            // For now, log and continue.
+        // Handle CORS preflight
+        if (req.method === 'OPTIONS') {
+            context.res = {
+                status: 204,
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+                }
+            };
+            return;
         }
-    }
 
-    const token = jwt.sign({ email }, secret, { expiresIn: '15m' });
+        const { email, name, facilityName, address, phone } = req.body || {};
 
-    // Construct Magic Link
-    // Need the function app URL.
-    // In Azure, it's usually https://<app>.azurewebsites.net
-    // We can get it from headers or env.
-    const host = req.headers['x-forwarded-host'] || req.headers.host;
-    const protocol = req.headers['x-forwarded-proto'] || 'http'; // Default to http for local
-    const baseUrl = `${protocol}://${host}`;
-    const magicLink = `${baseUrl}/api/auth-verify-token?token=${token}`;
+        if (!secret) {
+            context.res = {
+                status: 500,
+                headers: { 'Access-Control-Allow-Origin': '*' },
+                body: "Server misconfigured: JWT secret not set"
+            };
+            return;
+        }
 
-    // 日本語メールテンプレート
-    const subject = '【Karte AI+】ログイン用リンクをお送りします';
-    const displayName = name || facilityName || email;
-    
-    const text = `
+        if (!email) {
+            context.res = {
+                status: 400,
+                headers: { 'Access-Control-Allow-Origin': '*' },
+                body: "Email is required"
+            };
+            return;
+        }
+
+        // Save user profile if provided
+        if (name || facilityName || address || phone) {
+            try {
+                const { upsertUser } = require('../lib/table');
+                await upsertUser(email, { name, facilityName, address, phone });
+            } catch (e) {
+                context.log.error("Failed to save user profile", e);
+                // Continue to send link even if save fails? 
+                // Maybe better to fail so they try again? 
+                // For now, log and continue.
+            }
+        }
+
+        const token = jwt.sign({ email }, secret, { expiresIn: '15m' });
+
+        // Construct Magic Link
+        const host = req.headers['x-forwarded-host'] || req.headers.host;
+        const protocol = req.headers['x-forwarded-proto'] || 'http'; // Default to http for local
+        const baseUrl = `${protocol}://${host}`;
+        const magicLink = `${baseUrl}/api/auth-verify-token?token=${token}`;
+
+        // 日本語メールテンプレート
+        const subject = '【Karte AI+】ログイン用リンクをお送りします';
+        const displayName = name || facilityName || email;
+
+        const text = `
 Karte AI+ をご利用いただき、ありがとうございます。
 
 ${displayName} 様
@@ -83,7 +82,7 @@ Karte AI+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
 
-    const html = `
+        const html = `
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -142,36 +141,43 @@ Karte AI+
 </html>
 `;
 
-    const allowFakeSuccess = String(process.env.ALLOW_FAKE_EMAIL_SUCCESS || '').toLowerCase() === 'true';
-    const returnMagicLink = String(process.env.RETURN_MAGIC_LINK || '').toLowerCase() === 'true';
+        const allowFakeSuccess = String(process.env.ALLOW_FAKE_EMAIL_SUCCESS || '').toLowerCase() === 'true';
+        const returnMagicLink = String(process.env.RETURN_MAGIC_LINK || '').toLowerCase() === 'true';
 
-    try {
-        await sendEmail({ to: email, subject, text, html });
-        context.res = {
-            status: 200,
-            headers: { 'Access-Control-Allow-Origin': '*' },
-            body: { message: "Magic link sent" }
-        };
-    } catch (error) {
-        context.log.error("[auth-send-magic-link] Failed to send email:", error);
-
-        if (allowFakeSuccess) {
-            // 開発用フォールバック: メール送信に失敗しても成功扱い
-            context.log.warn("[auth-send-magic-link] ALLOW_FAKE_EMAIL_SUCCESS is enabled. Returning 200 despite email failure.");
+        try {
+            await sendEmail({ to: email, subject, text, html });
             context.res = {
                 status: 200,
                 headers: { 'Access-Control-Allow-Origin': '*' },
-                body: Object.assign(
-                    { message: "Magic link generated (email send skipped)" },
-                    returnMagicLink ? { magicLink } : {}
-                )
+                body: { message: "Magic link sent" }
             };
-        } else {
-            context.res = {
-                status: 500,
-                headers: { 'Access-Control-Allow-Origin': '*' },
-                body: "Failed to send email"
-            };
+        } catch (error) {
+            context.log.error("[auth-send-magic-link] Failed to send email:", error);
+
+            if (allowFakeSuccess) {
+                // 開発用フォールバック
+                context.log.warn("[auth-send-magic-link] ALLOW_FAKE_EMAIL_SUCCESS is enabled.");
+                context.res = {
+                    status: 200,
+                    headers: { 'Access-Control-Allow-Origin': '*' },
+                    body: Object.assign(
+                        { message: "Magic link generated (email send skipped)" },
+                        returnMagicLink ? { magicLink } : {}
+                    )
+                };
+            } else {
+                throw error; // Re-throw to be caught by outer catch
+            }
         }
+    } catch (criticalError) {
+        context.log.error("[auth-send-magic-link] Critical Startup Error:", criticalError);
+        context.res = {
+            status: 500,
+            headers: { 'Access-Control-Allow-Origin': '*' },
+            body: {
+                error: "Critical Server Error",
+                details: criticalError.message
+            }
+        };
     }
 };
