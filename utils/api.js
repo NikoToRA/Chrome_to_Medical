@@ -15,9 +15,18 @@ class ApiClient {
             'Content-Type': 'application/json'
         };
 
-        // TODO: Add Auth Token if available
-        // const token = await AuthManager.getToken();
-        // if (token) headers['Authorization'] = `Bearer ${token}`;
+        // Add Auth Token if available
+        if (typeof window !== 'undefined' && window.AuthManager) {
+            try {
+                const token = await window.AuthManager.getToken();
+                if (token) {
+                    headers['Authorization'] = `Bearer ${token}`;
+                }
+            } catch (error) {
+                console.warn('[ApiClient] Token取得エラー:', error);
+                // トークンが取得できなくてもリクエストは続行
+            }
+        }
 
         const executeFetch = async (attempt) => {
             const controller = new AbortController();
@@ -33,11 +42,26 @@ class ApiClient {
                 clearTimeout(id);
 
                 if (!response.ok) {
+                    let errorMessage = `API Error: ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        if (errorData && errorData.error) {
+                            errorMessage += ` - ${errorData.error}`;
+                        } else if (errorData && errorData.message) {
+                            errorMessage += ` - ${errorData.message}`;
+                        }
+                    } catch (e) {
+                        // ignore JSON parse error, use status text
+                        if (response.statusText) {
+                            errorMessage += ` (${response.statusText})`;
+                        }
+                    }
+
                     // Handle specific HTTP errors
                     if (response.status === 504 || response.status === 503) {
                         throw new Error(`Server Busy (Status: ${response.status})`);
                     }
-                    throw new Error(`API Error: ${response.status}`);
+                    throw new Error(errorMessage);
                 }
 
                 return await response.json();
@@ -68,10 +92,42 @@ class ApiClient {
         return this.post('/chat', { messages, system });
     }
 
-    async saveLog(type, metadata, userId) {
+    async saveLog(type, metadata, userId = null) {
+        // Get actual user ID from AuthManager if not provided
+        if (!userId && typeof window !== 'undefined' && window.AuthManager) {
+            const user = window.AuthManager.getUser();
+            if (user) {
+                userId = user.id || user.email || null;
+            }
+        }
+
         // Fire and forget for logs? Or wait?
         // Usually better to not block UI.
-        this.post('/save-log', { userId, type, content: metadata, metadata }).catch(console.error);
+        this.post('/save-log', { userId: userId || 'anonymous', type, content: metadata, metadata }).catch(console.error);
+    }
+
+    async logInsertion(payload) {
+        // Get actual user ID from AuthManager if not provided in payload
+        let userId = payload.userId;
+        if (!userId && typeof window !== 'undefined' && window.AuthManager) {
+            const user = window.AuthManager.getUser();
+            if (user) {
+                userId = user.id || user.email || null;
+            }
+        }
+
+        // Update payload with actual userId
+        const finalPayload = {
+            ...payload,
+            userId: userId || 'anonymous'
+        };
+
+        // Fire and forget for logs - don't block UI
+        this.post('/log-insertion', finalPayload).catch(console.error);
+    }
+
+    async cancelSubscription(email) {
+        return this.post('/cancel-subscription', { email });
     }
 }
 

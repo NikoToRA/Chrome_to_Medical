@@ -27,36 +27,12 @@
     box-shadow: 0 15px 40px rgba(0, 0, 0, 0.1);
 }
 
-.video-placeholder {
+.video-container {
     width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #E3F2FD;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    aspect-ratio: 16/9;
+    background: #000;
+    overflow: hidden;
     position: relative;
-    border-bottom: 1px solid var(--gray-100);
-}
-
-.play-button {
-    width: 60px;
-    height: 60px;
-    background: rgba(74, 144, 226, 0.9);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--white);
-    font-size: 24px;
-    margin-bottom: var(--space-2);
-    transition: transform 0.2s ease;
-    cursor: pointer;
-}
-
-.video-placeholder:hover .play-button {
-    transform: scale(1.1);
-    background: #4A90E2;
 }
 
 .placeholder-label {

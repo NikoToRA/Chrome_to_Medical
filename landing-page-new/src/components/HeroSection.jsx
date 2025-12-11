@@ -124,21 +124,12 @@ function HeroSection() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.8, delay: 0.2 }}
                 >
-                    <div className="hero-image-placeholder">
-                        <div className="placeholder-content">
-                            <div className="placeholder-icon">🏥</div>
-                            <h3>ヒーロー画像プレースホルダー</h3>
-                            <p>
-                                <strong>Nanobananaで生成する画像:</strong><br />
-                                診察室で患者と話している医師<br />
-                                PCモニターにアニメ調のAI+ロゴ
-                            </p>
-                            <div className="image-specs">
-                                <div className="spec-item">📐 推奨サイズ: 1920x1080px</div>
-                                <div className="spec-item">🎨 スタイル: リアル写真 + アニメAI</div>
-                                <div className="spec-item">💻 PC画面: 電子カルテ + AI+ロゴ</div>
-                            </div>
-                        </div>
+                    <div className="hero-image-container">
+                        <img
+                            src="/hero-image.jpeg"
+                            alt="医師とAIエージェント"
+                            className="hero-image-real"
+                        />
                     </div>
                 </motion.div>
             </div>

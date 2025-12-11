@@ -76,8 +76,10 @@ export const TESTIMONIALS = [
         author: '内科クリニック 院長',
         specialty: '内科',
         role: '開業医',
+        role: '開業医',
         rating: 5,
-        timeSaved: '1日2.5時間削減'
+        timeSaved: '1日2.5時間削減',
+        image: '/images/doctors/doctor-1.png'
     },
     {
         id: 2,
@@ -85,8 +87,10 @@ export const TESTIMONIALS = [
         author: '整形外科クリニック 医師',
         specialty: '整形外科',
         role: '勤務医',
+        role: '勤務医',
         rating: 5,
-        timeSaved: '1日1.5時間削減'
+        timeSaved: '1日1.5時間削減',
+        image: '/images/doctors/doctor-2.png'
     },
     {
         id: 3,
@@ -94,8 +98,10 @@ export const TESTIMONIALS = [
         author: '皮膚科クリニック 院長',
         specialty: '皮膚科',
         role: '開業医',
+        role: '開業医',
         rating: 5,
-        timeSaved: '1日3時間削減'
+        timeSaved: '1日3時間削減',
+        image: '/images/doctors/doctor-3.png'
     }
 ]
 

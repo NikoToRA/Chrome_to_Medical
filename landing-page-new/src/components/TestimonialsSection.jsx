@@ -34,9 +34,13 @@ function TestimonialsSection() {
                             variants={staggerItem}
                         >
                             <div className="testimonial-header">
-                                {/* Doctor Photo Placeholder */}
-                                <div className="doctor-photo-placeholder">
-                                    <span className="placeholder-text">写真</span>
+                                {/* Doctor Photo */}
+                                <div className="doctor-photo-container">
+                                    <img
+                                        src={testimonial.image}
+                                        alt={`${testimonial.author}の写真`}
+                                        className="doctor-photo"
+                                    />
                                 </div>
                                 <div className="testimonial-info">
                                     <div className="author-name">{testimonial.author}</div>

@@ -83,33 +83,7 @@ function SolutionSection() {
                     </div>
                 </motion.div>
 
-                {/* Supported EMRs Section */}
-                <motion.div
-                    className="supported-emrs"
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true }}
-                    variants={staggerContainer}
-                >
-                    <p className="emr-intro">
-                        <strong>Google Chrome</strong>を使用しているクラウド型カルテに対応。<br />
-                        以下の主要カルテでの利用実績があります。
-                    </p>
-                    <div className="emr-logos">
-                        <motion.div className="emr-logo-item" variants={staggerItem}>
-                            <div className="logo-placeholder">m3 Digikar</div>
-                            <span className="logo-caption">エムスリーデジカル</span>
-                        </motion.div>
-                        <motion.div className="emr-logo-item" variants={staggerItem}>
-                            <div className="logo-placeholder">CLINICS</div>
-                            <span className="logo-caption">CLINICSカルテ</span>
-                        </motion.div>
-                        <motion.div className="emr-logo-item" variants={staggerItem}>
-                            <div className="logo-placeholder">Mobacal</div>
-                            <span className="logo-caption">モバカル</span>
-                        </motion.div>
-                    </div>
-                </motion.div>
+                {/* Supported Emrs Section removed - moved to CompatibilitySection */}
 
             </div>
         </section>

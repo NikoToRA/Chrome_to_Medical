@@ -29,9 +29,15 @@ function UsageSceneSection() {
                 >
                     {/* Column 1: Template Insertion */}
                     <motion.div className="usage-card" variants={staggerItem}>
-                        <div className="video-placeholder">
-                            <div className="play-button">▶</div>
-                            <span className="placeholder-label">動画: 定型文の挿入</span>
+                        <div className="video-container">
+                            <video
+                                src="/images/usage/usage-template.mp4"
+                                autoPlay
+                                loop
+                                muted
+                                playsInline
+                                className="usage-video"
+                            />
                         </div>
                         <div className="usage-content">
                             <h3>定型文の挿入</h3>
@@ -44,9 +50,15 @@ function UsageSceneSection() {
 
                     {/* Column 2: Agent Usage */}
                     <motion.div className="usage-card" variants={staggerItem}>
-                        <div className="video-placeholder">
-                            <div className="play-button">▶</div>
-                            <span className="placeholder-label">動画: エージェントの使用</span>
+                        <div className="video-container">
+                            <video
+                                src="/images/usage/usage-agent.mp4"
+                                autoPlay
+                                loop
+                                muted
+                                playsInline
+                                className="usage-video"
+                            />
                         </div>
                         <div className="usage-content">
                             <h3>エージェントの使用</h3>

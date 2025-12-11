@@ -63,6 +63,11 @@ function bindEvents() {
     cancelSubscriptionBtn.addEventListener('click', handleCancelSubscription);
   }
 
+  const resetDataBtn = document.getElementById('resetDataBtn');
+  if (resetDataBtn) {
+    resetDataBtn.addEventListener('click', handleResetData);
+  }
+
   if (closeSettingsBtn) {
     closeSettingsBtn.addEventListener('click', () => {
       window.close();
@@ -486,7 +491,42 @@ async function handleCancelSubscription() {
     }
   } catch (error) {
     console.error('[Options] 解約処理エラー:', error);
-    showToast('解約処理に失敗しました: ' + error.message, 'warning');
+
+    if (error.message && error.message.includes('401')) {
+      showToast('認証セッションが有効期限切れです。一度拡張機能を閉じて再ログインしてください。', 'warning');
+      // Optional: Trigger logout cleanup
+      if (window.AuthManager) {
+        await window.AuthManager.logout();
+      }
+    } else {
+      showToast('解約処理に失敗しました: ' + error.message, 'warning');
+    }
+
+    setButtonLoading(btn, false);
+  }
+}
+
+async function handleResetData() {
+  if (!confirm('本当に全てのデータを削除しますか？\nログイン情報も消去され、初期状態に戻ります。')) {
+    return;
+  }
+
+  try {
+    const btn = document.getElementById('resetDataBtn');
+    setButtonLoading(btn, true, '削除中...');
+
+    // Clear all Extension Storage
+    await new Promise(resolve => chrome.storage.local.clear(resolve));
+
+    showToast('データを削除しました。', 'success');
+
+    setTimeout(() => {
+      window.close(); // Close options page
+    }, 1500);
+  } catch (error) {
+    console.error('[Options] リセットエラー:', error);
+    showToast('リセットに失敗しました', 'warning');
+    const btn = document.getElementById('resetDataBtn');
     setButtonLoading(btn, false);
   }
 }

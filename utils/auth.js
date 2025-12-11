@@ -4,6 +4,7 @@ class AuthManager {
     constructor() {
         this.user = null;
         this.isSubscribed = false;
+        this.token = null;
     }
 
     async login() {
@@ -23,10 +24,74 @@ class AuthManager {
     async logout() {
         this.user = null;
         this.isSubscribed = false;
+        this.token = null;
+        // ストレージからも削除
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+            await chrome.storage.local.remove(['authToken', 'userEmail']);
+        }
     }
 
     getUser() {
         return this.user;
+    }
+
+    // トークンを取得（ストレージから読み込み）
+    async getToken() {
+        if (this.token) {
+            return this.token;
+        }
+
+        // ストレージからトークンを読み込み
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+            try {
+                const result = await chrome.storage.local.get(['authToken']);
+                if (result.authToken) {
+                    this.token = result.authToken;
+                    return this.token;
+                }
+            } catch (error) {
+                console.error('[AuthManager] Token取得エラー:', error);
+            }
+        }
+
+        return null;
+    }
+
+    // トークンを保存
+    async setToken(token, email) {
+        this.token = token;
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+            try {
+                await chrome.storage.local.set({
+                    authToken: token,
+                    userEmail: email
+                });
+            } catch (error) {
+                console.error('[AuthManager] Token保存エラー:', error);
+            }
+        }
+    }
+
+    // 初期化時にストレージからトークンを読み込み
+    async init() {
+        if (typeof chrome !== 'undefined' && chrome.storage) {
+            try {
+                const result = await chrome.storage.local.get(['authToken', 'userEmail']);
+                if (result.authToken) {
+                    this.token = result.authToken;
+                }
+                if (result.userEmail) {
+                    // Set user with email as ID if no ID is available
+                    this.user = { 
+                        id: result.userEmail, // Use email as ID for now
+                        email: result.userEmail 
+                    };
+                    await this.checkSubscription();
+                }
+            } catch (error) {
+                console.error('[AuthManager] 初期化エラー:', error);
+            }
+        }
     }
 
     async checkSubscription() {
@@ -67,4 +132,6 @@ class AuthManager {
 
 if (typeof window !== 'undefined') {
     window.AuthManager = new AuthManager();
+    // 初期化時にトークンを読み込み
+    window.AuthManager.init().catch(console.error);
 }

@@ -1,6 +1,7 @@
 import HeroSection from '../components/HeroSection'
 import PainPointsSection from '../components/PainPointsSection'
 import SolutionSection from '../components/SolutionSection'
+import CompatibilitySection from '../components/CompatibilitySection'
 import TemplateFeatureSection from '../components/TemplateFeatureSection'
 import AgentFeatureSection from '../components/AgentFeatureSection'
 import UsageSceneSection from '../components/UsageSceneSection'
@@ -18,6 +19,7 @@ function Home() {
             <HeroSection />
             <PainPointsSection />
             <SolutionSection />
+            <CompatibilitySection />
             <TemplateFeatureSection />
             <AgentFeatureSection />
             <UsageSceneSection />

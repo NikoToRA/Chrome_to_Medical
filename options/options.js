@@ -58,6 +58,16 @@ function bindEvents() {
     addAgentBtn.addEventListener('click', handleAddAgent);
   }
 
+  const cancelSubscriptionBtn = document.getElementById('cancelSubscriptionBtn');
+  if (cancelSubscriptionBtn) {
+    cancelSubscriptionBtn.addEventListener('click', handleCancelSubscription);
+  }
+
+  const resetDataBtn = document.getElementById('resetDataBtn');
+  if (resetDataBtn) {
+    resetDataBtn.addEventListener('click', handleResetData);
+  }
+
   if (closeSettingsBtn) {
     closeSettingsBtn.addEventListener('click', () => {
       window.close();
@@ -414,4 +424,109 @@ function escapeHtml(unsafe = '') {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+async function handleCancelSubscription() {
+  const btn = document.getElementById('cancelSubscriptionBtn');
+  if (btn.disabled) return;
+
+  if (!confirm('本当に解約しますか？\n解約するとAI機能などの有料機能が即座に停止します。\nこの操作は取り消せません。')) {
+    return;
+  }
+
+  try {
+    setButtonLoading(btn, true, '処理中...');
+
+    // Get Auth Token/User Email
+    let email = null;
+    let token = null;
+
+    if (window.AuthManager) {
+      // Force re-initialization to ensure we have the latest storage state
+      await window.AuthManager.init();
+      const user = window.AuthManager.getUser();
+      email = user ? user.email : null;
+      token = await window.AuthManager.getToken();
+    }
+
+    // Fallback: Extract email from token if user object is missing
+    if (!email && token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        email = payload.email || payload.sub;
+      } catch (e) {
+        console.warn('[Options] Token decode failed:', e);
+      }
+    }
+
+    if (!token) {
+      showToast('ユーザー情報の取得に失敗しました。再ログインしてください。', 'warning');
+      setButtonLoading(btn, false);
+      return;
+    }
+
+    // Call API
+    const response = await window.ApiClient.cancelSubscription(email);
+
+    if (response && (response.success || response.status === 'canceled')) {
+      showToast('解約が完了しました。ご利用ありがとうございました。', 'success');
+
+      // Clear Auth and Status
+      if (window.AuthManager) {
+        await window.AuthManager.clearToken();
+      }
+
+      // UI Update (Disable button, show status)
+      btn.textContent = '解約済み';
+      btn.disabled = true;
+      btn.classList.add('btn-disabled');
+
+      // Logout or Redirect after short delay
+      setTimeout(() => {
+        window.close(); // Close options page
+      }, 3000);
+
+    } else {
+      throw new Error(response.error || '不明なエラー');
+    }
+  } catch (error) {
+    console.error('[Options] 解約処理エラー:', error);
+
+    if (error.message && error.message.includes('401')) {
+      showToast('認証セッションが有効期限切れです。一度拡張機能を閉じて再ログインしてください。', 'warning');
+      // Optional: Trigger logout cleanup
+      if (window.AuthManager) {
+        await window.AuthManager.logout();
+      }
+    } else {
+      showToast('解約処理に失敗しました: ' + error.message, 'warning');
+    }
+
+    setButtonLoading(btn, false);
+  }
+}
+
+async function handleResetData() {
+  if (!confirm('本当に全てのデータを削除しますか？\nログイン情報も消去され、初期状態に戻ります。')) {
+    return;
+  }
+
+  try {
+    const btn = document.getElementById('resetDataBtn');
+    setButtonLoading(btn, true, '削除中...');
+
+    // Clear all Extension Storage
+    await new Promise(resolve => chrome.storage.local.clear(resolve));
+
+    showToast('データを削除しました。', 'success');
+
+    setTimeout(() => {
+      window.close(); // Close options page
+    }, 1500);
+  } catch (error) {
+    console.error('[Options] リセットエラー:', error);
+    showToast('リセットに失敗しました', 'warning');
+    const btn = document.getElementById('resetDataBtn');
+    setButtonLoading(btn, false);
+  }
 }

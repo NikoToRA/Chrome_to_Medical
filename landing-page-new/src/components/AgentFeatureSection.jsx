@@ -70,8 +70,12 @@ function AgentFeatureSection() {
                         variants={slideUp}
                     >
                         <div className="agents-visual">
-                            <div className="center-placeholder">
-                                <span className="placeholder-text">AI<br />Characters</span>
+                            <div className="center-image-container">
+                                <img
+                                    src="/images/agents/Agent-center.jpg"
+                                    alt="AI Agent Character"
+                                    className="center-agent-image"
+                                />
                             </div>
                             <div className="orbit-agent agent-1">📋</div>
                             <div className="orbit-agent agent-2">📄</div>

@@ -24,22 +24,20 @@
     padding-left: var(--space-4);
 }
 
-.doctor-photo-placeholder {
+.doctor-photo-container {
     width: 60px;
     height: 60px;
-    background: #E0E0E0;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    overflow: hidden;
     flex-shrink: 0;
-    border: 2px dashed #BDBDBD;
+    border: 2px solid #E3F2FD;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.doctor-photo-placeholder .placeholder-text {
-    font-size: 10px;
-    color: #757575;
-    font-weight: bold;
+.doctor-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 .testimonial-info {
