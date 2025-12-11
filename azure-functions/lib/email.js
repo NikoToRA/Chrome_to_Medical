@@ -18,7 +18,7 @@ if (connectionString) {
  * @param {string} options.html - HTML本文
  * @returns {Promise<void>}
  */
-async function sendEmail({ to, subject, text, html }) {
+async function sendEmail({ to, subject, text, html, attachments }) {
     if (!emailClient) {
         throw new Error("Azure Communication Services Email is not configured");
     }
@@ -32,7 +32,8 @@ async function sendEmail({ to, subject, text, html }) {
         },
         recipients: {
             to: [{ address: to }]
-        }
+        },
+        attachments: attachments
     };
 
     try {
