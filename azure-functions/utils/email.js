@@ -2,6 +2,10 @@
 const { EmailClient } = require("@azure/communication-email");
 const { sendEmail } = require("../lib/email");
 const companyConfig = require("../config/company.json");
+const Stripe = require('stripe');
+const { getSubscription } = require('../lib/table');
+
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 class EmailService {
     // Constructor no longer needed for client init as we use lib/email
@@ -75,22 +79,23 @@ class EmailService {
     }
 
     async generatePortalUrl(email) {
-        // Call create-portal-session API to get customer portal URL
+        // Generate Stripe Customer Portal URL directly
         try {
-            const functionUrl = process.env.FUNCTION_APP_URL || 'https://func-karte-ai-1763705952.azurewebsites.net';
-            const response = await fetch(`${functionUrl}/api/create-portal-session`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email })
-            });
+            // Get customer ID from subscription table
+            const subscription = await getSubscription(email);
 
-            if (!response.ok) {
-                console.error('Failed to create portal session:', await response.text());
+            if (!subscription || !subscription.stripeCustomerId) {
+                console.warn(`No Stripe customer found for ${email}`);
                 return null;
             }
 
-            const data = await response.json();
-            return data.url;
+            // Create billing portal session
+            const session = await stripe.billingPortal.sessions.create({
+                customer: subscription.stripeCustomerId,
+                return_url: process.env.CANCEL_PAGE_URL || 'https://stkarteai1763705952.z11.web.core.windows.net/cancel-complete.html',
+            });
+
+            return session.url;
         } catch (error) {
             console.error('Error generating portal URL:', error);
             return null;
