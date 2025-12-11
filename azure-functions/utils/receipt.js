@@ -9,6 +9,9 @@ class ReceiptGenerator {
     * @param {string} receiptData.receiptNumber - Receipt number
     * @param {string} receiptData.customerName - Customer name
     * @param {string} receiptData.customerEmail - Customer email
+    * @param {string} [receiptData.customerAddress] - Customer address
+    * @param {string} [receiptData.customerPhone] - Customer phone
+    * @param {string} [receiptData.facilityName] - Facility name
     * @param {number} receiptData.amount - Amount (including tax)
     * @param {string} receiptData.billingDate - Billing date (YYYY-MM format)
     * @param {Date} receiptData.issueDate - Issue date
@@ -79,9 +82,23 @@ class ReceiptGenerator {
          // Customer Information
          doc.fontSize(12)
             .text('お客様情報', { underline: true })
-            .moveDown(0.5)
-            .text(`お名前: ${receiptData.customerName}`)
-            .text(`メールアドレス: ${receiptData.customerEmail}`)
+            .moveDown(0.5);
+
+         if (receiptData.facilityName) {
+            doc.text(`施設名: ${receiptData.facilityName}`);
+         }
+
+         doc.text(`お名前: ${receiptData.customerName}`);
+
+         if (receiptData.customerAddress) {
+            doc.text(`ご住所: ${receiptData.customerAddress}`);
+         }
+
+         if (receiptData.customerPhone) {
+            doc.text(`電話番号: ${receiptData.customerPhone}`);
+         }
+
+         doc.text(`メールアドレス: ${receiptData.customerEmail}`)
             .moveDown();
 
          // Payment Details

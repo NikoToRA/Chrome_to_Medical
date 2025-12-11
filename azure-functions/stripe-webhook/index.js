@@ -1,6 +1,6 @@
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
-const { upsertSubscription, upsertReceipt } = require('../lib/table');
+const { upsertSubscription, upsertReceipt, getUser } = require('../lib/table');
 const emailService = require('../utils/email'); // Ensure this points to your email service
 const receiptGenerator = require('../utils/receipt'); // Ensure this points to your receipt generator
 const { format } = require('date-fns');
@@ -127,11 +127,17 @@ module.exports = async function (context, req) {
                     const billingDate = format(new Date(invoice.created * 1000), 'yyyy-MM');
                     const receiptNumber = receiptGenerator.generateReceiptNumber(new Date());
 
+                    // Get customer information from Users table
+                    const userInfo = await getUser(customerEmail);
+
                     // Generate PDF
                     const buffer = await receiptGenerator.generateReceipt({
                         receiptNumber,
-                        customerName: invoice.customer_name || customerEmail.split('@')[0],
+                        customerName: userInfo?.name || invoice.customer_name || customerEmail.split('@')[0],
                         customerEmail: customerEmail,
+                        customerAddress: userInfo?.address,
+                        customerPhone: userInfo?.phone,
+                        facilityName: userInfo?.facilityName,
                         amount: amount,
                         billingDate: billingDate,
                         issueDate: new Date()
