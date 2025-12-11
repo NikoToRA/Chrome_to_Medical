@@ -102,5 +102,51 @@ module.exports = {
     upsertSubscription,
     getSubscription,
     upsertUser,
-    getUser
+    getUser,
+    getSubscriptionByCreatedDate,
+    upsertReceipt
 };
+
+async function getSubscriptionByCreatedDate(dateStr) {
+    const client = await getTableClient('Subscriptions');
+    try {
+        const subscriptions = [];
+        // Note: This query might differ depending on how 'created' is stored. 
+        // Assuming 'created' is stored as an ISO string or similar in the entity.
+        // OData filter for date comparison. 
+        // We need to match the date part. Since 'created' is likely a full timestamp, 
+        // we might need to filter by range or rely on a specific 'createdDate' field if we add one.
+        // For now, let's assume we are looking for a 'createdDate' field we will add to the subscription entity.
+
+        const entities = client.listEntities({
+            queryOptions: {
+                filter: `createdDate eq '${dateStr}' and status eq 'trialing'`
+            }
+        });
+
+        for await (const entity of entities) {
+            subscriptions.push(entity);
+        }
+        return subscriptions;
+    } catch (error) {
+        console.error("Error getting subscriptions by date:", error);
+        return [];
+    }
+}
+
+async function upsertReceipt(receiptData) {
+    const client = await getTableClient('Receipts');
+    // Receipt needs a unique rowKey, usually receiptNumber
+    if (!receiptData.receiptNumber) {
+        throw new Error("Receipt number is required for RowKey");
+    }
+
+    const entity = {
+        partitionKey: "Receipt",
+        rowKey: receiptData.receiptNumber,
+        ...receiptData,
+        createdAt: new Date().toISOString()
+    };
+
+    await client.upsertEntity(entity, "Merge");
+}

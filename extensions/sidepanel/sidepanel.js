@@ -95,13 +95,20 @@ async function checkAuthAndUpdateUI() {
       // トークンがある場合、認証UIを非表示
       hideAuthRequiredUI();
       // 購読状態を確認
-      await window.AuthManager.checkSubscription();
+      const isSubscribed = await window.AuthManager.checkSubscription();
+      if (!isSubscribed) {
+        // トークンはあるがサブスク未契約/期限切れの場合
+        console.log('[SidePanel] Subscription inactive. Showing re-auth UI.');
+        showAuthRequiredUI(true); // isInactive = true
+      } else {
+        hideAuthRequiredUI();
+      }
     }
   }
 }
 
 // 認証が必要な場合のUIを表示
-function showAuthRequiredUI() {
+function showAuthRequiredUI(isInactive = false) {
   // AIチャットタブを無効化
   const aiTab = document.querySelector('[data-tab-target="aiTab"]');
   const aiTabContent = document.querySelector('[data-tab="aiTab"]');
@@ -126,9 +133,15 @@ function showAuthRequiredUI() {
         padding: 20px;
         text-align: center;
       `;
+
+      const title = isInactive ? '⚠️ 利用期限切れ / 未契約' : '🔒 ログインが必要です';
+      const message = isInactive
+        ? '有効なサブスクリプションが見つかりません。<br>再契約後に発行されるトークンを入力してください。'
+        : 'AI機能を使用するには、ログインが必要です。';
+
       authOverlay.innerHTML = `
-        <h2 style="margin-bottom: 20px; color: #333;">🔒 ログインが必要です</h2>
-        <p style="margin-bottom: 20px; color: #666;">AI機能を使用するには、ログインが必要です。</p>
+        <h2 style="margin-bottom: 20px; color: #333;">${title}</h2>
+        <p style="margin-bottom: 20px; color: #666;">${message}</p>
         
         <div style="width: 100%; max-width: 400px; margin-bottom: 20px;">
           <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #333; font-weight: bold;">

@@ -1,8 +1,8 @@
 // Azure Function: Check and send trial warning emails (10 days after registration)
 // This function runs daily via Timer Trigger
 
-const database = require('../utils/database');
-const emailService = require('../utils/email');
+const { getSubscriptionByCreatedDate, upsertSubscription } = require('../lib/table');
+const emailService = require('../utils/email'); // Ensure this points to your email service
 const companyConfig = require('../config/company.json');
 const { addDays, format } = require('date-fns');
 
@@ -11,45 +11,49 @@ module.exports = async function (context, myTimer) {
 
     try {
         const today = new Date();
-        // Calculate the registration date (10 days ago)
+        // Calculate the registration date (10 days ago) - targeting 14 day trial, warn at 10 days
         const registrationDate = addDays(today, -companyConfig.trialWarningDay);
         const registrationDateStr = format(registrationDate, 'yyyy-MM-dd');
 
         context.log(`Checking for users registered on: ${registrationDateStr}`);
 
-        // Get users registered exactly 10 days ago
-        const users = await database.getUsersByRegistrationDate(registrationDateStr);
+        // Get users registered exactly 10 days ago (and still in trial)
+        const subscriptions = await getSubscriptionByCreatedDate(registrationDateStr);
 
-        if (!users || users.length === 0) {
-            context.log('No users found for trial warning');
+        if (!subscriptions || subscriptions.length === 0) {
+            context.log('No subscriptions found for trial warning');
             return;
         }
 
-        context.log(`Found ${users.length} user(s) to send trial warning`);
+        context.log(`Found ${subscriptions.length} subscription(s) to send trial warning`);
 
         // Send trial warning email to each user
         const results = await Promise.allSettled(
-            users.map(async (user) => {
+            subscriptions.map(async (sub) => {
                 // Skip if warning already sent
-                if (user.trialWarningSent) {
-                    context.log(`Trial warning already sent to ${user.email}`);
-                    return { success: false, email: user.email, reason: 'already_sent' };
+                if (sub.trialWarningSent) {
+                    context.log(`Trial warning already sent to ${sub.email}`);
+                    return { success: false, email: sub.email, reason: 'already_sent' };
                 }
 
                 try {
                     await emailService.sendTrialWarningEmail(
-                        user.email,
-                        user.name || user.userName
+                        sub.email
+                        // sub.name is removed as it's not in subscription table usually, 
+                        // fallback to email prefix inside sendTrialWarningEmail is sufficient
                     );
 
                     // Mark as sent in database
-                    await database.markTrialWarningSent(user.email);
+                    await upsertSubscription(sub.email, {
+                        trialWarningSent: true,
+                        trialWarningSentAt: new Date().toISOString()
+                    });
 
-                    context.log(`Trial warning email sent successfully to ${user.email}`);
-                    return { success: true, email: user.email };
+                    context.log(`Trial warning email sent successfully to ${sub.email}`);
+                    return { success: true, email: sub.email };
                 } catch (error) {
-                    context.log.error(`Failed to send trial warning to ${user.email}:`, error);
-                    return { success: false, email: user.email, error: error.message };
+                    context.log.error(`Failed to send trial warning to ${sub.email}:`, error);
+                    return { success: false, email: sub.email, error: error.message };
                 }
             })
         );
