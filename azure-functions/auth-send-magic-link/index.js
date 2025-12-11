@@ -144,6 +144,68 @@ Karte AI+
         const allowFakeSuccess = String(process.env.ALLOW_FAKE_EMAIL_SUCCESS || '').toLowerCase() === 'true';
         const returnMagicLink = String(process.env.RETURN_MAGIC_LINK || '').toLowerCase() === 'true';
 
+        // 開発用フォールバック（特定のアカウントのみ優先実行）
+        // Only run fake success (skip email) if:
+        // 1. It's a pure debug account (ux_test_...)
+        // 2. OR explicit debug flags are passed (debug_seed/reset)
+        const isPureDebug = email.includes('ux_test_');
+        const hasDebugFlags = req.body.debug_seed === true || req.body.debug_reset === true;
+
+        // Debug mode is triggered only if allowFakeSuccess is on AND (it's a debug email OR flags are present)
+        // This ensures 'super206cc' gets a REAL EMAIL during normal login, but can still be reset via curl with flags.
+        if (allowFakeSuccess && (isPureDebug || hasDebugFlags)) {
+            const shouldSeed = req.body.debug_seed === true;
+            const shouldReset = req.body.debug_reset === true;
+
+            context.log.warn(`[auth-send-magic-link] Debug Mode active. Email: ${email}, Skip email. Flags: seed=${shouldSeed}, reset=${shouldReset}`);
+
+            // Generate SESSION TOKEN directly to bypass auth-verify-token crash
+            const sessionToken = jwt.sign({ email, type: 'session' }, secret, { expiresIn: '14d' });
+
+            const { upsertSubscription } = require('../lib/table');
+
+            if (shouldReset) {
+                // FORCE UNSUBSCRIBE (for testing "Buy")
+                try {
+                    await upsertSubscription(email, {
+                        subscriptionId: 'sub_debug_canceled_' + Date.now(),
+                        status: 'canceled',
+                        currentPeriodEnd: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Yesterday
+                        planId: 'price_dummy',
+                        canceledAt: new Date().toISOString()
+                    });
+                    context.log.warn(`[auth-send-magic-link] FORCED RESET (Canceled) for ${email}`);
+                } catch (e) { context.log.error("Reset failed", e); }
+
+            } else if (shouldSeed) {
+                // FORCE SUBSCRIBE (for testing "Cancel")
+                try {
+                    await upsertSubscription(email, {
+                        subscriptionId: 'sub_debug_dummy_' + Date.now(),
+                        status: 'active',
+                        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // +30 days
+                        planId: 'price_dummy',
+                        createdAt: new Date().toISOString()
+                    });
+                    context.log.warn(`[auth-send-magic-link] Seeded dummy subscription for ${email}`);
+                } catch (seedErr) {
+                    context.log.error(`[auth-send-magic-link] Failed to seed dummy subscription: ${seedErr.message}`);
+                }
+            } else {
+                context.log.warn(`[auth-send-magic-link] No state change requested (just generating token).`);
+            }
+
+            context.res = {
+                status: 200,
+                headers: { 'Access-Control-Allow-Origin': '*' },
+                body: Object.assign(
+                    { message: "Magic link generated (email send skipped)" },
+                    returnMagicLink ? { magicLink, sessionToken } : {}
+                )
+            };
+            return;
+        }
+
         try {
             await sendEmail({ to: email, subject, text, html });
             context.res = {
@@ -153,21 +215,8 @@ Karte AI+
             };
         } catch (error) {
             context.log.error("[auth-send-magic-link] Failed to send email:", error);
-
-            if (allowFakeSuccess) {
-                // 開発用フォールバック
-                context.log.warn("[auth-send-magic-link] ALLOW_FAKE_EMAIL_SUCCESS is enabled.");
-                context.res = {
-                    status: 200,
-                    headers: { 'Access-Control-Allow-Origin': '*' },
-                    body: Object.assign(
-                        { message: "Magic link generated (email send skipped)" },
-                        returnMagicLink ? { magicLink } : {}
-                    )
-                };
-            } else {
-                throw error; // Re-throw to be caught by outer catch
-            }
+            // Fallback removed from catch since it's now prioritized
+            throw error;
         }
     } catch (criticalError) {
         context.log.error("[auth-send-magic-link] Critical Startup Error:", criticalError);

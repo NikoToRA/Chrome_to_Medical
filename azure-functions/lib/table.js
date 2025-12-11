@@ -1,3 +1,12 @@
+// Polyfill for Azure SDK expecting Web Crypto
+if (typeof crypto === 'undefined') {
+    try {
+        const nodeCrypto = require('crypto');
+        global.crypto = nodeCrypto.webcrypto || nodeCrypto;
+    } catch (e) {
+        console.error('Failed to polyfill crypto', e);
+    }
+}
 const { TableClient, AzureNamedKeyCredential } = require("@azure/data-tables");
 
 const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;

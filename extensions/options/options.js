@@ -63,10 +63,7 @@ function bindEvents() {
     cancelSubscriptionBtn.addEventListener('click', handleCancelSubscription);
   }
 
-  const resetDataBtn = document.getElementById('resetDataBtn');
-  if (resetDataBtn) {
-    resetDataBtn.addEventListener('click', handleResetData);
-  }
+
 
   if (closeSettingsBtn) {
     closeSettingsBtn.addEventListener('click', () => {
@@ -459,8 +456,45 @@ async function handleCancelSubscription() {
       }
     }
 
+    // FINAL FALLBACK: Direct storage access
+    if (!token && typeof chrome !== 'undefined' && chrome.storage) {
+      console.log('[Options] AuthManager had no token, trying direct storage access...');
+      const storage = await new Promise(resolve => chrome.storage.local.get(['authToken', 'userEmail'], resolve));
+      token = storage.authToken;
+      if (!email) email = storage.userEmail;
+    }
+
+    // MANUAL INPUT FALLBACK
+    const manualInput = document.getElementById('manualTokenInput');
+    if (!token && manualInput && manualInput.value.trim()) {
+      token = manualInput.value.trim();
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        email = payload.email || payload.sub;
+      } catch (e) {
+        console.warn('[Options] Manual token decode failed:', e);
+      }
+    }
+
     if (!token) {
-      showToast('ユーザー情報の取得に失敗しました。再ログインしてください。', 'warning');
+      console.error('[Options] No token found in AuthManager or Storage.');
+
+      // Debug info for user
+      let debugInfo = 'Storage: ';
+      try {
+        const s = await new Promise(r => chrome.storage.local.get(null, r));
+        debugInfo += JSON.stringify(s);
+      } catch (e) { debugInfo += e.message; }
+
+      // Show manual input UI instead of just alerting
+      const container = document.getElementById('manualAuthContainer');
+      if (container) {
+        container.style.display = 'block';
+        alert('認証情報の取得に失敗しました。\n表示された入力欄にトークンを貼り付けて、再度「解約する」を押してください。\n\n' + debugInfo);
+      } else {
+        alert('ログイン情報の取得に失敗しました。\n' + debugInfo);
+      }
+
       setButtonLoading(btn, false);
       return;
     }
@@ -473,18 +507,24 @@ async function handleCancelSubscription() {
 
       // Clear Auth and Status
       if (window.AuthManager) {
-        await window.AuthManager.clearToken();
+        await window.AuthManager.logout();
       }
 
-      // UI Update (Disable button, show status)
-      btn.textContent = '解約済み';
-      btn.disabled = true;
-      btn.classList.add('btn-disabled');
+      // UI Update (Enable Resubscribe)
+      // Remove old button and replace with Resubscribe button
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
 
-      // Logout or Redirect after short delay
-      setTimeout(() => {
-        window.close(); // Close options page
-      }, 3000);
+      newBtn.textContent = '再契約する';
+      newBtn.disabled = false;
+      newBtn.classList.remove('btn-danger', 'btn-disabled');
+      newBtn.style.backgroundColor = '#667eea';
+      newBtn.style.color = '#ffffff';
+      newBtn.style.borderColor = '#667eea';
+
+      newBtn.addEventListener('click', () => {
+        window.open('https://stkarteai1763705952.z11.web.core.windows.net/', '_blank');
+      });
 
     } else {
       throw new Error(response.error || '不明なエラー');
@@ -506,27 +546,4 @@ async function handleCancelSubscription() {
   }
 }
 
-async function handleResetData() {
-  if (!confirm('本当に全てのデータを削除しますか？\nログイン情報も消去され、初期状態に戻ります。')) {
-    return;
-  }
 
-  try {
-    const btn = document.getElementById('resetDataBtn');
-    setButtonLoading(btn, true, '削除中...');
-
-    // Clear all Extension Storage
-    await new Promise(resolve => chrome.storage.local.clear(resolve));
-
-    showToast('データを削除しました。', 'success');
-
-    setTimeout(() => {
-      window.close(); // Close options page
-    }, 1500);
-  } catch (error) {
-    console.error('[Options] リセットエラー:', error);
-    showToast('リセットに失敗しました', 'warning');
-    const btn = document.getElementById('resetDataBtn');
-    setButtonLoading(btn, false);
-  }
-}

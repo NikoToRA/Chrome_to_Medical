@@ -58,25 +58,20 @@
             style="background-color: #fff; color: #d32f2f; border: 1px solid #d32f2f;">
             プランを解約する
           </button>
+
+          <!-- Manual Token Input for Debugging/Fallback -->
+          <div id="manualAuthContainer"
+            style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #ffcdd2;">
+            <p style="font-size: 0.8rem; color: #d32f2f; margin-bottom: 5px;">
+              ⚠️ 認証情報が見つかりません。トークンを直接入力して解約してください:
+            </p>
+            <input type="text" id="manualTokenInput" placeholder="Success Pageのトークンをここに貼り付け"
+              style="width: 100%; padding: 8px; border: 1px solid #d32f2f; border-radius: 4px; font-size: 0.8rem;">
+          </div>
         </div>
       </section>
 
-      <section class="card card-debug"
-        style="margin-top: 24px; border-top: 1px solid #eee; padding-top: 24px; opacity: 0.8;">
-        <div class="card-header">
-          <div>
-            <h2 style="color: #666; font-size: 1.0rem;">トラブルシューティング</h2>
-          </div>
-        </div>
-        <div style="margin-top: 16px;">
-          <button type="button" id="resetDataBtn" class="btn btn-ghost" style="border: 1px solid #ccc;">
-            🧹 データを完全に削除してリセット（ログアウト）
-          </button>
-          <p style="font-size: 0.8rem; color: #999; margin-top: 8px;">
-            ※ ログイン情報や保存された設定がすべて消去されます。再入会の検証などにお使いください。
-          </p>
-        </div>
-      </section>
+
     </main>
   </div>
 

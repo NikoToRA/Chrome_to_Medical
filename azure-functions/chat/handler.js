@@ -29,6 +29,50 @@ module.exports = async function (context, req) {
         return;
     }
 
+    // 1.5 Validate Auth & Subscription
+    try {
+        const jwt = require('jsonwebtoken');
+        const { getSubscription } = require('../lib/table');
+        const secret = process.env.JWT_SECRET;
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            context.res = { status: 401, body: { error: "Unauthorized: Missing token" } };
+            return;
+        }
+
+        const token = authHeader.split(' ')[1];
+        if (!secret) throw new Error("JWT_SECRET missing");
+
+        const decoded = jwt.verify(token, secret);
+        const email = decoded.email || decoded.sub;
+
+        if (!email) {
+            context.res = { status: 401, body: { error: "Unauthorized: Invalid token claims" } };
+            return;
+        }
+
+        const sub = await getSubscription(email);
+        const isActive = sub && (sub.status === 'active' || sub.status === 'trialing');
+
+        if (!isActive) {
+            context.log.warn(`[CHAT] Access denied for ${email}: status=${sub ? sub.status : 'none'}`);
+            context.res = {
+                status: 403,
+                body: { error: "Subscription required", code: "SUBSCRIPTION_INACTIVE" }
+            };
+            return;
+        }
+
+    } catch (authError) {
+        context.log.error('[CHAT] Auth verification failed:', authError);
+        context.res = {
+            status: 401,
+            body: { error: "Unauthorized", details: authError.message }
+        };
+        return;
+    }
+
     try {
         const client = new AzureOpenAI({
             endpoint,
