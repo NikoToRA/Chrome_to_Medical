@@ -124,27 +124,55 @@ function showAuthRequiredUI(isInactive = false) {
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(255, 255, 255, 0.95);
+        background: #ffffff;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        z-index: 1000;
+        z-index: 10000;
         padding: 20px;
         text-align: center;
       `;
 
-      const title = isInactive ? '⚠️ 利用期限切れ / 未契約' : '🔒 ログインが必要です';
-      const message = isInactive
-        ? '有効なサブスクリプションが見つかりません。<br>再契約後に発行されるトークンを入力してください。'
-        : 'AI機能を使用するには、ログインが必要です。';
+      let title = '🔒 ログインが必要です';
+      let message = 'AI機能を使用するには、ログインが必要です。';
+
+      const restartLink = `<a href="#" id="forceRestartLink" style="display:block; margin-top:10px; font-size:12px; color:#667eea; text-decoration:underline;">新規登録・再登録はこちら</a>`;
+      const settingsLink = `<div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px; width:100%;"><button id="overlaySettingsBtn" class="btn btn-ghost btn-small" style="color:#999; font-size:11px;">⚙️ 設定・ログアウト</button></div>`;
+
+      if (isInactive) {
+        // Check if user has a subscription record (even if expired)
+        const hasRecord = window.AuthManager && window.AuthManager.hasSubscriptionRecord;
+
+        if (!hasRecord) {
+          // Case: New User (No subscription record found)
+          title = '✨ 利用開始手続き (v2.1)';
+          message = 'ログインありがとうございます。<br>AI機能を利用するには、サブスクリプションの開始が必要です。<br><br><span style="font-size:0.9em;color:#444;">※2週間の無料トライアルをご利用いただけます。</span>';
+        } else {
+          // Case: Expired User (Subscription record exists but inactive)
+          title = '⚠️ 利用期限切れ / 未契約 (v2.1)';
+          message = `有効なサブスクリプションが見つかりません。<br>お支払い情報を更新するか、再契約してください。<br><br><span style="font-size:0.9em;color:#444;">※契約が継続中の場合、設定画面からメールアドレスを再入力することで、新しい認証トークンが再発行されます。</span>${restartLink}`;
+        }
+      }
+
+      const manageButtonHtml = isInactive
+        ? (window.AuthManager && !window.AuthManager.hasSubscriptionRecord
+          ? `<button id="startSubscriptionBtn" class="btn btn-primary" style="margin-top: 10px; width: 100%; padding: 10px;">
+                 サブスクリプションを開始する（登録ページへ）
+               </button>`
+          : `<button id="manageSubscriptionBtn" class="btn btn-warning" style="margin-top: 10px; width: 100%; padding: 10px;">
+                 お支払い情報の確認・更新
+               </button>`)
+        : '';
 
       authOverlay.innerHTML = `
         <h2 style="margin-bottom: 20px; color: #333;">${title}</h2>
         <p style="margin-bottom: 20px; color: #666;">${message}</p>
         
         <div style="width: 100%; max-width: 400px; margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-size: 14px; color: #333; font-weight: bold;">
+          ${manageButtonHtml}
+          
+          <label style="display: block; margin-top: 15px; margin-bottom: 8px; font-size: 14px; color: #333; font-weight: bold;">
             トークンを入力（手動ログイン）
           </label>
           <textarea 
@@ -165,14 +193,75 @@ function showAuthRequiredUI(isInactive = false) {
             決済完了後、自動的にログインされます
           </p>
         </div>
+        ${settingsLink}
       `;
-      aiTabContent.style.position = 'relative';
-      aiTabContent.appendChild(authOverlay);
+      // Attach to body to cover everything
+      document.body.appendChild(authOverlay);
 
       // ログインボタンのイベント
       document.getElementById('goToLoginBtn').addEventListener('click', () => {
         window.open('https://stkarteai1763705952.z11.web.core.windows.net', '_blank');
       });
+
+      // サブスクリプション管理ボタンのイベント
+      const manageBtn = document.getElementById('manageSubscriptionBtn');
+      if (manageBtn) {
+        manageBtn.addEventListener('click', async () => {
+          if (window.AuthManager && window.AuthManager.user && window.AuthManager.user.email) {
+            try {
+              manageBtn.disabled = true;
+              manageBtn.textContent = '読み込み中...';
+
+              // create-portal-sessionを呼び出し
+              // ApiClientが利用可能前提
+              const response = await window.ApiClient.post('/create-portal-session', {
+                email: window.AuthManager.user.email
+              });
+
+              if (response.url) {
+                window.open(response.url, '_blank');
+              } else {
+                showNotification('ポータルURLの取得に失敗しました', 'error');
+              }
+            } catch (error) {
+              console.error('Portal session creation failed:', error);
+              showNotification('カスタマーポータルの作成に失敗しました: ' + error.message, 'error');
+            } finally {
+              manageBtn.disabled = false;
+              manageBtn.textContent = 'お支払い情報の確認・更新';
+            }
+          } else {
+            showNotification('メールアドレスが見つかりません。再ログインしてください。', 'error');
+          }
+        });
+      }
+
+      // サブスクリプション開始ボタンのイベント（新規ユーザー用）
+      const startSubscriptionBtn = document.getElementById('startSubscriptionBtn');
+      if (startSubscriptionBtn) {
+        startSubscriptionBtn.addEventListener('click', () => {
+          window.open('https://stkarteai1763705952.z11.web.core.windows.net/register', '_blank');
+        });
+      }
+
+      const forceRestartLink = document.getElementById('forceRestartLink');
+      if (forceRestartLink) {
+        forceRestartLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          window.open('https://stkarteai1763705952.z11.web.core.windows.net/register', '_blank');
+        });
+      }
+
+      const overlaySettingsBtn = document.getElementById('overlaySettingsBtn');
+      if (overlaySettingsBtn) {
+        overlaySettingsBtn.addEventListener('click', () => {
+          if (chrome.runtime?.openOptionsPage) {
+            chrome.runtime.openOptionsPage();
+          } else {
+            window.open(chrome.runtime.getURL('options/options.html'));
+          }
+        });
+      }
 
       // トークン送信ボタンのイベント
       const submitTokenBtn = document.getElementById('submitTokenBtn');
@@ -197,16 +286,22 @@ function showAuthRequiredUI(isInactive = false) {
               window.AuthManager.user = { id: email, email: email };
 
               // 購読状態を確認
-              await window.AuthManager.checkSubscription();
+              const isSubscribed = await window.AuthManager.checkSubscription();
 
-              showNotification('ログインに成功しました！', 'success');
-              hideAuthRequiredUI();
-
-              // ストレージにも保存（background.jsと同期）
+              // ストレージにも保存
               chrome.storage.local.set({
                 authToken: token,
                 userEmail: email
               });
+
+              if (isSubscribed) {
+                showNotification('ログインに成功しました！', 'success');
+                hideAuthRequiredUI();
+              } else {
+                showNotification('トークンは確認できました。サブスクリプションの手続きをお願いします。', 'warning');
+                // Do not hide UI, just refresh it to reflect "Expired" or "Start" state correctly
+                checkAuthAndUpdateUI();
+              }
             }
           } catch (error) {
             console.error('[SidePanel] トークン処理エラー:', error);
@@ -222,7 +317,11 @@ function showAuthRequiredUI(isInactive = false) {
 function hideAuthRequiredUI() {
   const authOverlay = document.getElementById('authRequiredOverlay');
   if (authOverlay) {
-    authOverlay.remove();
+    if (authOverlay.parentNode) {
+      authOverlay.parentNode.removeChild(authOverlay);
+    } else {
+      authOverlay.remove();
+    }
   }
 }
 
@@ -531,8 +630,11 @@ function setupEventListeners() {
   }
 
   if (newTemplateInput) {
-    newTemplateInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') addTemplate();
+    newTemplateInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        addTemplate();
+      }
     });
   }
 
@@ -558,29 +660,8 @@ function setupEventListeners() {
     });
   }
 
-  // 日本時間貼り付けボタン（定型文エリアの下）- カルテに直接貼り付け
-  const pasteJstTimeBtn = document.getElementById('pasteJstTimeBtn');
-  if (pasteJstTimeBtn) {
-    pasteJstTimeBtn.addEventListener('click', () => {
-      const jstTime = getJstTimeString();
-      // カルテに直接貼り付け
-      chrome.runtime.sendMessage({
-        action: 'pasteToActiveTab',
-        text: jstTime,
-        images: []
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          showNotification('日本時間の貼り付けに失敗しました: ' + chrome.runtime.lastError.message);
-          return;
-        }
-        if (response && response.success === false) {
-          showNotification('日本時間の貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
-        } else {
-          showNotification('日本時間をカルテに貼り付けました');
-        }
-      });
-    });
-  }
+  // 日付・時間管理機能のイベントリスナー
+  setupDateManagementListeners();
 
   if (templateCategorySelect) {
     templateCategorySelect.addEventListener('change', () => renderTemplateManageList());
@@ -647,18 +728,7 @@ function setupEventListeners() {
     });
   }
 
-  const logoutBtn = document.getElementById('logoutBtn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', async () => {
-      if (window.AuthManager) {
-        if (confirm('ログアウトしますか？')) {
-          await window.AuthManager.logout();
-          showNotification('ログアウトしました', 'success');
-          checkAuthAndUpdateUI();
-        }
-      }
-    });
-  }
+
 
   if (aiChatForm) {
     aiChatForm.addEventListener('submit', (e) => {
@@ -1751,7 +1821,6 @@ async function handleAiChatSend() {
     } else if (Array.isArray(response.content) && response.content[0] && response.content[0].text) {
       replyText = response.content[0].text;
     } else if (response.content === null || response.content === undefined) {
-      // Allow null/undefined if we want to handle it gracefully, or throw specific error
       console.warn('[SidePanel] Content is null/undefined');
       throw new Error('AIからの応答にコンテンツが含まれていません');
     } else {
@@ -1780,24 +1849,33 @@ async function handleAiChatSend() {
         'ai_chat',
         {
           agentId: selectedAgent.id,
-          // model: managed by backend
-          inputLength: message.length,
-          outputLength: replyText.length
+          model: response.model || response.usage?.model || 'unknown',
+          tokens: response.usage ? response.usage.total_tokens : 0,
+          timestamp: new Date().toISOString()
         },
         userId
       );
     } catch (logError) {
-      console.error('[SidePanel] ログ保存エラー:', logError);
+      console.warn('[SidePanel] ログ保存エラー（無視）:', logError);
     }
 
+    /* Legacy blocking code replaced by streaming above
+    const response = await window.ApiClient.chat(messages, system);
+    ...
+    */
+
+
+
+
   } catch (error) {
-    console.error('[SidePanel] AIチャット送信エラー:', error);
-    assistantMessage.content = `エラー: ${error.message}`;
-    assistantMessage.status = 'failed';
-    chatState.updatedAt = new Date().toISOString();
-    renderChatMessages();
-    await persistChatSession();
-    showNotification('AIチャットの送信に失敗しました');
+    console.error('[SidePanel] AI Chat Error (Sync):', error);
+    if (assistantMessage.status === 'pending') {
+      assistantMessage.status = 'failed';
+      assistantMessage.content = 'エラーが発生しました: ' + error.message;
+      renderChatMessages();
+    }
+    chatState.isSending = false;
+    showNotification('エラーが発生しました: ' + error.message, 'error');
   } finally {
     chatState.isSending = false;
     setSendButtonState(false);
@@ -1848,24 +1926,48 @@ function getDefaultAgents() {
       name: '紹介状作成エージェント',
       description: '適切な形式で紹介状を作成します。',
       instructions:
-        '提供された情報を基に、適切な形式の紹介状を作成してください。\n\n' +
-        '【記載すべき項目】\n' +
-        '1. 宛先（医療機関名・診療科名・医師名）\n' +
-        '2. 患者情報（氏名、年齢、性別、生年月日）\n' +
-        '3. 紹介の目的・理由\n' +
-        '4. 現病歴・主訴\n' +
-        '5. 現在までの経過・治療内容\n' +
-        '6. 検査結果・所見（関連するもの）\n' +
-        '7. 現在の診断・病名\n' +
-        '8. 依頼事項（専門的な診察、検査、治療など）\n' +
-        '9. 返信の希望（診療情報提供書の返送希望など）\n' +
-        '10. 紹介元の医療機関情報（名称、住所、電話番号、医師名、診療科）\n\n' +
+        'あなたは医療クラークとして、提供された情報を基に紹介状を作成してください。\n\n' +
+        '【重要な前提】\n' +
+        '- 宛先医療機関情報や患者の個人情報（氏名、年齢、性別、生年月日など）は、電子カルテ側の情報を用いるため、紹介状本文には含めません\n' +
+        '- 紹介状本文は、紹介目的から作成してください\n\n' +
+        '【紹介状の構成と順序】\n' +
+        '以下の順序で、自然な文章として作成してくださいただし、項目別にまとめるのではなく、作例のような一つの文書にしてほしい。\n\n' +
+        '1. 挨拶\n' +
+        '   - 「平素より大変お世話になっております。この度は患者様を紹介させていただきます。」などの挨拶文\n\n' +
+        '2. 紹介先にして欲しいこと（紹介の目的）\n' +
+        '   - なぜ紹介するのか、何を依頼するのかを簡潔に記載\n' +
+        '   - 例：「専門的加療をお願いしたく」など\n\n' +
+        '3. 患者バックグラウンド\n' +
+        '   - 患者の背景情報（既往歴、通院中の疾患など）\n' +
+        '   - 例：「当院には高血圧と高脂血症で通院中です」\n\n' +
+        '4. 当院での経過\n' +
+        '   - 今回の来院に至る経緯、症状の経過\n' +
+        '   - 例：「数日前から湿性咳嗽あり、倦怠感も強く本日呼吸が辛くなって外来受診されました」\n\n' +
+        '5. 医療機関としてのアセスメント\n' +
+        '   - 来院時の所見、検査結果、診断\n' +
+        '   - 例：「来院時体温38℃、右肺に湿性ラ音あり、レントゲンで右肺野に浸潤影がありました。WBC,CRPも高値で細菌性肺炎と診断しました。」\n\n' +
+        '6. 紹介先にやって欲しいこと（依頼事項）\n' +
+        '   - 具体的な依頼内容\n' +
+        '   - 例：「専門的加療をよろしくお願いします」\n\n' +
+        '7. 挨拶\n' +
+        '   - 結びの挨拶\n' +
+        '   - 例：「大変お忙しいところ誠に申し訳ありませんが、よろしくお願いいたします。」\n\n' +
         '【作成時の注意点】\n' +
-        '- 丁寧で専門的な表現を使用してください\n' +
-        '- 必要な情報を漏れなく記載してください\n' +
-        '- 読みやすく、論理的な構成にしてください\n' +
-        '- 医療用語は適切に使用してください\n' +
-        '- 患者のプライバシーに配慮してください',
+        '- メールとして適切な部分で改行、空行を挿入する\n' +
+        '- 経過が長い場合はよりシンプルに経過をまとめる\n' +
+        '- 丁寧で専門的な表現を使用する\n' +
+        '- 自然な文章の流れを保つ\n' +
+        '- 医療用語は適切に使用する\n' +
+        '- 簡潔で読みやすく、必要な情報を漏れなく記載する\n' +
+        '- 余計な装飾や説明文は追加しない\n' +
+        '- 提供された情報のみを使用し、推測や追加情報は記載しない\n\n' +
+        '作例）\n' +
+        '平素より大変お世話になっております。\n' +
+        'この度、人工膝関節置換術の適応検討および手術対応についてご相談させていただきたく、患者様を紹介いたします。\n' +
+        '患者様は1年前より右膝痛を自覚し、ここ4か月で疼痛が増強しました。湿布・内服で改善不十分のため当院にて内服NSAIDsおよび関節内注射を計8回施行しましたが、効果は次第に短縮・消失し、長時間歩行や階段での疼痛、夜間痛によりADL制限が進行し就労や家事が困難となり患者本人も手術を強く希望しています。\n' +
+        '診察では右膝に軽度腫脹、内側関節裂隙圧痛、可動域伸展0°/屈曲120°（終末屈曲時痛）、屈伸時クリッピングを認め、荷重位X線で内側裂隙狭小化と骨棘形成（KL grade III相当）で右内側型変形性膝関節症と診断しました。\n' +
+        'つきましては、人工膝関節置換術の適応評価、術前検査・麻酔判定、手術および術後リハビリ計画のご検討をお願いいたします。\n' +
+        '画像データを添付しておりますのでご参照ください。大変お手数をおかけしますが、どうぞよろしくお願いいたします。',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     },
@@ -2137,7 +2239,14 @@ function renderChatMessages() {
         message.role === 'user' ? 'あなた' : escapeHtml(chatState.agentName || 'アシスタント');
       const body =
         message.status === 'pending'
-          ? '<span class="ai-message-loading">思考中…</span>'
+          ? `<div class="ai-loading-container">
+               <div class="ai-loading-dots">
+                 <div class="ai-loading-dot"></div>
+                 <div class="ai-loading-dot"></div>
+                 <div class="ai-loading-dot"></div>
+               </div>
+               <span class="ai-loading-text">思考中...</span>
+             </div>`
           : `<span>${formatMessageText(message.content || '')}</span>`;
 
       return `
@@ -2345,6 +2454,21 @@ async function clearCurrentChatSession() {
 }
 
 // 日本時間表示機能
+function getJstDateString(offsetWeeks = 0) {
+  const now = new Date();
+  // JST conversion
+  const jstTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+
+  if (offsetWeeks > 0) {
+    jstTime.setDate(jstTime.getDate() + (offsetWeeks * 7));
+  }
+
+  const year = jstTime.getFullYear();
+  const month = String(jstTime.getMonth() + 1).padStart(2, '0');
+  const day = String(jstTime.getDate()).padStart(2, '0');
+  return `${year}/${month}/${day}`;
+}
+
 function getJstTimeString() {
   const now = new Date();
   const jstTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
@@ -2354,6 +2478,73 @@ function getJstTimeString() {
   const hours = String(jstTime.getHours()).padStart(2, '0');
   const minutes = String(jstTime.getMinutes()).padStart(2, '0');
   return `${year}/${month}/${day} ${hours}:${minutes}`;
+}
+
+// 日付・時間管理リスナー設定（新規追加）
+function setupDateManagementListeners() {
+  const pasteToTab = (text) => {
+    chrome.runtime.sendMessage({
+      action: 'pasteToActiveTab',
+      text: text,
+      images: []
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        showNotification('貼り付けに失敗しました: ' + chrome.runtime.lastError.message);
+        return;
+      }
+      if (response && response.success === false) {
+        showNotification('貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
+      } else {
+        showNotification('貼り付けました');
+      }
+    });
+  };
+
+  // 日付のみ
+  const pasteDateOnlyBtn = document.getElementById('pasteDateOnlyBtn');
+  if (pasteDateOnlyBtn) {
+    pasteDateOnlyBtn.addEventListener('click', () => {
+      pasteToTab(getJstDateString());
+    });
+  }
+
+  // 日時 (既存のボタンID再利用)
+  const pasteJstTimeBtn = document.getElementById('pasteJstTimeBtn');
+  if (pasteJstTimeBtn) {
+    pasteJstTimeBtn.addEventListener('click', () => {
+      pasteToTab(getJstTimeString());
+    });
+  }
+
+  // +2週
+  const paste2WeeksBtn = document.getElementById('paste2WeeksBtn');
+  if (paste2WeeksBtn) {
+    paste2WeeksBtn.addEventListener('click', () => {
+      pasteToTab(getJstDateString(2));
+    });
+  }
+
+  // +4週
+  const paste4WeeksBtn = document.getElementById('paste4WeeksBtn');
+  if (paste4WeeksBtn) {
+    paste4WeeksBtn.addEventListener('click', () => {
+      pasteToTab(getJstDateString(4));
+    });
+  }
+
+  // 手動計算
+  const pasteManualWeeksBtn = document.getElementById('pasteManualWeeksBtn');
+  const manualWeeksInput = document.getElementById('manualWeeksInput');
+  if (pasteManualWeeksBtn && manualWeeksInput) {
+    pasteManualWeeksBtn.addEventListener('click', () => {
+      const weeks = parseInt(manualWeeksInput.value, 10);
+      if (isNaN(weeks) || weeks < 0) {
+        showNotification('有効な週数を入力してください');
+        return;
+      }
+      pasteToTab(getJstDateString(weeks));
+    });
+  }
 }
 
 function updateJstTimeDisplay() {

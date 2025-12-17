@@ -14,6 +14,40 @@ function CompatibilitySection() {
         <section className="compatibility-section section-lg">
             <div className="container">
                 <motion.div
+                    className="demo-video-wrapper"
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true }}
+                    variants={slideUp}
+                    transition={{ delay: 0.3 }}
+                >
+                    <div className="video-container-framed">
+                        <video
+                            src="/images/usage/compatibility-demo.mp4"
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="demo-video"
+                        />
+                        <div className="video-caption">実際の連携動作イメージ</div>
+                    </div>
+                </motion.div>
+
+                <motion.div
+                    className="compatibility-cta"
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true }}
+                    variants={slideUp}
+                    transition={{ delay: 0.5 }}
+                >
+                    <a href={CTA_URL} className="btn btn-primary btn-lg">
+                        実際に試してみる
+                    </a>
+                </motion.div>
+
+                <motion.div
                     className="section-header text-center"
                     initial="hidden"
                     whileInView="visible"
@@ -48,40 +82,6 @@ function CompatibilitySection() {
                             </div>
                         </motion.div>
                     ))}
-                </motion.div>
-
-                <motion.div
-                    className="demo-video-wrapper"
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true }}
-                    variants={slideUp}
-                    transition={{ delay: 0.3 }}
-                >
-                    <div className="video-container-framed">
-                        <video
-                            src="/images/usage/compatibility-demo.mp4"
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                            className="demo-video"
-                        />
-                        <div className="video-caption">実際の連携動作イメージ</div>
-                    </div>
-                </motion.div>
-
-                <motion.div
-                    className="compatibility-cta"
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true }}
-                    variants={slideUp}
-                    transition={{ delay: 0.5 }}
-                >
-                    <a href={CTA_URL} className="btn btn-primary btn-lg">
-                        実際に試してみる
-                    </a>
                 </motion.div>
             </div>
         </section>

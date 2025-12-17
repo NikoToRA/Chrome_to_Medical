@@ -1,0 +1,34 @@
+<policies>
+    <inbound>
+        <!-- CORS -->
+        <cors allow-credentials="true">
+            <allowed-origins>
+                <origin>https://brave-moss-071a93e00.4.azurestaticapps.net</origin>
+                <origin>chrome-extension://knldjmfmopnpolahpmmgbagdohdbeiep</origin>
+                <origin>https://stkarteai1763705952.z11.web.core.windows.net</origin>
+            </allowed-origins>
+            <allowed-methods>
+                <method>GET</method>
+                <method>POST</method>
+                <method>OPTIONS</method>
+            </allowed-methods>
+            <allowed-headers>
+                <header>*</header>
+            </allowed-headers>
+        </cors>
+        <!-- Rate Limit (100 calls per 60s per IP) -->
+
+        <base />
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+        <!-- Strip backend CORS to avoid duplicates -->
+        <set-header name="Access-Control-Allow-Origin" exists-action="delete" />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

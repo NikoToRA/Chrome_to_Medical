@@ -103,7 +103,8 @@ module.exports = async function (context, req) {
         const responseBody = {
             role: reply.role,
             content: reply.content || "", // Ensure content is not null
-            usage: response.usage
+            usage: response.usage,
+            model: deployment
         };
 
         context.log('[CHAT] Response payload:', JSON.stringify(responseBody));

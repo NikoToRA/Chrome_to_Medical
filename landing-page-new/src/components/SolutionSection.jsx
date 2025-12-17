@@ -76,11 +76,11 @@ function SolutionSection() {
                     viewport={{ once: true }}
                     variants={slideUp}
                 >
-                    <div className="result-box">
+                    <a href="/register" className="result-box">
                         <span className="result-label">RESULT</span>
                         <h3 className="result-text">1日2時間を取り戻す</h3>
                         <p className="result-desc">空いた時間は、患者様との対話や、あなたのプライベートへ。</p>
-                    </div>
+                    </a>
                 </motion.div>
 
                 {/* Supported Emrs Section removed - moved to CompatibilitySection */}

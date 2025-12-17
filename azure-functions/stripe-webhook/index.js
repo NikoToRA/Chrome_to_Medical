@@ -23,8 +23,10 @@ module.exports = async function (context, req) {
     try {
         switch (event.type) {
             case 'checkout.session.completed': {
+                context.log('[Webhook] Processing checkout.session.completed');
                 const session = event.data.object;
                 const email = session.customer_details.email || session.metadata?.email;
+                const name = session.customer_details.name || email.split('@')[0];
 
                 if (!email) {
                     context.log.error('[Webhook] No email found in session');
@@ -35,6 +37,7 @@ module.exports = async function (context, req) {
                 let subscriptionStatus = 'active';
                 let currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
                 let createdDate = format(new Date(), 'yyyy-MM-dd');
+                let trialEnd = null;
 
                 if (session.subscription) {
                     const subscription = await stripe.subscriptions.retrieve(session.subscription);
@@ -42,7 +45,21 @@ module.exports = async function (context, req) {
                     currentPeriodEnd = new Date(subscription.current_period_end * 1000);
                     // Use subscription start date for consistent trial calculations
                     createdDate = format(new Date(subscription.created * 1000), 'yyyy-MM-dd');
+                    if (subscription.trial_end) {
+                        trialEnd = format(new Date(subscription.trial_end * 1000), 'yyyy-MM-dd');
+                    }
                 }
+
+                // If trial end is not set but we have a calculated currentPeriodEnd (e.g. for trial duration)
+                if (!trialEnd && subscriptionStatus === 'trialing') {
+                    trialEnd = format(currentPeriodEnd, 'yyyy-MM-dd');
+                }
+                // Fallback for welcome email if no specific trial end
+                if (!trialEnd) {
+                    trialEnd = format(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
+                }
+
+                context.log(`[Webhook] Upserting subscription for ${email}, Status: ${subscriptionStatus}`);
 
                 await upsertSubscription(email, {
                     status: subscriptionStatus,
@@ -54,7 +71,16 @@ module.exports = async function (context, req) {
                     createdDate: createdDate // Save YYYY-MM-DD for trial warning query
                 });
 
-                context.log(`[Webhook] Subscription created: ${email} - ${subscriptionStatus}`);
+                // Send Welcome Email
+                try {
+                    context.log('[Webhook] Sending welcome email...');
+                    await emailService.sendWelcomeEmail(email, name, trialEnd);
+                    context.log('[Webhook] Welcome email sent.');
+                } catch (e) {
+                    context.log.error(`[Webhook] Failed to send welcome email to ${email}:`, e);
+                }
+
+                context.log(`[Webhook] Subscription created flow complete: ${email} - ${subscriptionStatus}`);
                 break;
             }
             case 'customer.subscription.updated': {
@@ -66,6 +92,45 @@ module.exports = async function (context, req) {
                 if (!email) {
                     context.log.error('[Webhook] No email found for customer:', customerId);
                     break;
+                }
+
+                // Check for status change: trialing -> active
+                const previousAttributes = event.data.previous_attributes;
+                if (previousAttributes && previousAttributes.status === 'trialing' && subscription.status === 'active') {
+                    context.log(`[Webhook] Trial ended for ${email}, sending notification.`);
+                    try {
+                        const name = customer.name || email.split('@')[0];
+                        const amount = subscription.plan.amount; // Ensure plan amount is available
+                        const nextBillingDate = format(new Date(subscription.current_period_end * 1000), 'yyyy-MM-dd');
+
+                        await emailService.sendTrialEndEmail(email, name, amount, nextBillingDate);
+                    } catch (e) {
+                        context.log.error(`[Webhook] Failed to send trial end email to ${email}:`, e);
+                    }
+                }
+
+                // Check for cancellation scheduled: cancel_at_period_end changed to true
+                // Relaxed condition: If it's true, we consider sending email. 
+                // To avoid multiple emails, we could check if we already processed it, but for now getting the email sent is priority.
+                // We can check if the DB already has cancelAtPeriodEnd=true to avoid duplicate, but stripe-webhook gets current state.
+
+                const isCancellationScheduled = subscription.cancel_at_period_end === true;
+                const wasNotScheduled = previousAttributes && previousAttributes.cancel_at_period_end === false;
+
+                // Send email if explicitly changed, OR if it's true and we suspect we missed it (fallback)
+                // For this specific user case, simpler is better.
+                if (isCancellationScheduled && (wasNotScheduled || !previousAttributes)) {
+                    context.log(`[Webhook] Cancellation scheduled for ${email}.`);
+                    try {
+                        const name = customer.name || email.split('@')[0];
+                        const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+                        const accessEndDate = format(currentPeriodEnd, 'yyyy-MM-dd');
+
+                        await emailService.sendCancellationEmail(email, name, accessEndDate);
+                        context.log(`[Webhook] Cancellation email sent to ${email}`);
+                    } catch (e) {
+                        context.log.error(`[Webhook] Failed to send cancellation email to ${email}:`, e);
+                    }
                 }
 
                 const updateData = {
@@ -84,24 +149,83 @@ module.exports = async function (context, req) {
                 break;
             }
             case 'customer.subscription.deleted': {
+                context.log('[Webhook] Processing customer.subscription.deleted');
                 const subscription = event.data.object;
                 const customerId = subscription.customer;
                 const customer = await stripe.customers.retrieve(customerId);
                 const email = customer.email;
+                const name = customer.name || email.split('@')[0];
 
                 if (!email) {
                     context.log.error('[Webhook] No email found for customer:', customerId);
                     break;
                 }
 
+                const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+                const accessEndDate = format(currentPeriodEnd, 'yyyy-MM-dd');
+
+                context.log(`[Webhook] Subscription deleted for ${email}. Access ends: ${accessEndDate}`);
+
                 await upsertSubscription(email, {
                     status: 'canceled',
-                    currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+                    currentPeriodEnd: currentPeriodEnd.toISOString(),
                     canceledAt: new Date(subscription.canceled_at * 1000).toISOString(),
                     cancelAtPeriodEnd: false
                 });
+                context.log('[Webhook] Subscription record updated to canceled.');
 
-                context.log(`[Webhook] Subscription deleted: ${email}`);
+                // Send Cancellation Email
+                try {
+                    context.log(`[Webhook] Sending cancellation email to ${email}...`);
+                    await emailService.sendCancellationEmail(email, name, accessEndDate);
+                    context.log(`[Webhook] Cancellation email sent successfully to ${email}`);
+                } catch (e) {
+                    context.log.error(`[Webhook] Failed to send cancellation email to ${email}:`, e);
+                }
+
+                context.log(`[Webhook] Subscription deleted flow complete for: ${email}`);
+                break;
+            }
+            case 'invoice.payment_failed': {
+                const invoice = event.data.object;
+                const customerEmail = invoice.customer_email || invoice.customer_name;
+                const hostedInvoiceUrl = invoice.hosted_invoice_url; // Link to pay the invoice
+
+                if (!customerEmail) {
+                    context.log.error(`[Webhook] No email found for failed invoice: ${invoice.id}`);
+                    break;
+                }
+
+                context.log(`[Webhook] Payment failed for invoice: ${invoice.id}, email: ${customerEmail}`);
+
+                // Update subscription status if needed (though Stripe retries might keep it active)
+                // We rely on 'customer.subscription.updated' to handle status changes to 'past_due' etc.
+
+                // Send Payment Failed Email
+                try {
+                    // Try to get a portal URL for updating card
+                    let portalUrl = null;
+                    // We can't generate it here easily without adding more logic, so we let emailService generate it
+                    // or pass hosted_invoice_url as a fallback
+
+                    const failureReason = invoice.last_payment_error ? invoice.last_payment_error.message : '決済処理に失敗しました。';
+
+                    // Retrieve customer name if possible
+                    let customerName = invoice.customer_name;
+                    if (!customerName && invoice.customer) {
+                        try {
+                            const customer = await stripe.customers.retrieve(invoice.customer);
+                            customerName = customer.name;
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+
+                    await emailService.sendPaymentFailedEmail(customerEmail, customerName, failureReason, null);
+
+                } catch (e) {
+                    context.log.error(`[Webhook] Failed to send payment failed email to ${customerEmail}:`, e);
+                }
                 break;
             }
             case 'invoice.payment_succeeded': {

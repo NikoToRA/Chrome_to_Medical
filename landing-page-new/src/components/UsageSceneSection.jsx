@@ -31,13 +31,16 @@ function UsageSceneSection() {
                     <motion.div className="usage-card" variants={staggerItem}>
                         <div className="video-container">
                             <video
-                                src="/images/usage/usage-template.mp4"
+                                src="/images/usage/usage_text.mp4"
                                 autoPlay
                                 loop
                                 muted
                                 playsInline
                                 className="usage-video"
                             />
+                            <div className="usage-overlay">
+                                <div className="usage-overlay-text">スタンプのように<br />カルテを記載</div>
+                            </div>
                         </div>
                         <div className="usage-content">
                             <h3>定型文の挿入</h3>
@@ -59,6 +62,10 @@ function UsageSceneSection() {
                                 playsInline
                                 className="usage-video"
                             />
+                            <div className="usage-overlay">
+                                <div className="usage-overlay-agent">紹介状作成エージェント</div>
+                                <div className="usage-overlay-text">「紹介状を書いて」</div>
+                            </div>
                         </div>
                         <div className="usage-content">
                             <h3>エージェントの使用</h3>

@@ -38,7 +38,7 @@ function FAQSection() {
     }
 
     return (
-        <section className="faq-section section-md">
+        <section id="faq" className="faq-section section-md">
             <div className="container">
                 <motion.div
                     className="section-header text-center"

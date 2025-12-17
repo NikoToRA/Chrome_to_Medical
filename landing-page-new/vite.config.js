@@ -5,5 +5,17 @@ export default defineConfig({
     plugins: [react()],
     server: {
         port: 5174
+    },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    vendor: ['react', 'react-dom', 'react-router-dom'],
+                    three: ['three', '@react-three/fiber', '@react-three/drei'],
+                    ui: ['framer-motion']
+                }
+            }
+        },
+        chunkSizeWarningLimit: 1000
     }
 })

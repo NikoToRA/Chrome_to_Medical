@@ -4,6 +4,7 @@ class AuthManager {
     constructor() {
         this.user = null;
         this.isSubscribed = false;
+        this.hasSubscriptionRecord = false;
         this.token = null;
     }
 
@@ -82,9 +83,9 @@ class AuthManager {
                 }
                 if (result.userEmail) {
                     // Set user with email as ID if no ID is available
-                    this.user = { 
+                    this.user = {
                         id: result.userEmail, // Use email as ID for now
-                        email: result.userEmail 
+                        email: result.userEmail
                     };
                     await this.checkSubscription();
                 }
@@ -101,6 +102,7 @@ class AuthManager {
             // Call Azure Function
             const response = await window.ApiClient.post('/check-subscription', { email: this.user.email });
             this.isSubscribed = response.active;
+            this.hasSubscriptionRecord = response.hasSubscriptionRecord;
             return this.isSubscribed;
         } catch (e) {
             console.error("Subscription check failed", e);

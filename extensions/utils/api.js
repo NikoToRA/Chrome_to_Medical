@@ -1,6 +1,6 @@
 // API Client for Azure Functions
 
-const API_BASE_URL = 'https://func-karte-ai-1763705952.azurewebsites.net/api'; // TODO: Update with actual URL
+const API_BASE_URL = 'https://func-karte-ai-1763705952.azurewebsites.net/api'; // Reverted to Direct Function App for debugging
 
 class ApiClient {
     constructor() {
@@ -8,7 +8,7 @@ class ApiClient {
     }
 
     async post(endpoint, data, options = {}) {
-        const { timeout = 60000, retries = 1 } = options; // Default 60s timeout, 1 retry
+        const { timeout = 180000, retries = 1 } = options; // Default 180s timeout, 1 retry
         const url = `${this.baseUrl}${endpoint}`;
 
         const headers = {
@@ -92,6 +92,8 @@ class ApiClient {
         return this.post('/chat', { messages, system });
     }
 
+
+
     async saveLog(type, metadata, userId = null) {
         // Get actual user ID from AuthManager if not provided
         if (!userId && typeof window !== 'undefined' && window.AuthManager) {
@@ -128,6 +130,10 @@ class ApiClient {
 
     async cancelSubscription(email) {
         return this.post('/cancel-subscription', { email });
+    }
+
+    async checkSubscription(email) {
+        return this.post('/check-subscription', { email });
     }
 }
 

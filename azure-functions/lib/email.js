@@ -20,8 +20,11 @@ if (connectionString) {
  */
 async function sendEmail({ to, subject, text, html, attachments }) {
     if (!emailClient) {
+        console.error("Azure Communication Services Email is not configured. Connection string missing.");
         throw new Error("Azure Communication Services Email is not configured");
     }
+
+    console.log(`[Email] Attempting to send email to: ${to}, Subject: ${subject}`);
 
     const message = {
         senderAddress,

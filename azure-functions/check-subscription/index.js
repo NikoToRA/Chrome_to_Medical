@@ -15,8 +15,17 @@ module.exports = async function (context, req) {
         return;
     }
 
+    // START DEBUG LOG
+    context.log('[CheckSubscription] Processing for email:', email);
+
     try {
-        const sub = await getSubscription(email);
+        let sub = null;
+        try {
+            sub = await getSubscription(email);
+        } catch (dbError) {
+            context.log.error('[CheckSubscription] Database Error:', dbError);
+            // Consume error and treat as no subscription
+        }
 
         // Default to inactive if no record found
         let status = 'inactive';
@@ -33,26 +42,15 @@ module.exports = async function (context, req) {
 
             // Active判定:
             // - status が 'active' または 'trialing'
+            // - または 'canceled' だが有効期限内 (periodEnd > now)
             // - かつ currentPeriodEnd が未来（まだ有効期限内）
-            // - かつ 'canceled' でない
             const now = new Date();
             const periodEnd = expiry ? new Date(expiry) : null;
 
             isActive = (
-                (status === 'active' || status === 'trialing') &&
-                periodEnd &&
-                periodEnd > now &&
-                status !== 'canceled'
+                periodEnd && periodEnd > now &&
+                (status === 'active' || status === 'trialing' || status === 'canceled')
             );
-
-            context.log('[CheckSubscription] Subscription check:', {
-                email,
-                status,
-                isActive,
-                expiry,
-                canceledAt,
-                cancelAtPeriodEnd
-            });
         } else {
             context.log('[CheckSubscription] No subscription found for:', email);
         }
@@ -64,21 +62,34 @@ module.exports = async function (context, req) {
         }
 
         context.res = {
-            headers: { 'Access-Control-Allow-Origin': '*' },
+            status: 200, // Always 200 to prevent JSON parse errors on frontend
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
             body: {
                 active: isActive,
+                hasSubscriptionRecord: !!sub,
                 status,
                 expiry,
                 canceledAt,
                 cancelAtPeriodEnd
             }
         };
+        context.log('[CheckSubscription] Response set successfully');
+
     } catch (error) {
-        context.log.error("[CheckSubscription] Error:", error);
+        context.log.error("[CheckSubscription] Critical Error:", error);
         context.res = {
-            status: 500,
-            headers: { 'Access-Control-Allow-Origin': '*' },
-            body: { error: error.message }
+            status: 200, // Return 200 even on error to pass JSON to frontend
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            body: {
+                active: false,
+                error: error.message
+            }
         };
     }
 }

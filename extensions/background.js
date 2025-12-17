@@ -5,19 +5,19 @@ chrome.action.onClicked.addListener((tab) => {
 
 // 拡張機能がインストールされたときの処理
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Chrome to X 拡張機能がインストールされました');
+  // console.log('Chrome to X 拡張機能がインストールされました');
 });
 
 // サイドパネルからタブ情報を取得するためのメッセージハンドラ
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('[Background] メッセージ受信:', request);
-  
+  // console.log('[Background] メッセージ受信:', request);
+
   // PINGメッセージ（拡張機能のインストール確認用）
   if (request.type === 'PING') {
     sendResponse({ success: true, message: 'Extension is installed' });
     return true;
   }
-  
+
   if (request.action === 'getCurrentTab') {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length > 0) {
@@ -28,18 +28,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
-  
+
   if (request.action === 'pasteToActiveTab') {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (tabs.length === 0) {
-        console.error('[Background] アクティブなタブが見つかりません');
+        // console.error('[Background] アクティブなタブが見つかりません');
         sendResponse({ success: false, error: 'アクティブなタブが見つかりません' });
         return;
       }
-      
+
       const tab = tabs[0];
-      console.log('[Background] タブにメッセージを送信:', tab.id, tab.url);
-      
+      // console.log('[Background] タブにメッセージを送信:', tab.id, tab.url);
+
       try {
         // まず、content scriptが読み込まれているか確認し、なければ注入
         const results = await chrome.scripting.executeScript({
@@ -48,9 +48,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return typeof window.pasteContent === 'function';
           }
         });
-        
+
         const isContentScriptLoaded = results && results[0] && results[0].result;
-        
+
         if (!isContentScriptLoaded) {
           // プラットフォームハンドラーとcontent scriptを注入（manifest.jsonと同じ順序）
           await chrome.scripting.executeScript({
@@ -67,7 +67,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           // 注入後に少し待つ（プラットフォームハンドラーの初期化を待つ）
           await new Promise(resolve => setTimeout(resolve, 200));
         }
-        
+
         // pasteContentを直接呼び出す
         const pasteResults = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
@@ -80,12 +80,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           },
           args: [request.text, request.images]
         });
-        
+
         sendResponse({ success: true });
       } catch (error) {
-        console.error('[Background] スクリプト実行エラー:', error);
-        sendResponse({ 
-          success: false, 
+        console.error('[Background] スクリプト実行エラー:', error.message); // エラーは残す
+        sendResponse({
+          success: false,
           error: error.message,
           details: 'ページへの貼り付けに失敗しました'
         });
@@ -93,48 +93,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
-  
+
   if (request.action === 'captureScreenshot') {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (tabs.length === 0) {
-        console.error('[Background] アクティブなタブが見つかりません');
+        // console.error('[Background] アクティブなタブが見つかりません');
         sendResponse({ success: false, error: 'アクティブなタブが見つかりません' });
         return;
       }
-      
+
       const tab = tabs[0];
-      console.log('[Background] スクリーンショット取得開始:', tab.id);
-      
+      // console.log('[Background] スクリーンショット取得開始:', tab.id);
+
       try {
         // 現在のタブのスクリーンショットを取得
         const dataUrl = await chrome.tabs.captureVisibleTab(null, {
           format: 'png'
         });
-        
-        console.log('[Background] スクリーンショット取得成功');
+
+        // console.log('[Background] スクリーンショット取得成功');
         sendResponse({ success: true, dataUrl: dataUrl });
       } catch (error) {
-        console.error('[Background] スクリーンショット取得エラー:', error);
-        sendResponse({ 
-          success: false, 
+        console.error('[Background] スクリーンショット取得エラー:', error.message);
+        sendResponse({
+          success: false,
           error: error.message || 'スクリーンショットの取得に失敗しました'
         });
       }
     });
     return true; // 非同期レスポンス用
   }
-  
+
   if (request.action === 'startSelectionScreenshot') {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (tabs.length === 0) {
-        console.error('[Background] アクティブなタブが見つかりません');
+        // console.error('[Background] アクティブなタブが見つかりません');
         sendResponse({ success: false, error: 'アクティブなタブが見つかりません' });
         return;
       }
-      
+
       const tab = tabs[0];
-      console.log('[Background] 選択範囲スクリーンショット開始:', tab.id);
-      
+      // console.log('[Background] 選択範囲スクリーンショット開始:', tab.id);
+
       try {
         // content scriptが読み込まれているか確認し、なければ注入
         const results = await chrome.scripting.executeScript({
@@ -143,9 +143,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return typeof window.startSelectionScreenshot === 'function';
           }
         });
-        
+
         const isContentScriptLoaded = results && results[0] && results[0].result;
-        
+
         if (!isContentScriptLoaded) {
           // プラットフォームハンドラーとcontent scriptを注入（manifest.jsonと同じ順序）
           await chrome.scripting.executeScript({
@@ -162,7 +162,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           // 注入後に少し待つ（プラットフォームハンドラーの初期化を待つ）
           await new Promise(resolve => setTimeout(resolve, 200));
         }
-        
+
         // content scriptに選択範囲を指定してもらう
         const selectionResults = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
@@ -185,84 +185,84 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             });
           }
         });
-        
+
         const selection = selectionResults && selectionResults[0] && selectionResults[0].result;
-        
+
         if (selection) {
-          console.log('[Background] 選択範囲を取得:', selection);
+          // console.log('[Background] 選択範囲を取得:', selection);
           sendResponse({ success: true, selection: selection });
         } else {
           sendResponse({ success: false, error: '選択範囲を取得できませんでした' });
         }
       } catch (error) {
-        console.error('[Background] 選択範囲スクリーンショットエラー:', error);
-        sendResponse({ 
-          success: false, 
+        console.error('[Background] 選択範囲スクリーンショットエラー:', error.message);
+        sendResponse({
+          success: false,
           error: error.message || '選択範囲の取得に失敗しました'
         });
       }
     });
     return true; // 非同期レスポンス用
   }
-  
+
   if (request.action === 'captureSelectScreenshot') {
     chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
       if (tabs.length === 0) {
-        console.error('[Background] アクティブなタブが見つかりません');
+        // console.error('[Background] アクティブなタブが見つかりません');
         sendResponse({ success: false, error: 'アクティブなタブが見つかりません' });
         return;
       }
-      
+
       const tab = tabs[0];
       const selection = request.selection;
-      console.log('[Background] 選択範囲スクリーンショット取得開始:', tab.id, selection);
-      
+      // console.log('[Background] 選択範囲スクリーンショット取得開始:', tab.id, selection);
+
       try {
         // 現在のタブのスクリーンショットを取得
         const dataUrl = await chrome.tabs.captureVisibleTab(null, {
           format: 'png'
         });
-        
+
         // 選択範囲を切り抜く（background scriptではできないので、sidepanelで処理）
         // ここではスクリーンショットと選択範囲の情報を返す
-        console.log('[Background] スクリーンショット取得成功');
+        // console.log('[Background] スクリーンショット取得成功');
         sendResponse({ success: true, dataUrl: dataUrl, selection: selection });
       } catch (error) {
-        console.error('[Background] スクリーンショット取得エラー:', error);
-        sendResponse({ 
-          success: false, 
+        console.error('[Background] スクリーンショット取得エラー:', error.message);
+        sendResponse({
+          success: false,
           error: error.message || 'スクリーンショットの取得に失敗しました'
         });
       }
     });
     return true; // 非同期レスポンス用
   }
-  
+
   if (request.action === 'fetchImage') {
-    console.log('[Background] 画像取得開始:', request.url);
-    
+    // console.log('[Background] 画像取得開始:', request.url);
+
     (async () => {
       try {
         // クロスオリジンの画像を取得（background scriptはCORS制限を受けない）
         const response = await fetch(request.url);
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
-        
+
         const blob = await response.blob();
-        
+
         // Service WorkerではFileReaderが使えないため、ArrayBuffer経由でBase64に変換
         const arrayBuffer = await blob.arrayBuffer();
         const base64 = arrayBufferToBase64(arrayBuffer);
         const dataUrl = `data:${blob.type || 'image/png'};base64,${base64}`;
-        
-        console.log('[Background] 画像取得成功');
+
+        // console.log('[Background] 画像取得成功');
         sendResponse({ success: true, base64: dataUrl });
       } catch (error) {
-        console.error('[Background] 画像取得エラー:', error);
-        sendResponse({ 
-          success: false, 
+        console.error('[Background] 画像取得エラー:', error.message);
+        sendResponse({
+          success: false,
           error: error.message || '画像の取得に失敗しました'
         });
       }
@@ -276,7 +276,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse(result);
       })
       .catch((error) => {
-        console.error('[Background] Claudeチャットエラー:', error);
+        console.error('[Background] Claudeチャットエラー:', error.message);
         sendResponse({
           success: false,
           error: error.message || 'Claude APIの呼び出しに失敗しました',
@@ -291,7 +291,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'writeToClipboard') {
     (async () => {
       try {
-        console.log('[Background] クリップボードに書き込み:', request.text ? 'テキスト' : '画像');
+        // console.log('[Background] クリップボードに書き込み:', request.text ? 'テキスト' : '画像');
 
         // Offscreen documentを作成（まだ存在しない場合）
         await setupOffscreenDocument();
@@ -304,14 +304,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
 
         if (response && response.success) {
-          console.log('[Background] Offscreen経由でクリップボード書き込み成功');
+          // console.log('[Background] Offscreen経由でクリップボード書き込み成功');
           sendResponse({ success: true });
         } else {
-          console.error('[Background] Offscreen経由でクリップボード書き込み失敗:', response?.error);
+          // console.error('[Background] Offscreen経由でクリップボード書き込み失敗:', response?.error);
           sendResponse({ success: false, error: response?.error || 'クリップボード書き込み失敗' });
         }
       } catch (error) {
-        console.error('[Background] クリップボード書き込みエラー:', error);
+        console.error('[Background] クリップボード書き込みエラー:', error.message);
         sendResponse({ success: false, error: error.message });
       }
     })();
@@ -330,19 +330,19 @@ async function setupOffscreenDocument() {
   });
 
   if (existingContexts.length > 0) {
-    console.log('[Background] Offscreen document は既に存在します');
+    // console.log('[Background] Offscreen document は既に存在します');
     return;
   }
 
   // Offscreen documentを作成
-  console.log('[Background] Offscreen document を作成します');
+  // console.log('[Background] Offscreen document を作成します');
   await chrome.offscreen.createDocument({
     url: 'offscreen/offscreen.html',
     reasons: [chrome.offscreen.Reason.CLIPBOARD],
     justification: 'Google Docs等へのテキスト・画像貼り付けのため、クリップボードAPIにアクセスする必要があります'
   });
 
-  console.log('[Background] Offscreen document を作成しました');
+  // console.log('[Background] Offscreen document を作成しました');
 }
 
 // ArrayBufferをBase64に変換
@@ -485,58 +485,72 @@ async function getClaudeApiKey() {
 }
 
 // Success Pageからのトークン受信（自動ログイン）
+// Success Pageからのトークン受信（自動ログイン）
 chrome.runtime.onMessageExternal.addListener(
   (request, sender, sendResponse) => {
-    console.log('[Background] External message received:', request, 'from:', sender?.url);
+    // console.log('[Background] External message received:', request, 'from:', sender?.url);
 
-    // Success Pageからのメッセージか確認
-    if (sender?.url && sender.url.startsWith('https://stkarteai1763705952.z11.web.core.windows.net')) {
-      console.log('[Background] Success Pageからのメッセージを確認');
-      
-      if (request.type === 'AUTH_TOKEN' && request.token) {
-        console.log('[Background] 認証トークンを受信:', request.token.substring(0, 20) + '...');
-        
+    // 許可されたドメイン（Landing Page, APIM, Functions）からのメッセージか確認
+    const allowedOrigins = [
+      'https://stkarteai1763705952.z11.web.core.windows.net',
+      'https://apim-karte-ai-1763705952.azure-api.net',
+      'https://func-karte-ai-1763705952.azurewebsites.net'
+    ];
+
+    const isAllowed = sender?.url && allowedOrigins.some(origin => sender.url.startsWith(origin));
+
+    if (isAllowed) {
+      // console.log('[Background] 信頼されたオリジンからのメッセージを確認');
+
+      // アクション名とタイプ両方対応 (Webページ側の実装揺れを吸収)
+      const token = request.token;
+      const action = request.action || request.type;
+
+      if ((action === 'AUTH_TOKEN' || action === 'loginWithToken') && token) {
+        // console.log('[Background] 認証トークンを受信:', token.substring(0, 20) + '...');
+
         // トークンからメールアドレスを抽出（JWTデコード）
         try {
-          const payload = JSON.parse(atob(request.token.split('.')[1]));
+          const payload = JSON.parse(atob(token.split('.')[1]));
           const email = payload.email || payload.sub || request.email || 'unknown@example.com';
-          
-          console.log('[Background] メールアドレス:', email);
-          
+
+          // console.log('[Background] メールアドレス:', email);
+
           // トークンとメールアドレスを保存
           chrome.storage.local.set({
-            authToken: request.token,
+            authToken: token,
             userEmail: email,
             sessionId: request.sessionId || null
           }, () => {
-            console.log('[Background] ✅ トークンとメールアドレスを保存しました');
+            // console.log('[Background] ✅ トークンとメールアドレスを保存しました');
             sendResponse({ success: true, email: email });
-            
+
             // サイドパネルが開いている場合は、認証状態を更新
             chrome.runtime.sendMessage({
               action: 'authTokenReceived',
               email: email,
-              token: request.token
+              token: token
             }).then(() => {
-              console.log('[Background] ✅ サイドパネルにトークン送信完了');
+              // console.log('[Background] ✅ サイドパネルにトークン送信完了');
             }).catch((error) => {
-              console.log('[Background] サイドパネルが開いていないため無視:', error);
+              // サイドパネルが閉じていてもエラーではない
+              // console.log('[Background] サイドパネルへの通知 (パネル閉鎖中など):', error.message);
             });
           });
         } catch (error) {
-          console.error('[Background] ❌ トークンデコードエラー:', error);
+          console.error('[Background] ❌ トークンデコードエラー:', error.message);
           sendResponse({ success: false, error: 'Invalid token format: ' + error.message });
         }
-        
+
         return true; // 非同期レスポンス用
       } else {
-        console.log('[Background] ⚠️ リクエストタイプが不正:', request.type, 'token:', !!request.token);
+        // console.log('[Background] ⚠️ 未対応のアクションまたはトークンなし:', action);
       }
     } else {
-      console.log('[Background] ⚠️ Success Pageからのメッセージではない:', sender?.url);
+      // console.log('[Background] ⚠️ 許可されていないオリジン:', sender?.url);
     }
-    
-    sendResponse({ success: false, error: 'Invalid request' });
+
+    sendResponse({ success: false, error: 'Invalid request or origin' });
     return true;
   }
 );

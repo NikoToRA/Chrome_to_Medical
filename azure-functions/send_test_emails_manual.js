@@ -16,59 +16,72 @@ if (fs.existsSync(localSettingsPath)) {
 }
 
 const emailService = require('./utils/email'); // Now it should pick up env vars
-const receiptGenerator = require('./utils/receipt');
-const { format } = require('date-fns');
+// Note: EmailService class in utils/email.js is exported as 'new EmailService()'. 
+// It does NOT load env vars in constructor anymore (it delegates to lib/email.js which checks env vars on send).
+// So this is safe.
 
-// Re-initialize email service to pick up new env vars if needed
-// (Current implementation of email.js reads env var in constructor or method call? 
-// It reads in constructor (EmailService class). So we might need to recreate it if it was already required?)
-// Actually, `utils/email.js` exports `new EmailService()`. 
-// So it was instantiated when required. 
-// If env vars weren't set *before* require, it might have failed validation or set client to null.
-// Let's re-require or manually re-instantiate if possible.
-// Looking at email.js, it exports an instance.
-// We should set env vars BEFORE requiring email service, but we already required it.
-// To fix this, we'll implement a helper to reload.
-// OR, simpler: just set env vars first, *then* require.
+const receiptGenerator = require('./utils/receipt');
+const { format, addDays } = require('date-fns');
 
 async function main() {
-    console.log('--- sending test emails ---');
+    console.log('--- sending all test emails ---');
 
     const testEmail = 'super206cc@gmail.com';
     const testName = 'Test User';
+    const today = new Date();
+    const billingDate = format(today, 'yyyy-MM');
+    const trialEnd = format(addDays(today, 4), 'yyyy-MM-dd');
+    const accessEnd = format(addDays(today, 30), 'yyyy-MM-dd');
 
     console.log(`Target: ${testEmail}`);
 
     try {
-        // 1. Send Trial Warning
-        console.log('\nSending Trial Warning Email...');
+        // 1. Welcome Email
+        console.log('\n[1/5] Sending Welcome Email...');
+        await emailService.sendWelcomeEmail(testEmail, testName, trialEnd);
+        console.log('✓ Welcome Email Sent');
+
+        // 2. Trial Warning Email
+        console.log('\n[2/5] Sending Trial Warning Email...');
+        // Mocking portal URL generation inside if needed, but it handles null
         await emailService.sendTrialWarningEmail(testEmail, testName);
-        console.log('✓ Trial Warning Sent');
+        console.log('✓ Trial Warning Email Sent');
 
-        // 2. Send Receipt
-        console.log('\nSending Receipt Email...');
-        const receiptNumber = receiptGenerator.generateReceiptNumber(new Date());
-        const amount = 3980;
-        const billingDate = format(new Date(), 'yyyy-MM');
+        // 3. Trial End (Paid Transition) Email
+        console.log('\n[3/5] Sending Trial End (Paid Transition) Email...');
+        await emailService.sendTrialEndEmail(testEmail, testName, 4980, accessEnd);
+        console.log('✓ Trial End Email Sent');
 
+        // 4. Receipt Email
+        console.log('\n[4/5] Sending Receipt Email...');
+        const receiptNumber = receiptGenerator.generateReceiptNumber(today);
         const receiptBuffer = await receiptGenerator.generateReceipt({
             receiptNumber,
             customerName: testName,
             customerEmail: testEmail,
-            amount,
+            amount: 4980,
             billingDate,
-            issueDate: new Date()
+            issueDate: today
         });
-
         await emailService.sendReceiptEmail(
             testEmail,
             testName,
             receiptBuffer,
             receiptNumber,
-            amount,
+            4980,
             billingDate
         );
-        console.log('✓ Receipt Sent');
+        console.log('✓ Receipt Email Sent');
+
+        // 5. Cancellation Email
+        console.log('\n[5/5] Sending Cancellation Email...');
+        await emailService.sendCancellationEmail(testEmail, testName, accessEnd);
+        console.log('✓ Cancellation Email Sent');
+
+        // 6. Payment Failed Email
+        console.log('\n[6/6] Sending Payment Failed Email...');
+        await emailService.sendPaymentFailedEmail(testEmail, testName, '期限切れ', 'https://example.com/portal');
+        console.log('✓ Payment Failed Email Sent');
 
     } catch (error) {
         console.error('Error sending emails:', error);

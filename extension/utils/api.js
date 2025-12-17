@@ -1,6 +1,6 @@
 // API Client for Azure Functions
 
-const API_BASE_URL = 'https://func-karte-ai-1763705952.azurewebsites.net/api';
+const API_BASE_URL = 'https://apim-karte-ai-1763705952.azure-api.net/api';
 
 class ApiClient {
     constructor() {
@@ -10,7 +10,7 @@ class ApiClient {
     async post(endpoint, data, options = {}) {
         const { timeout = 60000, retries = 1 } = options; // Default 60s timeout, 1 retry
         const url = `${this.baseUrl}${endpoint}`;
-        
+
         // Log request for debugging
         console.log(`[ApiClient] POST ${endpoint}`, { url, timeout, retries });
 
@@ -31,10 +31,10 @@ class ApiClient {
                     console.log('[ApiClient] トークンなし - 認証なしでリクエスト');
                 }
             } else if (chrome && chrome.storage && chrome.storage.local) {
-                 // Fallback for when AuthManager is not yet initialized (rare)
-                 // This needs to be async, but post is async, so we can't easily wait here without refactoring
-                 // relying on AuthManager is better.
-                 console.warn('[ApiClient] AuthManager not available, skipping token');
+                // Fallback for when AuthManager is not yet initialized (rare)
+                // This needs to be async, but post is async, so we can't easily wait here without refactoring
+                // relying on AuthManager is better.
+                console.warn('[ApiClient] AuthManager not available, skipping token');
             }
         } catch (e) {
             console.warn('[ApiClient] Failed to attach token', e);
@@ -56,7 +56,7 @@ class ApiClient {
                 // Always try to read the response body first (can only be read once)
                 let responseBody;
                 let responseText = null;
-                
+
                 try {
                     // Clone response to avoid "body already read" error
                     const contentType = response.headers.get('content-type') || '';
@@ -98,13 +98,13 @@ class ApiClient {
                     // Handle HTTP errors
                     let errorMessage = `API Error: ${response.status}`;
                     let errorDetails = null;
-                    
+
                     console.error('[ApiClient] HTTP Error response:', {
                         status: response.status,
                         statusText: response.statusText,
                         body: responseBody
                     });
-                    
+
                     if (responseBody && responseBody.error) {
                         errorMessage = responseBody.error;
                     }
@@ -115,12 +115,12 @@ class ApiClient {
                         errorDetails = responseBody.message;
                         errorMessage += `: ${errorDetails}`;
                     }
-                    
+
                     // Handle specific HTTP errors
                     if (response.status === 504 || response.status === 503) {
                         throw new Error(`Server Busy (Status: ${response.status})`);
                     }
-                    
+
                     const error = new Error(errorMessage);
                     error.status = response.status;
                     error.details = errorDetails;
@@ -153,7 +153,7 @@ class ApiClient {
                 error.message.includes('Network request failed') ||
                 error.name === 'TypeError' // fetch failures often throw TypeError
             );
-            
+
             if (isNetworkError && retries > 0) {
                 const backoffDelay = 2000 * (retries + 1); // Exponential backoff: 4s, 6s
                 console.log(`[ApiClient] Network error detected, retrying after ${backoffDelay}ms... (${retries} attempts left)`);
@@ -165,7 +165,7 @@ class ApiClient {
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 return this.post(endpoint, data, { ...options, retries: retries - 1 });
             }
-            
+
             console.error('[ApiClient] Request Failed:', {
                 endpoint,
                 error: error.message,

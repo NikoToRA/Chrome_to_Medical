@@ -16,9 +16,7 @@
         <div class="platform-indicator" id="platformIndicator"></div>
       </div>
       <div class="header-actions">
-        <button id="logoutBtn" class="header-icon-btn" title="ログアウト" aria-label="ログアウト">
-          🚪
-        </button>
+
         <button id="openSettingsBtn" class="header-icon-btn" title="設定を開く" aria-label="設定を開く">
           ⚙️
         </button>
@@ -57,13 +55,36 @@
           </div>
           <!-- 日本時間表示・貼り付け（定型文エリアの下） -->
           <div class="jst-time-section" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
-            <div style="display: flex; align-items: center; gap: 10px; justify-content: space-between;">
+            <div style="margin-bottom: 8px;">
               <div id="jstTimeDisplay"
-                style="font-size: 14px; font-weight: bold; color: #0056b3; font-family: monospace;">
+                style="font-size: 16px; font-weight: bold; color: #0056b3; font-family: monospace; text-align: center; margin-bottom: 8px;">
                 <!-- 時間がここに表示されます -->
               </div>
+            </div>
+
+            <!-- 日付・日時貼り付け -->
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <button id="pasteDateOnlyBtn" class="btn btn-secondary"
+                style="flex: 1; font-size: 12px; padding: 6px;">日付のみ</button>
               <button id="pasteJstTimeBtn" class="btn btn-secondary"
-                style="font-size: 12px; padding: 4px 12px;">時間を貼り付け</button>
+                style="flex: 1; font-size: 12px; padding: 6px;">日時</button>
+            </div>
+
+            <!-- x週後 (自動) -->
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+              <button id="paste2WeeksBtn" class="btn btn-ghost"
+                style="flex: 1; font-size: 12px; border: 1px solid #ddd;">+2週後</button>
+              <button id="paste4WeeksBtn" class="btn btn-ghost"
+                style="flex: 1; font-size: 12px; border: 1px solid #ddd;">+4週後</button>
+            </div>
+
+            <!-- 手動計算 -->
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="number" id="manualWeeksInput" class="input" style="width: 60px; padding: 4px;"
+                placeholder="週数" min="1" value="1">
+              <span style="font-size: 12px; white-space: nowrap;">週後</span>
+              <button id="pasteManualWeeksBtn" class="btn btn-secondary"
+                style="flex: 1; font-size: 12px; padding: 4px;">計算して貼付</button>
             </div>
           </div>
         </section>
@@ -173,8 +194,9 @@
           </select>
         </div>
         <div class="template-input-group" style="margin-bottom: 15px;">
-          <input type="text" id="newTemplateInput" class="input" placeholder="定型文を入力">
-          <button id="addTemplateBtn" class="btn btn-primary">追加</button>
+          <textarea id="newTemplateInput" class="input" placeholder="定型文を入力 (Shift+Enterで改行)" rows="3"
+            style="resize: vertical; min-height: 60px; font-family: inherit;"></textarea>
+          <button id="addTemplateBtn" class="btn btn-primary" style="height: auto;">追加</button>
         </div>
         <div id="templateManageList" class="template-manage-list"
           style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #eee;"></div>
@@ -187,6 +209,30 @@
             <button id="addCategoryBtn" class="btn btn-secondary">追加</button>
           </div>
           <div id="categoryList" class="category-list" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 設定モーダル（新規追加） -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>設定</h2>
+        <button class="modal-close" id="closeSettingsModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 20px;">
+          <h3 style="font-size: 14px; margin-bottom: 10px; color: #666;">アカウント</h3>
+          <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #eee;">
+            <p style="font-size: 12px; color: #333; margin-bottom: 8px;">現在のアカウントからログアウトします。</p>
+            <button id="logoutBtn" class="btn btn-danger" style="width: 100%;">ログアウト</button>
+          </div>
+        </div>
+
+        <div>
+          <h3 style="font-size: 14px; margin-bottom: 10px; color: #666;">その他</h3>
+          <button id="openExtensionOptionsBtn" class="btn btn-secondary" style="width: 100%;">拡張機能のオプションを開く</button>
         </div>
       </div>
     </div>

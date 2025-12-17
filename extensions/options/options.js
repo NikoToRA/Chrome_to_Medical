@@ -15,6 +15,104 @@ async function initOptions() {
   bindEvents();
   await loadAgents();
   setupStorageWatchers();
+  checkSubscriptionStatus(); // 非同期で実行
+}
+
+async function checkSubscriptionStatus() {
+  const btn = document.getElementById('cancelSubscriptionBtn');
+  if (!btn || !window.AuthManager) return;
+
+  // Visual feedback that check is starting
+  const originalText = btn.textContent;
+  btn.textContent = '契約状況を確認中...';
+  btn.disabled = true;
+
+  try {
+    // 最新のステータスを取得
+    await window.AuthManager.init();
+    const user = window.AuthManager.getUser();
+
+    if (!user || !user.email) {
+      console.warn('[Options] User not logged in during check');
+      btn.textContent = '未ログイン (クリックでログイン)';
+      btn.classList.remove('btn-danger', 'btn-secondary');
+      btn.classList.add('btn-primary'); // Make it look inviting
+      btn.disabled = false;
+
+      btn.onclick = (evt) => {
+        evt.preventDefault();
+        evt.stopImmediatePropagation();
+        window.open('https://stkarteai1763705952.z11.web.core.windows.net/login', '_blank');
+      };
+      return;
+    }
+
+    // User exists, check API
+    const response = await window.ApiClient.checkSubscription(user.email);
+    console.log('[Options] Subscription Check Response:', response);
+
+    if (response) {
+      if (response.cancelAtPeriodEnd) {
+        btn.textContent = '解約予約済み (期間終了まで利用可)';
+        btn.disabled = true;
+        btn.classList.add('btn-disabled');
+        btn.style.backgroundColor = '#ccc';
+        btn.style.borderColor = '#ccc';
+        btn.style.color = '#666';
+
+        // 期間終了日を表示する要素を追加
+        if (response.expiry) {
+          const expiry = new Date(response.expiry).toLocaleDateString();
+          // Avoid duplicate info elements
+          const existingInfo = btn.parentNode.nextElementSibling;
+          if (!existingInfo || !existingInfo.classList.contains('sub-info')) {
+            const info = document.createElement('p');
+            info.className = 'sub-info';
+            info.style.fontSize = '0.8rem';
+            info.style.color = '#d32f2f';
+            info.style.marginTop = '8px';
+            info.textContent = `※ ${expiry} までご利用いただけます。その後自動的に利用停止となります。`;
+            btn.parentNode.after(info);
+          }
+        }
+      } else {
+        // Active and NOT canceled
+        console.log('[Options] User is active and NOT canceled.');
+        btn.textContent = 'プランを解約する'; // Restore default
+        btn.disabled = false;
+      }
+    } else {
+      // No response or null
+      btn.textContent = 'ステータス不明';
+      btn.disabled = false;
+    }
+
+  } catch (e) {
+    console.warn('[Options] サブスクリプション状態確認エラー:', e);
+
+    // Show error state with Retry option
+    btn.textContent = `エラー: ${e.message.slice(0, 20)} (クリックで再試行)`;
+    btn.title = e.message;
+    btn.classList.add('btn-warning');
+    btn.disabled = false;
+
+    // Remove existing event listeners to prevent stacking (tricky with anonymous functions)
+    // Instead, we just set a flag or rely on the fact that click handler is handleCancelSubscription.
+    // We should probably change the click handler behavior if in error state, 
+    // BUT handleCancelSubscription also does a form of auth check/fallback.
+
+    // Ideally: Click -> Retry Check
+    // Reuse the button but change behavior temporarily? 
+    // Easier: Just let handleCancelSubscription run, it has fallbacks. 
+    // OR: Explicitly add a "Retry" listener.
+
+    btn.onclick = async (evt) => {
+      evt.preventDefault();
+      evt.stopImmediatePropagation();
+      btn.onclick = null; // Reset
+      await checkSubscriptionStatus(); // Retry check
+    };
+  }
 }
 
 async function loadAgents() {
@@ -58,6 +156,15 @@ function bindEvents() {
     addAgentBtn.addEventListener('click', handleAddAgent);
   }
 
+  const reLoginBtn = document.getElementById('reLoginBtn');
+  if (reLoginBtn) {
+    reLoginBtn.addEventListener('click', () => {
+      // Landing Page でのログインを促す
+      // 既存のログインページへ飛ばす
+      window.open('https://stkarteai1763705952.z11.web.core.windows.net/login', '_blank');
+    });
+  }
+
   const cancelSubscriptionBtn = document.getElementById('cancelSubscriptionBtn');
   if (cancelSubscriptionBtn) {
     cancelSubscriptionBtn.addEventListener('click', handleCancelSubscription);
@@ -73,6 +180,18 @@ function bindEvents() {
 
   if (agentsList) {
     agentsList.addEventListener('click', handleAgentAction);
+  }
+
+  const headerLogoutBtn = document.getElementById('headerLogoutBtn');
+  if (headerLogoutBtn) {
+    headerLogoutBtn.addEventListener('click', async () => {
+      if (confirm('ログアウトしますか？')) {
+        if (window.AuthManager) {
+          await window.AuthManager.logout();
+          window.close(); // オプションページを閉じる
+        }
+      }
+    });
   }
 }
 
@@ -503,28 +622,23 @@ async function handleCancelSubscription() {
     const response = await window.ApiClient.cancelSubscription(email);
 
     if (response && (response.success || response.status === 'canceled')) {
-      showToast('解約が完了しました。ご利用ありがとうございました。', 'success');
+      showToast('解約予約が完了しました。期間終了まで引き続きご利用いただけます。', 'success');
 
-      // Clear Auth and Status
-      if (window.AuthManager) {
-        await window.AuthManager.logout();
-      }
+      // DO NOT Logout: User still has access until period end.
+      // if (window.AuthManager) {
+      //   await window.AuthManager.logout();
+      // }
 
-      // UI Update (Enable Resubscribe)
-      // Remove old button and replace with Resubscribe button
-      const newBtn = btn.cloneNode(true);
-      btn.parentNode.replaceChild(newBtn, btn);
+      // UI Update (Reflect Cancellation Scheduled)
+      btn.textContent = '解約予約済み (期間終了まで利用可)';
+      btn.disabled = true;
+      btn.classList.add('btn-disabled');
+      btn.style.backgroundColor = '#ccc';
+      btn.style.borderColor = '#ccc';
+      btn.style.color = '#666';
 
-      newBtn.textContent = '再契約する';
-      newBtn.disabled = false;
-      newBtn.classList.remove('btn-danger', 'btn-disabled');
-      newBtn.style.backgroundColor = '#667eea';
-      newBtn.style.color = '#ffffff';
-      newBtn.style.borderColor = '#667eea';
-
-      newBtn.addEventListener('click', () => {
-        window.open('https://stkarteai1763705952.z11.web.core.windows.net/', '_blank');
-      });
+      // We don't need a Resume button immediately here, or we could add a "Resume" button if API supports it.
+      // For now, disabling the cancel button is sufficient to show state.
 
     } else {
       throw new Error(response.error || '不明なエラー');

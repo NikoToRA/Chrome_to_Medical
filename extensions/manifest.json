@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Karte AI+",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "description": "クラウド型電子カルテ向けサポート拡張機能 - AIによる診療記録作成支援と固定文挿入で医療現場の業務を効率化",
   "permissions": [
     "sidePanel",
@@ -35,7 +35,9 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "<all_urls>"
+      ],
       "js": [
         "content/platforms/generic.js",
         "content/platforms/clinics.js",
@@ -53,7 +55,9 @@
   "options_page": "options/options.html",
   "externally_connectable": {
     "matches": [
-      "https://stkarteai1763705952.z11.web.core.windows.net/*"
+      "https://stkarteai1763705952.z11.web.core.windows.net/*",
+      "https://apim-karte-ai-1763705952.azure-api.net/*",
+      "https://func-karte-ai-1763705952.azurewebsites.net/*"
     ]
   }
 }

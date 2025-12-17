@@ -153,8 +153,7 @@ export const FOOTER_LINKS = {
     ],
     support: [
         { label: '無料から始める', href: 'https://stkarteai1763705952.z11.web.core.windows.net/' },
-        { label: 'ヘルプセンター', href: '/help' },
-        { label: 'よくある質問', href: '/faq' },
+        { label: 'よくある質問', href: '#faq' },
         { label: 'お問い合わせ', href: '/contact' }
     ]
 }

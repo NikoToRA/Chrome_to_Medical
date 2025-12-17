@@ -2,6 +2,7 @@
     background-color: var(--background-color);
     position: relative;
     overflow: hidden;
+    padding-top: var(--space-4);
 }
 
 .compatibility-section .section-title {

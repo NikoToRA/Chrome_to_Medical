@@ -24,8 +24,8 @@ module.exports = async function (context, req) {
         const email = decoded.email;
         let isActive = false; // Initialize to avoid ReferenceError
 
-        // Generate long-lived session token
-        const sessionToken = jwt.sign({ email, type: 'session' }, secret, { expiresIn: '14d' });
+        // Generate long-lived session token (1 year)
+        const sessionToken = jwt.sign({ email, type: 'session' }, secret, { expiresIn: '365d' });
 
         // Check for duplicate registration (unless it's a test email with +test)
         const isTestEmail = email.includes('+test@');

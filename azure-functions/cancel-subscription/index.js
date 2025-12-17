@@ -81,8 +81,14 @@ module.exports = async function (context, req) {
 
         // 3. Get subscription
         const subscription = await getSubscription(userEmail);
+        context.log('[CancelSubscription] Retrieved subscription for', userEmail, ':', JSON.stringify(subscription));
 
-        if (!subscription || !subscription.subscriptionId) {
+        const subId = subscription ? (subscription.stripeSubscriptionId || subscription.subscriptionId) : null;
+        context.log('[CancelSubscription] Resolved subId:', subId);
+
+        if (!subscription || !subId) {
+            context.log.warn('[CancelSubscription] Active subscription not found. Subscription object:', subscription, 'Resolved subId:', subId);
+
             // Check if already canceled in our DB?
             if (subscription && subscription.status === 'canceled') {
                 context.res = {
@@ -96,28 +102,43 @@ module.exports = async function (context, req) {
             context.res = {
                 status: 404,
                 headers: { 'Access-Control-Allow-Origin': '*' },
-                body: { error: "Active subscription not found" }
+                body: {
+                    error: "Active subscription not found",
+                    debug: {
+                        email: userEmail,
+                        hasSubscription: !!subscription,
+                        hasSubId: !!subId,
+                        subscriptionKeys: subscription ? Object.keys(subscription) : []
+                    }
+                }
             };
             return;
         }
 
-        // 4. Cancel Stripe Subscription
+        // 4. Update Stripe Subscription to cancel at period end
+        let canceledSubscription;
         try {
-            const canceledSubscription = await stripe.subscriptions.cancel(subscription.subscriptionId);
-            context.log('[CancelSubscription] Stripe subscription cancelled:', canceledSubscription.id);
+            canceledSubscription = await stripe.subscriptions.update(subId, {
+                cancel_at_period_end: true
+            });
+            context.log('[CancelSubscription] Stripe subscription set to cancel at period end:', canceledSubscription.id);
         } catch (stripeErr) {
             // ignore if already canceled
             if (stripeErr.code === 'resource_missing') {
-                context.log.warn('Stripe subscription already missing:', subscription.subscriptionId);
+                context.log.warn('Stripe subscription already missing:', subId);
+                // If it's missing, we might want to treat it as canceled locally
+                canceledSubscription = { status: 'canceled', cancel_at_period_end: true }; // Dummy object for DB update
             } else {
                 throw stripeErr;
             }
         }
 
         // 5. Update Subscription in DB
+        // We do NOT set status to 'canceled' yet. It remains 'active' (or whatever it was) until the period ends.
+        // We just verify the cancelAtPeriodEnd flag.
         await upsertSubscription(userEmail, {
-            status: 'canceled',
-            canceledAt: new Date().toISOString(),
+            // status: 'canceled', // Don't change status yet
+            cancelAtPeriodEnd: true,
             updatedAt: new Date().toISOString()
         });
 
@@ -126,8 +147,12 @@ module.exports = async function (context, req) {
             headers: { 'Access-Control-Allow-Origin': '*' },
             body: {
                 success: true,
-                message: "Subscription cancelled successfully",
-                status: 'canceled'
+                message: "Subscription cancellation scheduled",
+                status: canceledSubscription.status,
+                cancelAtPeriodEnd: true,
+                currentPeriodEnd: canceledSubscription.current_period_end
+                    ? new Date(canceledSubscription.current_period_end * 1000).toISOString()
+                    : null
             }
         };
 
