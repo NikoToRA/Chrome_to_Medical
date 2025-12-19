@@ -356,6 +356,26 @@ function setupAuthTokenListener() {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === 'local' && changes.authToken) {
       console.log('[SidePanel] ストレージからトークン変更を検知');
+
+      // Update in-memory token to match storage state
+      if (window.AuthManager) {
+        const newToken = changes.authToken.newValue;
+        window.AuthManager.token = newToken || null;
+
+        if (!newToken) {
+          // Token removed (Logout)
+          window.AuthManager.user = null;
+          window.AuthManager.isSubscribed = false;
+        } else {
+          // Token updated/restored - re-init might be needed to get user details
+          // But checkAuthAndUpdateUI calls checkSubscription which might help if user email is known.
+          // Ideally we should reload user info here too if possible, but for logout fix, nulling is key.
+          if (changes.userEmail && changes.userEmail.newValue) {
+            window.AuthManager.user = { id: changes.userEmail.newValue, email: changes.userEmail.newValue };
+          }
+        }
+      }
+
       checkAuthAndUpdateUI();
     }
   });
