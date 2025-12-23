@@ -256,11 +256,11 @@ ${companyConfig.address}
     /**
      * Send welcome email (registration complete)
      */
-    async sendWelcomeEmail(email, userName, trialEndDate) {
+    async sendWelcomeEmail(email, userName, trialEndDate, token) {
         const displayName = userName || email.split('@')[0];
         const subject = "【Karte AI Plus】登録完了・無料トライアル開始のお知らせ";
-        const text = this.getWelcomeInPlainText(displayName, trialEndDate);
-        const html = this.getWelcomeHtml(displayName, trialEndDate);
+        const text = this.getWelcomeInPlainText(displayName, trialEndDate, token);
+        const html = this.getWelcomeHtml(displayName, trialEndDate, token);
 
         try {
             const result = await sendEmail({ to: email, subject, text, html });
@@ -314,15 +314,31 @@ ${companyConfig.address}
         }
     }
 
-    getWelcomeInPlainText(name, trialEndDate) {
+    getWelcomeInPlainText(name, trialEndDate, token) {
         return `${name} 様
 
 この度は、Karte AI Plusにご登録いただき、誠にありがとうございます。
 無料トライアル（14日間）が開始されました。
 トライアル期間中は、有料プランのすべての機能をご利用いただけます。
 
-【トライアル終了日】
-${trialEndDate}
+【💻 PCでの利用開始手順】
+本サービスはPC版 Google Chrome 専用の拡張機能です。
+以下の手順でセットアップを行ってください。
+
+1. 拡張機能をインストール
+   以下のURLからChrome拡張機能をインストールしてください。
+   https://chromewebstore.google.com/detail/karte-ai+/hggikgjlgfkbgkpcanglcinpggofdigl?hl=ja
+
+2. トークンを入力してログイン
+   インストール後、拡張機能のサイドパネルを開き、以下の「認証トークン」を入力してください。
+
+   認証トークン:
+   ${token || '(トークン発行エラー: ログイン画面から再発行してください)'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【トライアル情報】
+終了予定日: ${trialEndDate}
 
 【課金開始について】
 トライアル終了日の翌日から、月額料金の課金が開始されます。
@@ -348,7 +364,7 @@ ${companyConfig.address}
 お問い合わせ: ${companyConfig.email || 'support@wonder-drill.com'}`;
     }
 
-    getWelcomeHtml(name, trialEndDate) {
+    getWelcomeHtml(name, trialEndDate, token) {
         return `<!DOCTYPE html>
 <html>
 <head>
@@ -359,7 +375,10 @@ ${companyConfig.address}
         .header {background-color: #4CAF50; color: white; padding: 20px; text-align: center;}
         .content {padding: 20px; background-color: #f9f9f9;}
         .highlight-box {background-color: #e8f5e9; border: 1px solid #4CAF50; padding: 15px; margin: 20px 0; border-radius: 5px;}
+        .setup-box {background-color: #ffffff; border: 2px solid #2196F3; padding: 20px; margin: 20px 0; border-radius: 8px;}
+        .token-display {background-color: #f5f5f5; border: 1px solid #e0e0e0; padding: 15px; font-family: monospace; word-break: break-all; margin: 10px 0; font-size: 14px; color: #555;}
         .footer {text-align: center; padding: 20px; color: #666; font-size: 12px;}
+        .btn {display: inline-block; background-color: #2196F3; color: white; padding: 12px 25px; text-decoration: none; border-radius: 4px; font-weight: bold;}
         ul {padding-left: 20px;}
     </style>
 </head>
@@ -373,6 +392,23 @@ ${companyConfig.address}
             <p>この度は、Karte AI Plusにご登録いただき、誠にありがとうございます。</p>
             <p>無料トライアル（14日間）が開始されました。<br>
             トライアル期間中は、有料プランのすべての機能をご利用いただけます。</p>
+
+            <div class="setup-box">
+                <h2 style="margin-top: 0; color: #1976D2; font-size: 18px;">💻 PCでの利用開始手順</h2>
+                <p>本サービスはPC版 Google Chrome 専用です。</p>
+                
+                <h3 style="font-size: 16px; margin-bottom: 5px;">Step 1: 拡張機能をインストール</h3>
+                <div style="text-align: center; margin: 15px 0;">
+                    <a href="https://chromewebstore.google.com/detail/karte-ai+/hggikgjlgfkbgkpcanglcinpggofdigl?hl=ja" class="btn">Chrome ウェブストアを開く</a>
+                </div>
+
+                <h3 style="font-size: 16px; margin-bottom: 5px;">Step 2: トークンでログイン</h3>
+                <p style="font-size: 14px;">インストール後、拡張機能に入力してください。</p>
+                <div class="token-display">
+                    ${token || '(トークン発行エラー)'}
+                </div>
+                <p style="font-size: 12px; color: #666;">※このトークンは1年間有効です。</p>
+            </div>
 
             <div class="highlight-box">
                 <h3 style="margin-top: 0; color: #2e7d32;">トライアル情報</h3>

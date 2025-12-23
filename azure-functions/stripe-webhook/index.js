@@ -71,10 +71,16 @@ module.exports = async function (context, req) {
                     createdDate: createdDate // Save YYYY-MM-DD for trial warning query
                 });
 
+                const jwt = require('jsonwebtoken');
+                const secret = process.env.JWT_SECRET;
+                // Generate long-lived session token (1 year) for the welcome email
+                // This allows users to start using the extension immediately without re-login
+                const sessionToken = jwt.sign({ email, type: 'session' }, secret, { expiresIn: '365d' });
+
                 // Send Welcome Email
                 try {
                     context.log('[Webhook] Sending welcome email...');
-                    await emailService.sendWelcomeEmail(email, name, trialEnd);
+                    await emailService.sendWelcomeEmail(email, name, trialEnd, sessionToken);
                     context.log('[Webhook] Welcome email sent.');
                 } catch (e) {
                     context.log.error(`[Webhook] Failed to send welcome email to ${email}:`, e);

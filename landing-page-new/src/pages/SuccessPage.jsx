@@ -6,9 +6,19 @@ export default function SuccessPage() {
     const [searchParams] = useSearchParams();
     const [email, setEmail] = useState('');
     const [copied, setCopied] = useState(false);
-    const [customExtId, setCustomExtId] = useState('');
+    const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+    // const [customExtId, setCustomExtId] = useState('');
     const token = searchParams.get('token');
     const PROD_EXTENSION_ID = 'hggikgjlgfkbgkpcanglcinpggofdigl';
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth <= 768);
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const sendTokenToExtension = (extId) => {
         if (!token || !extId) return;
@@ -35,6 +45,7 @@ export default function SuccessPage() {
                 console.error('SendMessage failed', e);
             }
         } else {
+            // Suppress alert on mobile/non-extension environments for auto-send
             if (extId !== PROD_EXTENSION_ID) alert('Chrome APIが見つかりません。');
         }
     };
@@ -46,12 +57,12 @@ export default function SuccessPage() {
         }
 
         // Auto-send to Production ID
-        if (token) {
+        if (token && !isMobile) {
             setTimeout(() => {
                 sendTokenToExtension(PROD_EXTENSION_ID);
             }, 1000); // Slight delay to ensure extension is ready
         }
-    }, [token]);
+    }, [token, isMobile]);
 
     const copyToken = () => {
         if (token) {
@@ -70,15 +81,33 @@ export default function SuccessPage() {
                     <h1>登録が完了しました！</h1>
                     <p className="success-subtitle">
                         Karte AI+ へようこそ！<br />
-                        14日間の無料トライアルが開始されました。
+                        ご登録のメールアドレスに、利用開始に必要な情報をお送りしました。
                     </p>
                 </div>
+
+                {isMobile && (
+                    <div className="mobile-warning">
+                        <h3>📧 メールをご確認ください</h3>
+                        <p>
+                            PCでのセットアップが必要です。<br />
+                            ご登録のメールアドレスに、<strong>Chrome拡張機能のリンク</strong>と<strong>認証トークン</strong>をお送りしました。
+                        </p>
+                        <p className="mobile-instruction">
+                            <strong>次のステップ：</strong><br />
+                            PCでメールを開き、記載された手順に従って利用を開始してください。
+                        </p>
+                    </div>
+                )}
 
                 {token && (
                     <div className="token-section">
                         <div className="token-card">
                             <h3>認証トークン</h3>
-                            <p className="token-description">このトークンをコピーして、拡張機能に入力してください。</p>
+                            <p className="token-description">
+                                {isMobile
+                                    ? "PCでログインする際に、このトークンを使用します（メールにも記載されています）。"
+                                    : "このトークンをコピーして、拡張機能に入力してください（メールにも記載されています）。"}
+                            </p>
                             <div className="token-box">{token}</div>
                             <button onClick={copyToken} className="copy-button main-copy-btn">
                                 {copied ? '✓ コピーしました' : 'トークンをコピー'}
@@ -92,22 +121,36 @@ export default function SuccessPage() {
                     <div className="steps-container">
                         <div className="step-card">
                             <div className="step-number">1</div>
-                            <h3>拡張機能をインストール</h3>
+                            <h3>PCで拡張機能をインストール</h3>
                             <p>Chrome Web Storeから拡張機能をダウンロードします。</p>
-                            <a
-                                href="https://chromewebstore.google.com/detail/karte-ai+/hggikgjlgfkbgkpcanglcinpggofdigl?hl=ja"
-                                className="action-button primary"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                Chrome Web Storeへ
-                            </a>
+                            {isMobile ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+                                    <button className="action-button disabled" disabled>
+                                        スマホではインストール不可
+                                    </button>
+                                    <p style={{ fontSize: '12px', color: '#e53e3e', fontWeight: 'bold' }}>
+                                        PCでメールをご確認ください
+                                    </p>
+                                </div>
+                            ) : (
+                                <a
+                                    href="https://chromewebstore.google.com/detail/karte-ai+/hggikgjlgfkbgkpcanglcinpggofdigl?hl=ja"
+                                    className="action-button primary"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    Chrome Web Storeへ
+                                </a>
+                            )}
                         </div>
 
                         <div className="step-card">
                             <div className="step-number">2</div>
                             <h3>AIパネルを開く</h3>
-                            <p>ブラウザ右上の <img src="/images/extension-icon.png" alt="icon" style={{ width: '24px', verticalAlign: 'middle', margin: '0 4px' }} /> アイコンをクリックして、サイドパネルを開きます。</p>
+                            <p>
+                                PCブラウザ右上の <img src="/images/extension-icon.png" alt="icon" style={{ width: '24px', verticalAlign: 'middle', margin: '0 4px' }} />
+                                アイコンをクリックして、サイドパネルを開きます。
+                            </p>
                         </div>
 
                         <div className="step-card">
