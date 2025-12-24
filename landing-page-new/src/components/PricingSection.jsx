@@ -5,7 +5,7 @@ import './PricingSection.css'
 
 function PricingSection() {
     return (
-        <section className="pricing-section section-lg">
+        <section id="price" className="pricing-section section-lg">
             <div className="container">
                 <motion.div
                     className="section-header text-center"

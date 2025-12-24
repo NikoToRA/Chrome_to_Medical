@@ -47,9 +47,7 @@ function HeroSection() {
                     animate="visible"
                     variants={fadeIn}
                 >
-                    <motion.div className="hero-logo-container" variants={slideUp}>
-                        <img src="/logo.png" alt="Karte AI+ Logo" className="hero-logo" />
-                    </motion.div>
+
 
                     <motion.div className="hero-badge" variants={slideUp}>
                         <span>既存のクラウドカルテに、AIを簡単にプラス</span>
@@ -59,16 +57,17 @@ function HeroSection() {
                         className="hero-title"
                         variants={slideUp}
                     >
-                        <span className="text-pure-white">カルテの隣に、</span><br />
-                        <span className="gradient-text-logo">AIをプラス＋</span>
+                        <span className="text-pure-white">あなたのカルテに、</span><br />
+                        <span className="gradient-text-logo">AIをプラス</span>
                     </motion.h1>
 
                     <motion.p
                         className="hero-subtitle"
                         variants={slideUp}
                     >
-                        いつもの電子カルテ画面はそのままに。<br />
-                        Chrome拡張機能で、診療を劇的にアシスト。
+                        いつもの電子カルテ画面はそのまま。<br />
+                        インストールするだけで、<br className="mobile-break" />
+                        外来診療を劇的にアシスト。
                     </motion.p>
 
                     <motion.p
@@ -96,6 +95,23 @@ function HeroSection() {
                         無料期間中はいつでもキャンセル可能 • システム変更不要 • 即日利用開始
                     </motion.p>
 
+                </motion.div>
+
+                {/* Right Column: Hero Image */}
+                <motion.div
+                    className="hero-image-column"
+                    initial={{ opacity: 0, x: 50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.8, delay: 0.2 }}
+                >
+                    <div className="hero-image-container">
+                        <img
+                            src="/hero-image.jpeg"
+                            alt="医師とAIエージェント"
+                            className="hero-image-real"
+                        />
+                    </div>
+
                     <motion.div
                         className="hero-stats-compact"
                         variants={slideUp}
@@ -115,22 +131,6 @@ function HeroSection() {
                             <div className="stat-label-compact">AIエージェント</div>
                         </div>
                     </motion.div>
-                </motion.div>
-
-                {/* Right Column: Hero Image */}
-                <motion.div
-                    className="hero-image-column"
-                    initial={{ opacity: 0, x: 50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.8, delay: 0.2 }}
-                >
-                    <div className="hero-image-container">
-                        <img
-                            src="/hero-image.jpeg"
-                            alt="医師とAIエージェント"
-                            className="hero-image-real"
-                        />
-                    </div>
                 </motion.div>
             </div>
 

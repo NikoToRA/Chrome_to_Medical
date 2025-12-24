@@ -23,7 +23,7 @@ function CompatibilitySection() {
                 >
                     <div className="video-container-framed">
                         <video
-                            src="/images/usage/compatibility-demo.mp4"
+                            src="/images/usage/usage_complete_v2.mp4"
                             autoPlay
                             loop
                             muted

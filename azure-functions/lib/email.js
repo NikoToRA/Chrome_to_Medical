@@ -40,7 +40,9 @@ async function sendEmail({ to, subject, text, html, attachments }) {
     };
 
     try {
+        console.log(`[Email] Calling beginSend...`);
         const poller = await emailClient.beginSend(message);
+        console.log(`[Email] beginSend returned poller. Polling until done...`);
         const result = await poller.pollUntilDone();
         console.log(`[Email] Sent successfully to ${to}, MessageId: ${result.id}`);
         return result;

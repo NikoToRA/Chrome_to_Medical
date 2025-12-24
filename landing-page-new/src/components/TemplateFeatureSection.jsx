@@ -4,7 +4,7 @@ import './TemplateFeatureSection.css'
 
 function TemplateFeatureSection() {
     return (
-        <section className="template-feature-section section-lg">
+        <section id="features" className="template-feature-section section-lg">
             <div className="container">
                 <div className="feature-layout">
                     <motion.div

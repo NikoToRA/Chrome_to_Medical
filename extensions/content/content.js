@@ -162,7 +162,7 @@ function detectPlatform() {
   }
 
   // CLINICS（ドメインに clinics を含む場合を暫定判定）
-  if (hostname.includes('clinics')) {
+  if (hostname.includes('clinics') || hostname.includes('medley.life')) {
     return 'clinics';
   }
 
@@ -187,7 +187,7 @@ function getPlatformHandlers() {
   } catch (error) {
     // クロスオリジンの場合はアクセスできない（正常）
   }
-  
+
   // 現在のフレームのwindow.PlatformHandlersを使用
   return window.PlatformHandlers;
 }
@@ -196,14 +196,14 @@ async function waitForPlatformHandlers(requiredHandlers = []) {
   const normalized = Array.isArray(requiredHandlers)
     ? requiredHandlers.filter(Boolean)
     : [];
-  
+
   console.log('[Chrome to X] waitForPlatformHandlers開始 - 必要なハンドラー:', normalized);
   console.log('[Chrome to X] waitForPlatformHandlers - 実行フレーム:', window === window.top ? 'メインフレーム' : 'iframe');
-  
+
   // 最初に即座にチェック（待機なし）
   const immediateCheck = getPlatformHandlers();
   console.log('[Chrome to X] waitForPlatformHandlers - 即座チェック:', immediateCheck ? Object.keys(immediateCheck) : 'undefined');
-  
+
   if (immediateCheck) {
     const missing = normalized.filter((name) => !immediateCheck[name]);
     console.log('[Chrome to X] waitForPlatformHandlers - 不足しているハンドラー:', missing);
@@ -214,7 +214,7 @@ async function waitForPlatformHandlers(requiredHandlers = []) {
   } else {
     console.log('[Chrome to X] waitForPlatformHandlers - window.PlatformHandlersが未定義、待機開始');
   }
-  
+
   // 必要なハンドラーがない場合のみ待機
   const deadline = Date.now() + PLATFORM_HANDLER_WAIT_TIMEOUT;
   let attemptCount = 0;
@@ -246,19 +246,19 @@ async function waitForPlatformHandlers(requiredHandlers = []) {
  */
 function setupTextInputDetection() {
   const isInIframe = window !== window.top;
-  
+
   // 編集可能な要素を記録する共通関数
   function recordEditableElement(element) {
     if (!element) return;
-    
-    if (element.tagName === 'TEXTAREA' || 
-        (element.tagName === 'INPUT' && (element.type === 'text' || element.type === 'search' || !element.type)) ||
-        element.isContentEditable ||
-        element.getAttribute('contenteditable') === 'true') {
+
+    if (element.tagName === 'TEXTAREA' ||
+      (element.tagName === 'INPUT' && (element.type === 'text' || element.type === 'search' || !element.type)) ||
+      element.isContentEditable ||
+      element.getAttribute('contenteditable') === 'true') {
       focusedElement = element;
       lastEditableElement = element;
       console.log('[Chrome to X] 編集可能な要素を保存:', element.tagName, element.id || element.className);
-      
+
       // iframe内で実行されている場合、postMessageでメインフレームに通知
       if (isInIframe) {
         try {
@@ -278,7 +278,7 @@ function setupTextInputDetection() {
       }
     }
   }
-  
+
   // focusinイベントで要素を記録
   document.addEventListener('focusin', (e) => {
     const target = e.target;
@@ -289,25 +289,25 @@ function setupTextInputDetection() {
     });
     recordEditableElement(target);
   }, true); // キャプチャフェーズで実行
-  
+
   // clickイベントで要素を記録（フォーカスが外れてもクリック位置を記録）
   document.addEventListener('click', (e) => {
     const target = e.target;
-    
+
     // 拡張機能の要素（通知など）をクリックした場合は無視
-    if (target.id === 'chrome-to-x-notification' || 
-        target.closest('#chrome-to-x-notification')) {
+    if (target.id === 'chrome-to-x-notification' ||
+      target.closest('#chrome-to-x-notification')) {
       console.log('[Chrome to X] 拡張機能の要素をクリック - 座標記録をスキップ');
       return;
     }
-    
+
     // ページコンテンツのクリック座標を記録
     lastClickX = e.clientX;
     lastClickY = e.clientY;
     console.log('[Chrome to X] ページコンテンツのクリック座標を記録:', { x: lastClickX, y: lastClickY, target: target.tagName, id: target.id, className: target.className });
-    
+
     recordEditableElement(target);
-    
+
     // 親要素もチェック（contenteditable の親要素をクリックした場合）
     let parent = target.parentElement;
     for (let i = 0; i < 5 && parent; i++) {
@@ -318,20 +318,20 @@ function setupTextInputDetection() {
       parent = parent.parentElement;
     }
   }, true);
-  
+
   // mousedownイベントで要素を記録
   document.addEventListener('mousedown', (e) => {
     const target = e.target;
-    
+
     // 拡張機能の要素は無視
-    if (target.id === 'chrome-to-x-notification' || 
-        target.closest('#chrome-to-x-notification')) {
+    if (target.id === 'chrome-to-x-notification' ||
+      target.closest('#chrome-to-x-notification')) {
       return;
     }
-    
+
     recordEditableElement(target);
   }, true);
-  
+
   // selectionchangeイベントでアクティブな要素を記録
   document.addEventListener('selectionchange', () => {
     const activeElement = document.activeElement;
@@ -339,20 +339,20 @@ function setupTextInputDetection() {
       recordEditableElement(activeElement);
     }
   }, true);
-  
+
   // 定期的に activeElement をチェック（フォールバック）
   setInterval(() => {
     const activeElement = document.activeElement;
-    if (activeElement && (activeElement.tagName === 'TEXTAREA' || 
-        (activeElement.tagName === 'INPUT' && (activeElement.type === 'text' || activeElement.type === 'search' || !activeElement.type)) ||
-        activeElement.isContentEditable ||
-        activeElement.getAttribute('contenteditable') === 'true')) {
+    if (activeElement && (activeElement.tagName === 'TEXTAREA' ||
+      (activeElement.tagName === 'INPUT' && (activeElement.type === 'text' || activeElement.type === 'search' || !activeElement.type)) ||
+      activeElement.isContentEditable ||
+      activeElement.getAttribute('contenteditable') === 'true')) {
       if (focusedElement !== activeElement) {
         recordEditableElement(activeElement);
       }
     }
   }, 1000); // 1秒ごとにチェック
-  
+
   // メインフレームで、iframe からのメッセージをリッスン
   if (!isInIframe) {
     window.addEventListener('message', (e) => {
@@ -380,7 +380,7 @@ function setupTextInputDetection() {
       }
     });
   }
-  
+
   // iframe 内で、メインフレームからの貼り付けメッセージをリッスン
   if (isInIframe) {
     window.addEventListener('message', (e) => {
@@ -394,7 +394,7 @@ function setupTextInputDetection() {
       }
     });
   }
-  
+
   // iframe 内の要素を検索するヘルパー関数
   function findElementInFrame(frameDoc, elementInfo) {
     // ID で検索
@@ -404,7 +404,7 @@ function setupTextInputDetection() {
         return element;
       }
     }
-    
+
     // クラス名で検索
     if (elementInfo.className) {
       const elements = frameDoc.querySelectorAll(`.${elementInfo.className.split(' ')[0]}`);
@@ -414,7 +414,7 @@ function setupTextInputDetection() {
         }
       }
     }
-    
+
     // タグ名で検索
     const elements = frameDoc.querySelectorAll(elementInfo.tagName);
     for (const el of elements) {
@@ -422,7 +422,7 @@ function setupTextInputDetection() {
         return el;
       }
     }
-    
+
     return null;
   }
 
@@ -445,11 +445,11 @@ function isElementValid(element) {
     // ownerDocumentを確認（iframe内の要素でも有効）
     const ownerDoc = element.ownerDocument;
     if (!ownerDoc) return false;
-    
+
     // 要素の基本プロパティにアクセスできるか確認
     const tagName = element.tagName;
     if (!tagName) return false;
-    
+
     return true;
   } catch (error) {
     return false;
@@ -465,7 +465,7 @@ function getActiveTextElement() {
     focusedElement: focusedElement,
     documentActiveElement: document.activeElement
   });
-  
+
   // document.activeElement が iframe の場合、その iframe 内の activeElement を確認
   if (document.activeElement && (document.activeElement.tagName === 'IFRAME' || document.activeElement.tagName === 'FRAME')) {
     try {
@@ -483,7 +483,7 @@ function getActiveTextElement() {
       console.warn('[Chrome to X] iframe内のactiveElement取得に失敗:', error);
     }
   }
-  
+
   // まず、保存された要素が有効か確認（iframe内の要素も含む）
   if (lastEditableElement && isElementValid(lastEditableElement)) {
     try {
@@ -497,7 +497,7 @@ function getActiveTextElement() {
       console.warn('[Chrome to X] 保存された編集要素へのアクセスに失敗:', error);
     }
   }
-  
+
   if (focusedElement && isElementValid(focusedElement)) {
     try {
       if (isEditableElement(focusedElement)) {
@@ -509,7 +509,7 @@ function getActiveTextElement() {
       console.warn('[Chrome to X] 保存されたフォーカス要素へのアクセスに失敗:', error);
     }
   }
-  
+
   const editableFromDocument = findEditableElementInDocument(document);
   if (editableFromDocument) {
     return editableFromDocument;
@@ -540,9 +540,9 @@ function getActiveTextElement() {
 
   if (activeElement) {
     if (activeElement.tagName === 'TEXTAREA' ||
-        (activeElement.tagName === 'INPUT' && (activeElement.type === 'text' || activeElement.type === 'search' || !activeElement.type)) ||
-        activeElement.isContentEditable ||
-        activeElement.getAttribute('contenteditable') === 'true') {
+      (activeElement.tagName === 'INPUT' && (activeElement.type === 'text' || activeElement.type === 'search' || !activeElement.type)) ||
+      activeElement.isContentEditable ||
+      activeElement.getAttribute('contenteditable') === 'true') {
       console.log('[Chrome to X] アクティブ要素を検出:', activeElement);
       return activeElement;
     }
@@ -600,7 +600,7 @@ function insertTextToDraftEditor(element, text) {
     try {
       // 貼り付け前のテキスト内容を記録
       const beforeText = normalizeContentText(element);
-      
+
       // フォーカスを確実に戻す
       await new Promise(resolve => {
         requestAnimationFrame(() => {
@@ -611,7 +611,7 @@ function insertTextToDraftEditor(element, text) {
           requestAnimationFrame(() => resolve());
         });
       });
-      
+
       // 少し待ってから処理（フォーカスが安定するのを待機）
       await new Promise(resolve => setTimeout(resolve, 100));
       // Draft.jsではcontenteditable配下のDOMを直接更新することで挿入できる場合が多い
@@ -626,13 +626,13 @@ function insertTextToDraftEditor(element, text) {
       // 結果を確認（Draft.jsが非同期で処理する可能性を考慮）
       setTimeout(() => {
         const afterText = normalizeContentText(element);
-        const wasInserted = afterText.includes(text) || 
-                           afterText.length > beforeText.length ||
-                           (beforeText.length === 0 && afterText.length > 0);
-        
-        console.log('[Chrome to X] 貼り付け結果:', { 
-          beforeText, 
-          afterText, 
+        const wasInserted = afterText.includes(text) ||
+          afterText.length > beforeText.length ||
+          (beforeText.length === 0 && afterText.length > 0);
+
+        console.log('[Chrome to X] 貼り付け結果:', {
+          beforeText,
+          afterText,
           wasInserted,
           directSuccess,
           syntheticPasteDispatched
@@ -659,7 +659,7 @@ async function insertTextForFacebook(element, text) {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
-    
+
     // 改行で分割して<div>要素に変換
     const lines = escaped.split('\n');
     const htmlParts = lines.map((line, index) => {
@@ -674,7 +674,7 @@ async function insertTextForFacebook(element, text) {
       }
     });
     const htmlText = htmlParts.join('');
-    
+
     const selection = window.getSelection();
     let range;
     if (selection.rangeCount > 0) {
@@ -684,11 +684,11 @@ async function insertTextForFacebook(element, text) {
       range.selectNodeContents(element);
       range.collapse(false);
     }
-    
+
     if (selection.rangeCount > 0 && !selection.isCollapsed) {
       range.deleteContents();
     }
-    
+
     // execCommand('insertHTML')を試す
     if (typeof document.execCommand === 'function') {
       try {
@@ -701,22 +701,22 @@ async function insertTextForFacebook(element, text) {
           newRange.collapse(false);
           selection.removeAllRanges();
           selection.addRange(newRange);
-          
-          element.dispatchEvent(new InputEvent('input', { 
-            bubbles: true, 
+
+          element.dispatchEvent(new InputEvent('input', {
+            bubbles: true,
             cancelable: true,
             inputType: 'insertFromPaste',
             data: text
           }));
           element.dispatchEvent(new Event('change', { bubbles: true }));
-          
+
           return true;
         }
       } catch (error) {
         console.warn('[Chrome to X] execCommand(insertHTML)に失敗:', error);
       }
     }
-    
+
     // フォールバック: フラグメントを使用
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = htmlText;
@@ -724,13 +724,13 @@ async function insertTextForFacebook(element, text) {
     while (tempDiv.firstChild) {
       fragment.appendChild(tempDiv.firstChild);
     }
-    
+
     if (fragment.childNodes.length === 0) {
       return false;
     }
-    
+
     range.insertNode(fragment);
-    
+
     const lastNode = fragment.lastChild;
     if (lastNode) {
       if (lastNode.nodeType === Node.ELEMENT_NODE && lastNode.tagName === 'DIV') {
@@ -742,15 +742,15 @@ async function insertTextForFacebook(element, text) {
       selection.removeAllRanges();
       selection.addRange(range);
     }
-    
-    element.dispatchEvent(new InputEvent('input', { 
-      bubbles: true, 
+
+    element.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
       cancelable: true,
       inputType: 'insertFromPaste',
       data: text
     }));
     element.dispatchEvent(new Event('change', { bubbles: true }));
-    
+
     return true;
   } catch (error) {
     console.error('[Chrome to X] Facebook用の挿入に失敗:', error);
@@ -771,10 +771,10 @@ function insertTextDirectly(element, text, options = {}) {
 
     // 貼り付け前のテキスト内容を記録
     const beforeText = normalizeContentText(element);
-    
+
     // 要素にフォーカス
     element.focus({ preventScroll: true });
-    
+
     // その他のエディタでは execCommand を試す
     if (typeof document.execCommand === 'function') {
       const executed = document.execCommand('insertText', false, text);
@@ -789,9 +789,9 @@ function insertTextDirectly(element, text, options = {}) {
         return wasInserted;
       }
     }
-    
+
     const selection = window.getSelection();
-    
+
     // 選択範囲を取得または作成
     let range;
     if (selection.rangeCount > 0) {
@@ -804,13 +804,13 @@ function insertTextDirectly(element, text, options = {}) {
         null,
         false
       );
-      
+
       let lastTextNode = null;
       let node;
       while (node = walker.nextNode()) {
         lastTextNode = node;
       }
-      
+
       if (lastTextNode) {
         range = document.createRange();
         range.setStartAfter(lastTextNode);
@@ -822,25 +822,25 @@ function insertTextDirectly(element, text, options = {}) {
         range.collapse(false);
       }
     }
-    
+
     // 既存の内容を削除（選択範囲がある場合）
     if (selection.rangeCount > 0 && !selection.isCollapsed) {
       range.deleteContents();
     }
-    
+
     // テキストノードを作成して挿入
     const textNode = document.createTextNode(text);
     range.insertNode(textNode);
-    
+
     // カーソル位置を更新
     range.setStartAfter(textNode);
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
-    
+
     // input/change イベントを発火
-    element.dispatchEvent(new InputEvent('input', { 
-      bubbles: true, 
+    element.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
       cancelable: true,
       inputType,
       data: text
@@ -848,10 +848,10 @@ function insertTextDirectly(element, text, options = {}) {
     if (dispatchChange) {
       element.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    
+
     const afterText = normalizeContentText(element);
     const wasInserted = afterText.includes(text) || afterText.length >= beforeText.length + text.length;
-    
+
     console.log('[Chrome to X] 直接挿入完了:', { beforeText, afterText, wasInserted });
     return wasInserted;
   } catch (error) {
@@ -1011,14 +1011,14 @@ async function pasteContent(text, images) {
           // iframe が activeElement でない場合、すべての iframe に試行
           const iframes = document.querySelectorAll('iframe');
           console.log('[Chrome to X] すべての iframe にキーボードイベントを送信します。iframe 数:', iframes.length);
-          
+
           for (const iframe of iframes) {
             try {
               iframe.focus();
               await new Promise(resolve => setTimeout(resolve, 50));
-              
+
               const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-              
+
               const pasteKeyDown = new KeyboardEvent('keydown', {
                 key: 'v',
                 code: 'KeyV',
@@ -1030,7 +1030,7 @@ async function pasteContent(text, images) {
                 cancelable: true,
                 view: window
               });
-              
+
               const pasteKeyUp = new KeyboardEvent('keyup', {
                 key: 'v',
                 code: 'KeyV',
@@ -1042,7 +1042,7 @@ async function pasteContent(text, images) {
                 cancelable: true,
                 view: window
               });
-              
+
               // iframe 内の document で execCommand('paste') を試す
               try {
                 const frameDoc = iframe.contentDocument || iframe.contentWindow?.document;
@@ -1059,16 +1059,16 @@ async function pasteContent(text, images) {
               } catch (error) {
                 console.warn('[Chrome to X] iframe 内での execCommand("paste") に失敗:', error);
               }
-              
+
               // execCommand が失敗した場合、キーボードイベントを送信
               iframe.dispatchEvent(pasteKeyDown);
               iframe.dispatchEvent(pasteKeyUp);
-              
+
               console.log('[Chrome to X] iframe にキーボードイベントを送信:', iframe);
-              
+
               // iframe にフォーカスを維持
               iframe.focus();
-              
+
               // iframe 内の要素にフォーカスを当てる
               let focusSuccess = false;
               try {
@@ -1080,7 +1080,7 @@ async function pasteContent(text, images) {
                     view: iframe.contentWindow
                   });
                   frameDoc.body?.dispatchEvent(clickEvent);
-                  
+
                   const editables = frameDoc.querySelectorAll('textarea, input[type="text"], [contenteditable="true"]');
                   if (editables.length > 0) {
                     editables[0].focus();
@@ -1091,12 +1091,12 @@ async function pasteContent(text, images) {
               } catch (error) {
                 console.warn('[Chrome to X] iframe 内の要素へのフォーカスに失敗:', error);
               }
-              
+
               // iframe 内の要素にアクセスできない場合、最後のクリック座標をクリック
               if (!focusSuccess) {
                 try {
                   let clickX, clickY;
-                  
+
                   if (lastClickX !== null && lastClickY !== null) {
                     clickX = lastClickX;
                     clickY = lastClickY;
@@ -1107,7 +1107,7 @@ async function pasteContent(text, images) {
                     clickY = rect.top + rect.height / 2;
                     console.log('[Chrome to X] iframe の中心座標を使用:', { x: clickX, y: clickY });
                   }
-                  
+
                   const mouseDownEvent = new MouseEvent('mousedown', {
                     bubbles: true,
                     cancelable: true,
@@ -1115,7 +1115,7 @@ async function pasteContent(text, images) {
                     clientX: clickX,
                     clientY: clickY
                   });
-                  
+
                   const mouseUpEvent = new MouseEvent('mouseup', {
                     bubbles: true,
                     cancelable: true,
@@ -1123,7 +1123,7 @@ async function pasteContent(text, images) {
                     clientX: clickX,
                     clientY: clickY
                   });
-                  
+
                   const clickEvent = new MouseEvent('click', {
                     bubbles: true,
                     cancelable: true,
@@ -1131,7 +1131,7 @@ async function pasteContent(text, images) {
                     clientX: clickX,
                     clientY: clickY
                   });
-                  
+
                   const elementAtPoint = document.elementFromPoint(clickX, clickY);
                   if (elementAtPoint) {
                     console.log('[Chrome to X] 座標の要素にクリックイベントを送信:', elementAtPoint.tagName);
@@ -1139,7 +1139,7 @@ async function pasteContent(text, images) {
                     elementAtPoint.dispatchEvent(mouseUpEvent);
                     elementAtPoint.dispatchEvent(clickEvent);
                   }
-                  
+
                   await new Promise(resolve => setTimeout(resolve, 50));
                   iframe.focus();
                 } catch (error) {
@@ -1150,26 +1150,26 @@ async function pasteContent(text, images) {
               console.warn('[Chrome to X] iframe へのイベント送信に失敗:', error);
             }
           }
-          
+
           await new Promise(resolve => setTimeout(resolve, 300));
-          
+
           // ページにフォーカスを戻す（拡張機能のボタンからフォーカスを奪還）
           try {
             window.focus();
             console.log('[Chrome to X] window.focus() を実行');
-            
+
             await new Promise(resolve => setTimeout(resolve, 100));
-            
+
             // 最後にアクティブな iframe にもう一度フォーカスを当てる
             if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
               const activeIframe = document.activeElement;
               activeIframe.focus();
               console.log('[Chrome to X] アクティブな iframe に再フォーカス');
-              
+
               // 最後のクリック座標をクリック
               try {
                 let clickX, clickY;
-                
+
                 if (lastClickX !== null && lastClickY !== null) {
                   clickX = lastClickX;
                   clickY = lastClickY;
@@ -1180,7 +1180,7 @@ async function pasteContent(text, images) {
                   clickY = rect.top + rect.height / 2;
                   console.log('[Chrome to X] アクティブな iframe の中心座標を使用:', { x: clickX, y: clickY });
                 }
-                
+
                 const clickEvent = new MouseEvent('click', {
                   bubbles: true,
                   cancelable: true,
@@ -1188,7 +1188,7 @@ async function pasteContent(text, images) {
                   clientX: clickX,
                   clientY: clickY
                 });
-                
+
                 const elementAtPoint = document.elementFromPoint(clickX, clickY);
                 if (elementAtPoint) {
                   elementAtPoint.dispatchEvent(clickEvent);
@@ -1204,25 +1204,25 @@ async function pasteContent(text, images) {
                 // 最後のクリック座標に最も近い iframe を探す
                 let closestIframe = null;
                 let minDistance = Infinity;
-                
+
                 for (const iframe of iframes) {
                   const rect = iframe.getBoundingClientRect();
                   const centerX = rect.left + rect.width / 2;
                   const centerY = rect.top + rect.height / 2;
                   const distance = Math.sqrt(Math.pow(centerX - lastClickX, 2) + Math.pow(centerY - lastClickY, 2));
-                  
+
                   if (distance < minDistance) {
                     minDistance = distance;
                     closestIframe = iframe;
                   }
                 }
-                
+
                 if (closestIframe) {
                   closestIframe.focus();
                   console.log('[Chrome to X] 最も近い iframe にフォーカス');
-                  
+
                   await new Promise(resolve => setTimeout(resolve, 50));
-                  
+
                   // クリックイベントを送信
                   const clickEvent = new MouseEvent('click', {
                     bubbles: true,
@@ -1231,7 +1231,7 @@ async function pasteContent(text, images) {
                     clientX: lastClickX,
                     clientY: lastClickY
                   });
-                  
+
                   const elementAtPoint = document.elementFromPoint(lastClickX, lastClickY);
                   if (elementAtPoint) {
                     elementAtPoint.dispatchEvent(clickEvent);
@@ -1243,7 +1243,7 @@ async function pasteContent(text, images) {
           } catch (error) {
             console.warn('[Chrome to X] フォーカス復元に失敗:', error);
           }
-          
+
           // ユーザーに手動での貼り付けを案内
           showNotification('クリップボードに保存しました。Ctrl/Cmd+V で貼り付けてください。', 5000);
           return true;
@@ -1254,7 +1254,7 @@ async function pasteContent(text, images) {
         return false;
       }
     }
-    
+
     // 要素が非アクティブの場合は再フォーカス
     if (document.activeElement !== element) {
       console.log('[Chrome to X] 直前の要素にフォーカスを戻します');
@@ -1269,10 +1269,10 @@ async function pasteContent(text, images) {
         });
       });
     }
-    
+
     // 少し待ってから処理（フォーカスが確実に当たるように）
     await new Promise(resolve => setTimeout(resolve, 150));
-    
+
     // 再度要素を取得（フォーカス後の状態を確認）
     element = getActiveTextElement() || element;
     if (document.activeElement !== element) {
@@ -1283,12 +1283,12 @@ async function pasteContent(text, images) {
         });
       });
     }
-    
+
     // プラットフォームを検出（テキストと画像の両方で使用）
     const platform = detectPlatform();
-    
+
     console.log('[Chrome to X] プラットフォーム検出結果:', platform);
-    
+
     // デバッグ: 即座にチェック（メインフレーム優先）
     const currentHandlers = (() => {
       try {
@@ -1300,7 +1300,7 @@ async function pasteContent(text, images) {
       }
       return window.PlatformHandlers;
     })();
-    
+
     console.log('[Chrome to X] 即座チェック - window.PlatformHandlers:', currentHandlers);
     console.log('[Chrome to X] 即座チェック - 実行フレーム:', window === window.top ? 'メインフレーム' : 'iframe');
     if (currentHandlers) {
@@ -1308,7 +1308,7 @@ async function pasteContent(text, images) {
       console.log('[Chrome to X] 即座チェック - notion存在:', !!currentHandlers.notion);
       console.log('[Chrome to X] 即座チェック - generic存在:', !!currentHandlers.generic);
     }
-    
+
     // ハンドラー取得（短いタイムアウトで高速化）
     const requiredHandlers = platform ? [platform, 'generic'] : ['generic'];
     console.log('[Chrome to X] 必要なハンドラー:', requiredHandlers);
@@ -1316,7 +1316,7 @@ async function pasteContent(text, images) {
     const availableHandlers = handlers ? Object.keys(handlers) : [];
     console.log('[Chrome to X] window.PlatformHandlers:', handlers);
     console.log('[Chrome to X] 利用可能なハンドラー:', availableHandlers);
-    
+
     // デバッグ: 必要なハンドラーが存在するか確認
     if (handlers) {
       requiredHandlers.forEach(name => {
@@ -1344,7 +1344,7 @@ async function pasteContent(text, images) {
     }
 
     const handler = handlerKey && handlers ? handlers[handlerKey] : null;
-    
+
     // Notionの場合、画像がある場合はドラッグ&ドロップで貼り付けを試行
     if (platform === 'notion' && images && images.length > 0 && handler && typeof handler.insertImages === 'function') {
       console.log('[Chrome to X] Notion: 画像をドラッグ&ドロップで貼り付けます');
@@ -1357,7 +1357,7 @@ async function pasteContent(text, images) {
         console.error('[Chrome to X] Notion: 画像のドラッグ&ドロップに失敗:', error);
       }
     }
-    
+
     // テキストを貼り付け
     if (text) {
       // ハンドラーが利用可能な場合はそれを使用、そうでなければフォールバック
@@ -1380,20 +1380,20 @@ async function pasteContent(text, images) {
           const start = element.selectionStart || 0;
           const end = element.selectionEnd || 0;
           const value = element.value;
-          
+
           element.value = value.substring(0, start) + text + value.substring(end);
-          
+
           const newPosition = start + text.length;
           element.setSelectionRange(newPosition, newPosition);
-          
+
           element.dispatchEvent(new Event('input', { bubbles: true }));
           element.dispatchEvent(new Event('change', { bubbles: true }));
-          
+
           success = true;
         } else if (element.isContentEditable || element.getAttribute('contenteditable') === 'true') {
-          const isDraftEditor = element.classList.contains('public-DraftEditor-content') || 
-                               element.closest('[data-testid="tweetTextarea_0"]');
-          
+          const isDraftEditor = element.classList.contains('public-DraftEditor-content') ||
+            element.closest('[data-testid="tweetTextarea_0"]');
+
           if (isDraftEditor) {
             success = await insertTextToDraftEditor(element, text);
           } else {
@@ -1407,61 +1407,61 @@ async function pasteContent(text, images) {
           }
         }
       }
-      
+
       if (!success) {
         throw new Error('貼り付けに失敗しました');
       }
     }
-    
-      // 画像の処理（Notionの場合は既にクリップボードにコピー済みなのでスキップ）
-      if (images && images.length > 0 && !(platform === 'notion' && handler && typeof handler.insertImages === 'function')) {
-        console.log('[Chrome to X] 画像の貼り付け開始:', images.length, '枚');
-        
-        let uploadSuccess = false;
-        let handlerImageResult = null;
-        
-        if (handler && typeof handler.insertImages === 'function') {
-          try {
-            handlerImageResult = await handler.insertImages(element, images);
-            if (handlerImageResult && handlerImageResult.success) {
-              uploadSuccess = true;
-        console.log('[Chrome to X] プラットフォームハンドラーで画像貼り付け成功:', handlerKey || platform, handlerImageResult);
-            } else {
-              console.warn('[Chrome to X] プラットフォームハンドラーで画像貼り付け失敗:', handlerImageResult);
-            }
-          } catch (handlerError) {
-            console.error('[Chrome to X] プラットフォームハンドラーで画像貼り付け中にエラー:', handlerError);
-          }
-        }
-        
-        if (!uploadSuccess) {
-          if (platform === 'x') {
-            uploadSuccess = await uploadImagesToX(images);
-          } else if (platform === 'gmail') {
-            uploadSuccess = await uploadImagesToGmail(images);
-          } else if (platform === 'facebook') {
-            uploadSuccess = await uploadImagesToFacebook(images, element);
-          } else {
-            console.log('[Chrome to X] プラットフォーム:', platform, 'クリップボード経由で試行');
-            await pasteImagesViaClipboard(element, images);
+
+    // 画像の処理（Notionの場合は既にクリップボードにコピー済みなのでスキップ）
+    if (images && images.length > 0 && !(platform === 'notion' && handler && typeof handler.insertImages === 'function')) {
+      console.log('[Chrome to X] 画像の貼り付け開始:', images.length, '枚');
+
+      let uploadSuccess = false;
+      let handlerImageResult = null;
+
+      if (handler && typeof handler.insertImages === 'function') {
+        try {
+          handlerImageResult = await handler.insertImages(element, images);
+          if (handlerImageResult && handlerImageResult.success) {
             uploadSuccess = true;
+            console.log('[Chrome to X] プラットフォームハンドラーで画像貼り付け成功:', handlerKey || platform, handlerImageResult);
+          } else {
+            console.warn('[Chrome to X] プラットフォームハンドラーで画像貼り付け失敗:', handlerImageResult);
           }
+        } catch (handlerError) {
+          console.error('[Chrome to X] プラットフォームハンドラーで画像貼り付け中にエラー:', handlerError);
         }
-        
-        if (uploadSuccess) {
-          showNotification(`テキストと画像${images.length}枚を貼り付けました`);
+      }
+
+      if (!uploadSuccess) {
+        if (platform === 'x') {
+          uploadSuccess = await uploadImagesToX(images);
+        } else if (platform === 'gmail') {
+          uploadSuccess = await uploadImagesToGmail(images);
+        } else if (platform === 'facebook') {
+          uploadSuccess = await uploadImagesToFacebook(images, element);
         } else {
-          console.log('[Chrome to X] 画像アップロードに失敗、クリップボード経由で試行');
+          console.log('[Chrome to X] プラットフォーム:', platform, 'クリップボード経由で試行');
           await pasteImagesViaClipboard(element, images);
-          showNotification(`テキストと画像${images.length}枚を貼り付けました`);
+          uploadSuccess = true;
         }
-      } else if (text) {
+      }
+
+      if (uploadSuccess) {
+        showNotification(`テキストと画像${images.length}枚を貼り付けました`);
+      } else {
+        console.log('[Chrome to X] 画像アップロードに失敗、クリップボード経由で試行');
+        await pasteImagesViaClipboard(element, images);
+        showNotification(`テキストと画像${images.length}枚を貼り付けました`);
+      }
+    } else if (text) {
       showNotification('テキストを貼り付けました');
     }
-    
+
     // フォーカスを戻す
     element.focus();
-    
+
     return true;
   } catch (error) {
     console.error('[Chrome to X] 貼り付けに失敗しました:', error);
@@ -1484,7 +1484,7 @@ function showNotification(message, duration = 2000) {
   if (existing) {
     existing.remove();
   }
-  
+
   const notification = document.createElement('div');
   notification.id = 'chrome-to-x-notification';
   notification.textContent = message;
@@ -1502,7 +1502,7 @@ function showNotification(message, duration = 2000) {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     animation: slideIn 0.3s ease;
   `;
-  
+
   // アニメーション定義を追加
   if (!document.getElementById('chrome-to-x-styles')) {
     const style = document.createElement('style');
@@ -1531,9 +1531,9 @@ function showNotification(message, duration = 2000) {
     `;
     document.head.appendChild(style);
   }
-  
+
   document.body.appendChild(notification);
-  
+
   setTimeout(() => {
     notification.style.animation = 'slideOut 0.3s ease';
     setTimeout(() => {
@@ -1549,11 +1549,11 @@ function showNotification(message, duration = 2000) {
  */
 function getDraftEditorText(element) {
   if (!element) return '';
-  
+
   // Draft.jsエディタの場合、改行を保持する必要がある
-  const isDraftEditor = element.classList.contains('public-DraftEditor-content') || 
-                       element.closest('[data-testid="tweetTextarea_0"]');
-  
+  const isDraftEditor = element.classList.contains('public-DraftEditor-content') ||
+    element.closest('[data-testid="tweetTextarea_0"]');
+
   if (isDraftEditor) {
     // Draft.jsエディタでは、<div>要素が改行を表す
     // 直接の子要素の<div>を取得し、それぞれのテキストを改行で結合する
@@ -1571,12 +1571,12 @@ function getDraftEditorText(element) {
       });
       return text.replace(/\u200B/g, ''); // zero-width spaceを除去
     }
-    
+
     // フォールバック: innerTextを使用（ブラウザが改行を処理）
     const text = element.innerText || element.textContent || '';
     return text.replace(/\u200B/g, ''); // zero-width spaceを除去
   }
-  
+
   // 通常の要素の場合
   return (element.textContent || element.innerText || '')
     .replace(/\u200B/g, '')  // zero-width space
@@ -1594,74 +1594,74 @@ async function uploadImagesToX(images) {
   try {
     // Xの投稿フォーム全体を探す
     const composer = document.querySelector('[data-testid="tweetTextarea_0"]')?.closest('div[role="textbox"]')?.closest('div')?.closest('div');
-    
+
     // ファイル入力要素を探す（ページ全体から）
     let fileInput = document.querySelector('input[type="file"][accept*="image"]') ||
-                   document.querySelector('input[type="file"]');
-    
+      document.querySelector('input[type="file"]');
+
     // 見つからない場合は、画像ボタンをクリックしてファイル入力を表示
     if (!fileInput) {
       // ツールバー内の画像ボタンを探す
       const toolbar = document.querySelector('[data-testid="toolBar"]');
       if (toolbar) {
-        const mediaButton = toolbar.querySelector('[data-testid="attach"]') || 
-                           toolbar.querySelector('button[aria-label*="画像"]') ||
-                           toolbar.querySelector('button[aria-label*="メディア"]') ||
-                           toolbar.querySelector('button[aria-label*="画像を追加"]');
-        
+        const mediaButton = toolbar.querySelector('[data-testid="attach"]') ||
+          toolbar.querySelector('button[aria-label*="画像"]') ||
+          toolbar.querySelector('button[aria-label*="メディア"]') ||
+          toolbar.querySelector('button[aria-label*="画像を追加"]');
+
         if (mediaButton) {
           console.log('[Chrome to X] 画像ボタンをクリック');
           mediaButton.click();
           // ファイル入力が表示されるまで待つ
           await new Promise(resolve => setTimeout(resolve, 500));
-          
+
           // 再度ファイル入力を探す
           fileInput = document.querySelector('input[type="file"][accept*="image"]') ||
-                     document.querySelector('input[type="file"]');
+            document.querySelector('input[type="file"]');
         }
       }
     }
-    
+
     if (!fileInput) {
       console.log('[Chrome to X] ファイル入力要素が見つかりません');
       return false;
     }
-    
+
     console.log('[Chrome to X] ファイル入力要素を発見:', fileInput);
-    
+
     // Base64データURLからFileオブジェクトを作成
     const files = [];
     for (const image of images) {
       const base64Data = image.base64;
       const response = await fetch(base64Data);
       const blob = await response.blob();
-      
+
       // Fileオブジェクトを作成
       const fileName = image.name || `image_${Date.now()}.png`;
       const file = new File([blob], fileName, { type: blob.type });
       files.push(file);
     }
-    
+
     // DataTransferオブジェクトを作成してファイルを設定
     const dataTransfer = new DataTransfer();
     files.forEach(file => dataTransfer.items.add(file));
-    
+
     // ファイル入力にファイルを設定
     fileInput.files = dataTransfer.files;
-    
+
     // changeイベントを発火
     const changeEvent = new Event('change', { bubbles: true, cancelable: true });
     fileInput.dispatchEvent(changeEvent);
-    
+
     // inputイベントも発火（Xがリッスンしている可能性がある）
     const inputEvent = new Event('input', { bubbles: true, cancelable: true });
     fileInput.dispatchEvent(inputEvent);
-    
+
     console.log('[Chrome to X] Xの画像アップロード成功:', files.length, '枚');
-    
+
     // 画像がアップロードされるまで少し待つ
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     return true;
   } catch (error) {
     console.error('[Chrome to X] Xの画像アップロードに失敗:', error);
@@ -1675,7 +1675,7 @@ async function uploadImagesToX(images) {
 async function uploadImagesToGmail(images) {
   try {
     console.log('[Chrome to X] Gmailの画像アップロード開始');
-    
+
     // Gmailのファイル添付ボタンを探す（複数のパターンを試す）
     // GmailのUI構造は動的に変わる可能性があるため、複数のセレクタを試す
     const attachSelectors = [
@@ -1692,7 +1692,7 @@ async function uploadImagesToGmail(images) {
       'div[aria-label="添付"]',
       'div[aria-label="Attach"]'
     ];
-    
+
     let attachButton = null;
     for (const selector of attachSelectors) {
       attachButton = document.querySelector(selector);
@@ -1701,21 +1701,21 @@ async function uploadImagesToGmail(images) {
         break;
       }
     }
-    
+
     // ファイル入力要素を探す（Gmailは通常、ページ内に隠しinputがある）
     let fileInput = document.querySelector('input[type="file"]');
-    
+
     // 見つからない場合は、添付ボタンをクリックしてファイル入力を表示
     if (!fileInput && attachButton) {
       console.log('[Chrome to X] 添付ボタンをクリック');
       attachButton.click();
       // ファイル入力が表示されるまで待つ
       await new Promise(resolve => setTimeout(resolve, 800));
-      
+
       // 再度ファイル入力を探す
       fileInput = document.querySelector('input[type="file"]');
     }
-    
+
     // まだ見つからない場合は、Gmailのエディタエリア内を探す
     if (!fileInput) {
       const editorArea = document.querySelector('div[role="textbox"]')?.closest('div')?.parentElement;
@@ -1723,15 +1723,15 @@ async function uploadImagesToGmail(images) {
         fileInput = editorArea.querySelector('input[type="file"]');
       }
     }
-    
+
     if (!fileInput) {
       console.log('[Chrome to X] Gmailのファイル入力要素が見つかりません');
       // フォールバック: クリップボード経由を試す
       return false;
     }
-    
+
     console.log('[Chrome to X] Gmailのファイル入力要素を発見:', fileInput);
-    
+
     // Base64データURLからFileオブジェクトを作成
     const files = [];
     for (let i = 0; i < images.length; i++) {
@@ -1739,52 +1739,52 @@ async function uploadImagesToGmail(images) {
       const base64Data = image.base64;
       const response = await fetch(base64Data);
       const blob = await response.blob();
-      
+
       // Fileオブジェクトを作成
       const fileName = image.name || `image_${Date.now()}_${i}.png`;
       const file = new File([blob], fileName, { type: blob.type });
       files.push(file);
-      
+
       // Gmailは1枚ずつアップロードする必要がある場合がある
       if (i === 0) {
         // 最初のファイルを設定
         const dataTransfer = new DataTransfer();
         dataTransfer.items.add(file);
         fileInput.files = dataTransfer.files;
-        
+
         // changeイベントを発火
         const changeEvent = new Event('change', { bubbles: true, cancelable: true });
         fileInput.dispatchEvent(changeEvent);
-        
+
         // inputイベントも発火
         const inputEvent = new Event('input', { bubbles: true, cancelable: true });
         fileInput.dispatchEvent(inputEvent);
-        
+
         // 次のファイルの前に少し待つ
         if (images.length > 1) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
     }
-    
+
     // 複数ファイルの場合は、すべてのファイルを一度に設定
     if (files.length > 1) {
       const dataTransfer = new DataTransfer();
       files.forEach(file => dataTransfer.items.add(file));
       fileInput.files = dataTransfer.files;
-      
+
       const changeEvent = new Event('change', { bubbles: true, cancelable: true });
       fileInput.dispatchEvent(changeEvent);
-      
+
       const inputEvent = new Event('input', { bubbles: true, cancelable: true });
       fileInput.dispatchEvent(inputEvent);
     }
-    
+
     console.log('[Chrome to X] Gmailの画像アップロード成功:', files.length, '枚');
-    
+
     // 画像がアップロードされるまで少し待つ
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     return true;
   } catch (error) {
     console.error('[Chrome to X] Gmailの画像アップロードに失敗:', error);
@@ -1800,8 +1800,8 @@ async function uploadImagesToFacebook(images, element) {
     console.log('[Chrome to X] Facebookの画像アップロード開始');
 
     const scopeRoot = element?.closest('[role="dialog"]') ||
-                      element?.closest('[aria-label][role="group"]') ||
-                      document;
+      element?.closest('[aria-label][role="group"]') ||
+      document;
 
     const findFileInput = () => {
       const selectors = [
@@ -1893,7 +1893,7 @@ async function pasteImagesViaClipboard(element, images) {
     // 要素にフォーカス
     element.focus({ preventScroll: true });
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     // 画像を1枚ずつクリップボード経由で貼り付ける
     for (let i = 0; i < images.length; i++) {
       const image = images[i];
@@ -1902,18 +1902,18 @@ async function pasteImagesViaClipboard(element, images) {
         const base64Data = image.base64;
         const response = await fetch(base64Data);
         const blob = await response.blob();
-        
+
         // クリップボードに画像をコピー
         await navigator.clipboard.write([
           new ClipboardItem({ [blob.type]: blob })
         ]);
-        
+
         // 少し待ってからキーボードショートカットをシミュレート
         await new Promise(resolve => setTimeout(resolve, 150));
-        
+
         // Ctrl+V (Mac: Cmd+V) をシミュレート
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-        
+
         const keyDownModifier = new KeyboardEvent('keydown', {
           key: isMac ? 'Meta' : 'Control',
           code: isMac ? 'MetaLeft' : 'ControlLeft',
@@ -1924,7 +1924,7 @@ async function pasteImagesViaClipboard(element, images) {
           bubbles: true,
           cancelable: true
         });
-        
+
         const keyDownV = new KeyboardEvent('keydown', {
           key: 'v',
           code: 'KeyV',
@@ -1935,14 +1935,14 @@ async function pasteImagesViaClipboard(element, images) {
           bubbles: true,
           cancelable: true
         });
-        
+
         // pasteイベントを発火
         const pasteEvent = new ClipboardEvent('paste', {
           bubbles: true,
           cancelable: true,
           clipboardData: new DataTransfer()
         });
-        
+
         Object.defineProperty(pasteEvent.clipboardData, 'items', {
           value: [{
             kind: 'file',
@@ -1951,16 +1951,16 @@ async function pasteImagesViaClipboard(element, images) {
           }],
           writable: false
         });
-        
+
         Object.defineProperty(pasteEvent.clipboardData, 'files', {
           value: [blob],
           writable: false
         });
-        
+
         element.dispatchEvent(keyDownModifier);
         element.dispatchEvent(keyDownV);
         element.dispatchEvent(pasteEvent);
-        
+
         // keyupイベント
         const keyUpV = new KeyboardEvent('keyup', {
           key: 'v',
@@ -1972,7 +1972,7 @@ async function pasteImagesViaClipboard(element, images) {
           bubbles: true,
           cancelable: true
         });
-        
+
         const keyUpModifier = new KeyboardEvent('keyup', {
           key: isMac ? 'Meta' : 'Control',
           code: isMac ? 'MetaLeft' : 'ControlLeft',
@@ -1983,10 +1983,10 @@ async function pasteImagesViaClipboard(element, images) {
           bubbles: true,
           cancelable: true
         });
-        
+
         element.dispatchEvent(keyUpV);
         element.dispatchEvent(keyUpModifier);
-        
+
         // 次の画像の前に少し待つ
         if (i < images.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 300));
@@ -2009,7 +2009,7 @@ function startSelectionScreenshot() {
     if (selectionOverlay) {
       removeSelectionOverlay();
     }
-    
+
     // オーバーレイを作成
     const overlay = document.createElement('div');
     overlay.id = 'chrome-to-x-selection-overlay';
@@ -2024,7 +2024,7 @@ function startSelectionScreenshot() {
       cursor: crosshair;
       user-select: none;
     `;
-    
+
     // 選択範囲ボックス
     const selectionBox = document.createElement('div');
     selectionBox.id = 'chrome-to-x-selection-box';
@@ -2035,7 +2035,7 @@ function startSelectionScreenshot() {
       pointer-events: none;
       display: none;
     `;
-    
+
     // インストラクション
     const instruction = document.createElement('div');
     instruction.style.cssText = `
@@ -2053,66 +2053,66 @@ function startSelectionScreenshot() {
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     `;
     instruction.textContent = '範囲をドラッグして選択してください（ESCキーでキャンセル）';
-    
+
     overlay.appendChild(selectionBox);
     overlay.appendChild(instruction);
     document.body.appendChild(overlay);
     selectionOverlay = overlay;
-    
+
     // マウスイベント
     const handleMouseDown = (e) => {
       e.preventDefault();
       e.stopPropagation();
-      
+
       const rect = overlay.getBoundingClientRect();
       selectionState.isSelecting = true;
       selectionState.startX = e.clientX - rect.left;
       selectionState.startY = e.clientY - rect.top;
       selectionState.currentX = e.clientX - rect.left;
       selectionState.currentY = e.clientY - rect.top;
-      
+
       selectionBox.style.display = 'block';
       updateSelectionBox();
     };
-    
+
     const handleMouseMove = (e) => {
       if (!selectionState.isSelecting) return;
-      
+
       const rect = overlay.getBoundingClientRect();
       selectionState.currentX = e.clientX - rect.left;
       selectionState.currentY = e.clientY - rect.top;
-      
+
       updateSelectionBox();
     };
-    
+
     const handleMouseUp = (e) => {
       if (!selectionState.isSelecting) return;
-      
+
       selectionState.isSelecting = false;
-      
+
       const startX = Math.min(selectionState.startX, selectionState.currentX);
       const startY = Math.min(selectionState.startY, selectionState.currentY);
       const width = Math.abs(selectionState.currentX - selectionState.startX);
       const height = Math.abs(selectionState.currentY - selectionState.startY);
-      
+
       if (width < 10 || height < 10) {
         // 選択範囲が小さすぎる場合は無視
         return;
       }
-      
+
       // 選択範囲の座標を取得（ビューポート基準）
       // chrome.tabs.captureVisibleTabはビューポートのみをキャプチャするため、
       // ビューポート基準の座標を使用する
       const viewportX = startX;
       const viewportY = startY;
-      
+
       // デバッグ情報を収集
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
       const devicePixelRatio = window.devicePixelRatio || 1;
       const scrollX = window.scrollX;
       const scrollY = window.scrollY;
-      
+
       console.log('[Chrome to X] 選択範囲情報:', {
         selection: {
           x: Math.round(viewportX),
@@ -2136,10 +2136,10 @@ function startSelectionScreenshot() {
           currentY: selectionState.currentY
         }
       });
-      
+
       // オーバーレイを削除
       removeSelectionOverlay();
-      
+
       // 選択範囲を返す（ビューポート基準 + デバイスピクセル比を考慮）
       // chrome.tabs.captureVisibleTabはデバイスピクセル比を考慮したサイズで取得するため、
       // 座標もデバイスピクセル比を掛ける必要がある
@@ -2153,7 +2153,7 @@ function startSelectionScreenshot() {
         devicePixelRatio: devicePixelRatio
       });
     };
-    
+
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -2161,12 +2161,12 @@ function startSelectionScreenshot() {
         reject(new Error('キャンセルされました'));
       }
     };
-    
+
     overlay.addEventListener('mousedown', handleMouseDown);
     overlay.addEventListener('mousemove', handleMouseMove);
     overlay.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('keydown', handleKeyDown);
-    
+
     // クリーンアップ関数
     overlay._cleanup = () => {
       overlay.removeEventListener('mousedown', handleMouseDown);
@@ -2174,13 +2174,13 @@ function startSelectionScreenshot() {
       overlay.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('keydown', handleKeyDown);
     };
-    
+
     function updateSelectionBox() {
       const startX = Math.min(selectionState.startX, selectionState.currentX);
       const startY = Math.min(selectionState.startY, selectionState.currentY);
       const width = Math.abs(selectionState.currentX - selectionState.startX);
       const height = Math.abs(selectionState.currentY - selectionState.startY);
-      
+
       selectionBox.style.left = `${startX}px`;
       selectionBox.style.top = `${startY}px`;
       selectionBox.style.width = `${width}px`;
@@ -2222,7 +2222,7 @@ function dispatchSyntheticPaste(element, text) {
     });
 
     Object.defineProperty(pasteEvent.clipboardData, 'getData', {
-      value: function(type) {
+      value: function (type) {
         if (type === 'text/plain' || type === 'text') {
           return text;
         }
@@ -2235,7 +2235,7 @@ function dispatchSyntheticPaste(element, text) {
       value: [{
         kind: 'string',
         type: 'text/plain',
-        getAsString: function(callback) {
+        getAsString: function (callback) {
           callback(text);
         }
       }],
@@ -2257,14 +2257,14 @@ function dispatchSyntheticPaste(element, text) {
 // メッセージリスナー - サイドパネルからの貼り付けリクエストを受信
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('[Chrome to X] メッセージ受信:', request);
-  
+
   // ペーストを実行（Ctrl/Cmd+V をシミュレート）
   if (request.action === 'simulatePaste') {
     console.log('[Chrome to X] ペースト実行');
-    
+
     try {
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-      
+
       // Ctrl/Cmd+V のキーボードイベントを作成
       const pasteKeyDown = new KeyboardEvent('keydown', {
         key: 'v',
@@ -2276,7 +2276,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         bubbles: true,
         cancelable: true
       });
-      
+
       const pasteKeyUp = new KeyboardEvent('keyup', {
         key: 'v',
         code: 'KeyV',
@@ -2287,18 +2287,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         bubbles: true,
         cancelable: true
       });
-      
+
       // activeElement にイベントを送信
       if (document.activeElement) {
         document.activeElement.dispatchEvent(pasteKeyDown);
         document.activeElement.dispatchEvent(pasteKeyUp);
         console.log('[Chrome to X] activeElement にペーストイベントを送信:', document.activeElement.tagName);
       }
-      
+
       // document にもイベントを送信
       document.dispatchEvent(pasteKeyDown);
       document.dispatchEvent(pasteKeyUp);
-      
+
       sendResponse({ success: true });
     } catch (error) {
       console.error('[Chrome to X] ペースト実行エラー:', error);
@@ -2306,11 +2306,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     return true;
   }
-  
+
   if (request.action === 'paste') {
     console.log('[Chrome to X] 貼り付け処理開始');
     const isInIframe = window !== window.top;
-    
+
     // iframe 内で実行されている場合は、そのまま実行
     if (isInIframe) {
       pasteContent(request.text, request.images).then(() => {
@@ -2322,13 +2322,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
       return true;
     }
-    
+
     // メインフレームで実行されている場合
     pasteContent(request.text, request.images).then(async (success) => {
       // 要素が見つからなかった場合、クリップボード経由で貼り付けを試行
       if (!success) {
         console.log('[Chrome to X] メインフレームで要素が見つからないため、クリップボード経由で貼り付けを試行');
-        
+
         // クリップボードに書き込む
         try {
           await chrome.runtime.sendMessage({
@@ -2336,23 +2336,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             text: request.text
           });
           console.log('[Chrome to X] クリップボードに書き込み成功');
-          
+
           // 少し待つ
           await new Promise(resolve => setTimeout(resolve, 100));
-          
+
           // iframe を探してフォーカスを当てる
           const iframes = document.querySelectorAll('iframe');
           for (const iframe of iframes) {
             try {
               // iframe にフォーカスを当てる
               iframe.focus();
-              
+
               // iframe 内の document にアクセスできる場合、キーボードイベントを送信
               try {
                 const frameDoc = iframe.contentDocument || iframe.contentWindow?.document;
                 if (frameDoc) {
                   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-                  
+
                   // Ctrl/Cmd+V のキーボードイベントを送信
                   const pasteKeyDown = new KeyboardEvent('keydown', {
                     key: 'v',
@@ -2364,7 +2364,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     bubbles: true,
                     cancelable: true
                   });
-                  
+
                   const pasteKeyUp = new KeyboardEvent('keyup', {
                     key: 'v',
                     code: 'KeyV',
@@ -2375,23 +2375,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     bubbles: true,
                     cancelable: true
                   });
-                  
+
                   frameDoc.dispatchEvent(pasteKeyDown);
                   frameDoc.dispatchEvent(pasteKeyUp);
-                  
+
                   console.log('[Chrome to X] iframe 内にキーボードイベントを送信');
-                  
+
                   // 処理が完了するまで少し待つ
                   await new Promise(resolve => setTimeout(resolve, 300));
-                  
+
                   break;
                 }
               } catch (error) {
                 // iframe 内の document にアクセスできない場合は、メインフレームから送信
                 console.log('[Chrome to X] iframe 内の document にアクセスできないため、メインフレームからキーボードイベントを送信');
-                
+
                 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-                
+
                 const pasteKeyDown = new KeyboardEvent('keydown', {
                   key: 'v',
                   code: 'KeyV',
@@ -2402,7 +2402,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                   bubbles: true,
                   cancelable: true
                 });
-                
+
                 const pasteKeyUp = new KeyboardEvent('keyup', {
                   key: 'v',
                   code: 'KeyV',
@@ -2413,12 +2413,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                   bubbles: true,
                   cancelable: true
                 });
-                
+
                 iframe.dispatchEvent(pasteKeyDown);
                 iframe.dispatchEvent(pasteKeyUp);
-                
+
                 await new Promise(resolve => setTimeout(resolve, 300));
-                
+
                 break;
               }
             } catch (error) {
@@ -2438,7 +2438,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
-  
+
   if (request.action === 'startSelectionScreenshot') {
     console.log('[Chrome to X] 選択範囲スクリーンショット開始');
     startSelectionScreenshot().then((selection) => {
@@ -2449,21 +2449,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true; // 非同期レスポンス用
   }
-  
+
   if (request.action === 'cancelSelectionScreenshot') {
     console.log('[Chrome to X] 選択範囲スクリーンショットキャンセル');
     cancelSelectionScreenshot();
     sendResponse({ success: true });
     return true;
   }
-  
+
   return false;
 });
 
 // 初期化
 function initializeContentScript() {
   setupTextInputDetection();
-  
+
   // プラットフォームハンドラーの読み込みを確認
   if (typeof window.PlatformHandlers === 'undefined') {
     console.warn('[Chrome to X] プラットフォームハンドラーが読み込まれていません。再試行します...');
@@ -2476,7 +2476,7 @@ function initializeContentScript() {
       }
     }, 100);
   }
-  
+
   // document.bodyが存在するまで待機してからドラッグ&ドロップ機能を設定
   if (document.body) {
     setupImageDragAndDrop();
@@ -2488,7 +2488,7 @@ function initializeContentScript() {
         setupImageDragAndDrop();
       }
     }, 100);
-    
+
     // タイムアウト（10秒後）
     setTimeout(() => {
       clearInterval(checkBody);
@@ -2511,7 +2511,7 @@ function setupImageDragAndDrop() {
     console.log('[Chrome to X] document.bodyが存在しないため、ドラッグ&ドロップ機能の設定をスキップ');
     return;
   }
-  
+
   // ページ内の画像にドラッグ可能な属性を追加
   function makeImagesDraggable() {
     try {
@@ -2521,16 +2521,16 @@ function setupImageDragAndDrop() {
         if (img.hasAttribute('data-chrome-to-x-draggable')) {
           return;
         }
-        
+
         img.setAttribute('data-chrome-to-x-draggable', 'true');
         img.draggable = true;
-        
+
         // ドラッグ開始時に画像データを保存
         img.addEventListener('dragstart', (e) => {
           try {
             const imageUrl = img.src;
             const imageAlt = img.alt || '画像';
-            
+
             // データURL（base64）の場合はそのまま使用
             if (imageUrl.startsWith('data:')) {
               e.dataTransfer.setData('text/plain', JSON.stringify({
@@ -2544,7 +2544,7 @@ function setupImageDragAndDrop() {
               e.dataTransfer.effectAllowed = 'copy';
               return;
             }
-            
+
             // 通常のURLの場合は、URLを保存（sidepanel側でbackground script経由で取得）
             // クロスオリジン対応のため、常にURLを保存する方式に変更
             e.dataTransfer.setData('text/plain', JSON.stringify({
@@ -2557,12 +2557,12 @@ function setupImageDragAndDrop() {
             console.error('[Chrome to X] ドラッグ開始時のエラー:', error);
           }
         });
-        
+
         // ドラッグ中の視覚的フィードバック
         img.addEventListener('drag', (e) => {
           img.style.opacity = '0.5';
         });
-        
+
         img.addEventListener('dragend', (e) => {
           img.style.opacity = '1';
         });
@@ -2571,26 +2571,26 @@ function setupImageDragAndDrop() {
       console.error('[Chrome to X] 画像ドラッグ設定エラー:', error);
     }
   }
-  
+
   // 初期実行
   makeImagesDraggable();
-  
+
   // 動的に追加される画像にも対応（MutationObserver）
   try {
     const observer = new MutationObserver(() => {
       makeImagesDraggable();
     });
-    
+
     observer.observe(document.body, {
       childList: true,
       subtree: true
     });
-    
+
     console.log('[Chrome to X] 画像ドラッグ&ドロップ機能を有効化');
   } catch (error) {
     console.error('[Chrome to X] MutationObserver設定エラー:', error);
   }
-  
+
   // サイドパネルからの画像ドロップを受け取る（Notion用）
   // 手動ドラッグ&ドロップ時に、ドロップ位置を正確に処理する
   try {
@@ -2598,52 +2598,52 @@ function setupImageDragAndDrop() {
       try {
         const data = e.dataTransfer.getData('text/plain');
         if (!data) return;
-        
+
         const parsedData = JSON.parse(data);
         if (parsedData.type === 'chrome-to-x-image' && parsedData.imageData) {
           console.log('[Chrome to X] サイドパネルからの画像ドロップを検出');
-          
+
           // Notionページの場合
           const platform = detectPlatform();
           if (platform === 'notion') {
             // ドロップ位置の座標を取得（実際のマウス位置を使用）
             const dropX = e.clientX;
             const dropY = e.clientY;
-            
+
             console.log('[Chrome to X] Notion: ドロップ位置:', { x: dropX, y: dropY });
-            
+
             // ドロップ位置の要素を取得
             const dropTarget = document.elementFromPoint(dropX, dropY);
             if (!dropTarget) {
               console.warn('[Chrome to X] Notion: ドロップ位置の要素が見つかりません');
               return;
             }
-            
+
             // Notionのleaf要素を探す（ドロップ位置から）
             const leafElement = dropTarget.closest('[data-content-editable-leaf="true"]') ||
-                               dropTarget.querySelector('[data-content-editable-leaf="true"]') ||
-                               dropTarget;
-            
+              dropTarget.querySelector('[data-content-editable-leaf="true"]') ||
+              dropTarget;
+
             console.log('[Chrome to X] Notion: ドロップ先要素:', {
               dropTarget: dropTarget.tagName,
               leafElement: leafElement ? leafElement.tagName : null
             });
-            
+
             // 画像データからFileオブジェクトを作成
             const imageData = parsedData.imageData;
             const base64Data = imageData.base64;
             const response = await fetch(base64Data);
             const blob = await response.blob();
             const file = new File([blob], imageData.name || 'image.png', { type: blob.type });
-            
+
             // DataTransferを作成
             const dataTransfer = new DataTransfer();
             dataTransfer.items.add(file);
-            
+
             // ドロップ位置の座標を使用してドラッグ&ドロップイベントを発火
             leafElement.focus({ preventScroll: true });
             await new Promise(resolve => setTimeout(resolve, 50));
-            
+
             // ドロップ位置の座標を使用
             const dragenter = new DragEvent('dragenter', {
               bubbles: true,
@@ -2652,7 +2652,7 @@ function setupImageDragAndDrop() {
               clientX: dropX,
               clientY: dropY
             });
-            
+
             const dragover = new DragEvent('dragover', {
               bubbles: true,
               cancelable: true,
@@ -2661,7 +2661,7 @@ function setupImageDragAndDrop() {
               clientY: dropY
             });
             dragover.preventDefault();
-            
+
             const drop = new DragEvent('drop', {
               bubbles: true,
               cancelable: true,
@@ -2670,19 +2670,19 @@ function setupImageDragAndDrop() {
               clientY: dropY
             });
             drop.preventDefault();
-            
+
             leafElement.dispatchEvent(dragenter);
             await new Promise(resolve => setTimeout(resolve, 10));
             leafElement.dispatchEvent(dragover);
             await new Promise(resolve => setTimeout(resolve, 10));
             const dropResult = leafElement.dispatchEvent(drop);
-            
+
             if (dropResult) {
               console.log('[Chrome to X] Notion: ドラッグ&ドロップで画像を貼り付けました（位置:', dropX, dropY, '）');
             } else {
               console.warn('[Chrome to X] Notion: ドラッグ&ドロップに失敗しました');
             }
-            
+
             // 元のイベントをキャンセル（Notionのデフォルト処理を防ぐ）
             e.preventDefault();
             e.stopPropagation();
@@ -2693,7 +2693,7 @@ function setupImageDragAndDrop() {
         console.log('[Chrome to X] ドロップイベント処理:', error);
       }
     }, true); // キャプチャフェーズでリスナーを追加
-    
+
     document.addEventListener('dragover', (e) => {
       // dragoverイベントではgetData()が使えないため、typesを確認
       if (e.dataTransfer.types.includes('text/plain')) {
@@ -2701,7 +2701,7 @@ function setupImageDragAndDrop() {
         e.dataTransfer.dropEffect = 'copy';
       }
     }, true);
-    
+
     console.log('[Chrome to X] サイドパネルからの画像ドロップ受信機能を有効化');
   } catch (error) {
     console.error('[Chrome to X] ドロップイベント設定エラー:', error);

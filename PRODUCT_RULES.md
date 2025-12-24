@@ -27,6 +27,10 @@ All developers and AI agents must adhere to these guidelines.
 4.  **Frameworks**:
     *   Extension: Vanilla JS (for lightweight performance).
     *   Landing Page: React + Vite.
+5.  **EMR Platform Specifics (電子カルテ個別対応)**:
+    *   **Isolation Rule**: If an EMR has unique issues (e.g., newline pasting bugs), create a **dedicated platform handler** (e.g., `clinics.js`) identified by URL.
+    *   **Do Not Touch Generic**: NEVER modify `generic.js` to fix a specific site's issue. Keep the generic handler pure.
+    *   **HTML Insertion**: For EMRs that strip newlines, prefer `insertHTML` with `<br>` tags over "simulated typing" to maintain UX speed.
 
 ## 📂 Documentation Index
 

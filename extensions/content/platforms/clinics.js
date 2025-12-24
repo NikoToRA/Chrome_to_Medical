@@ -14,7 +14,7 @@
   }
 
   function log(...args) {
-    try { console.log('[Chrome to Medical][clinics]', ...args); } catch (_) {}
+    try { console.log('[Chrome to Medical][clinics]', ...args); } catch (_) { }
   }
 
   function getGeneric() {
@@ -48,45 +48,68 @@
     if (tag === 'TEXTAREA') return true;
     if (tag === 'INPUT') {
       const t = (el.type || '').toLowerCase();
-      return !t || ['text','search','email','url','tel','password','number'].includes(t);
+      return !t || ['text', 'search', 'email', 'url', 'tel', 'password', 'number'].includes(t);
     }
     return !!(el.isContentEditable || el.getAttribute('contenteditable') === 'true' || el.getAttribute('role') === 'textbox');
   }
 
   function sanitizeForClinics(text) {
     if (!text) return '';
-    // 改行をスペースに置換し、連続スペースを1つに整形
-    return String(text)
-      .replace(/[\r\n]+/g, ' ')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
+    return String(text);
   }
 
   async function insertText(element, text, options = {}) {
     try {
       log('insertText called');
       const target = resolveEditorElement(element);
-      const generic = getGeneric();
-      if (!generic || !generic.insertText) {
-        log('generic handler not available');
-        return false;
+
+      // HTMLエスケープ処理
+      const escapedText = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+      // 改行を<br>タグに変換
+      const htmlText = escapedText.replace(/\r?\n/g, '<br>');
+
+      // フォーカスを確実にする
+      if (target) {
+        target.focus();
+        await new Promise(resolve => setTimeout(resolve, 10));
       }
 
-      // ここで将来的に CLINICS 固有の前処理（例: タブ切替、特定フレームへのfocus）を追加
-
-      // シンプル対処: 改行を含むと貼付け失敗するため、改行をスペースに変換
-      const hasNewline = /[\r\n]/.test(text || '');
-      const toInsert = hasNewline ? sanitizeForClinics(text) : text;
-
-      // まずはそのまま（改行なし or 既に整形済み）を試し、失敗時は再整形して再試行
-      let success = await generic.insertText(target || element, toInsert, options);
-      if (!success && !hasNewline) {
-        const fallback = sanitizeForClinics(text);
-        if (fallback && fallback !== text) {
-          success = await generic.insertText(target || element, fallback, options);
+      // insertHTMLコマンドを実行
+      // 多くのWebカルテやリッチテキストエディタはこれで改行付きテキストを受け入れる
+      if (document.queryCommandSupported('insertHTML')) {
+        const success = document.execCommand('insertHTML', false, htmlText);
+        if (success) {
+          log('insertHTML success');
+          // イベント発火で変更を通知
+          target.dispatchEvent(new Event('input', { bubbles: true }));
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
         }
       }
-      return success;
+
+      // insertHTMLが失敗、またはサポートされていない場合はgenericハンドラーにフォールバック
+      // ただし、genericハンドラーは改行で問題が起きる可能性があるため、
+      // 最終手段として全角スペース置換を試みる
+      const generic = getGeneric();
+      if (generic && generic.insertText) {
+        log('fallback to generic handler');
+        // まずはそのまま試す
+        let success = await generic.insertText(target || element, text, options);
+        if (!success) {
+          // 失敗したら全角スペース置換で再試行
+          const fallbackText = text.replace(/[\r\n]+/g, '\u3000');
+          success = await generic.insertText(target || element, fallbackText, options);
+        }
+        return success;
+      }
+
+      return false;
     } catch (e) {
       log('insertText error', e);
       return false;

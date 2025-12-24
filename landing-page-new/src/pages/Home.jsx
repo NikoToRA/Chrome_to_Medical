@@ -1,3 +1,5 @@
+import TopBand from '../components/TopBand'
+import Header from '../components/Header'
 import HeroSection from '../components/HeroSection'
 import PainPointsSection from '../components/PainPointsSection'
 import SolutionSection from '../components/SolutionSection'
@@ -16,6 +18,8 @@ import Footer from '../components/Footer'
 function Home() {
     return (
         <div className="home-page">
+            <TopBand />
+            <Header />
             <HeroSection />
             <PainPointsSection />
             <SolutionSection />
