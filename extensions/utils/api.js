@@ -118,14 +118,16 @@ class ApiClient {
             }
         }
 
-        // Update payload with actual userId
-        const finalPayload = {
-            ...payload,
-            userId: userId || 'anonymous'
+        // Map payload to save-log format
+        const saveData = {
+            userId: userId || 'anonymous',
+            type: payload.action || 'insertion_log',
+            content: payload.content || '',
+            metadata: payload.metadata || payload || {}
         };
 
-        // Fire and forget for logs - don't block UI
-        this.post('/log-insertion', finalPayload).catch(console.error);
+        // Fire and forget for logs - log-insertion (404) -> save-log
+        this.post('/save-log', saveData).catch(console.error);
     }
 
     async cancelSubscription(email) {

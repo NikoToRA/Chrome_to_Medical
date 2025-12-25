@@ -214,6 +214,11 @@ function setupStorageWatchers() {
 }
 
 function handleAddAgent() {
+  if (state.agents.length >= 8) {
+    showToast('エージェントは最大8個までです', 'warning');
+    alert('エージェントの作成上限（8個）に達しました。\n既存のエージェントを削除してから作成してください。');
+    return;
+  }
   const newAgent = createBlankAgent();
   state.agents = [...state.agents, newAgent];
   renderAgents();
