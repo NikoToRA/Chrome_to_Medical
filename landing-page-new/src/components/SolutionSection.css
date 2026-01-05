@@ -4,6 +4,32 @@
     overflow: hidden;
 }
 
+.before-after-container {
+    max-width: 1000px;
+    margin: 0 auto var(--space-16);
+    padding: 0 var(--space-4);
+}
+
+.before-after-image-wrapper {
+    position: relative;
+    border-radius: var(--radius-2xl);
+    overflow: hidden;
+    box-shadow: var(--shadow-2xl);
+    background: var(--gray-100);
+    line-height: 0;
+}
+
+.before-after-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    transition: transform 0.5s ease;
+}
+
+.before-after-image-wrapper:hover .before-after-image {
+    transform: scale(1.02);
+}
+
 .solution-steps {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

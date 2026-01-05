@@ -54,6 +54,12 @@ function TemplateFeatureSection() {
                                 </div>
                             </div>
                         </div>
+
+                        <div className="manual-link-container">
+                            <a href="/manuals/fixed_phrases.html" target="_blank" rel="noopener noreferrer" className="manual-link">
+                                定型文機能の操作マニュアルを見る <span aria-hidden="true">→</span>
+                            </a>
+                        </div>
                     </motion.div>
 
                     <motion.div

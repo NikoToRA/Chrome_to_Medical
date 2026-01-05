@@ -119,3 +119,4 @@ EMAIL_SENDER_ADDRESS                     DoNotReply@56e74c6e-f57a-4dfe-9bfc-b6a2
 
 スクリプトが対話的に設定を進めます。
 
+

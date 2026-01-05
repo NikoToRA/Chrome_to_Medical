@@ -89,3 +89,4 @@ az functionapp config appsettings set \
 4. Function Appを再起動
 5. 実際のメール送信をテスト
 
+

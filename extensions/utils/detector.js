@@ -63,6 +63,11 @@ class PlatformDetector {
       return 'google-docs';
     }
 
+    // Medical Care Station (MCS)
+    if (hostname.includes('medical-care.net')) {
+      return 'mcs';
+    }
+
     return null;
   }
 
@@ -136,7 +141,8 @@ class PlatformDetector {
       'note': 'Note',
       'hatena': 'はてなブログ',
       'notion': 'Notion',
-      'google-docs': 'Google Docs'
+      'google-docs': 'Google Docs',
+      'mcs': 'Medical Care Station'
     };
     return names[platform] || platform || '不明';
   }

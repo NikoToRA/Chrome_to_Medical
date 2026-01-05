@@ -13,6 +13,7 @@ class EmrAdapterManager {
         if (window.ClinicsAdapter) this.adapters.push(new ClinicsAdapter());
         if (window.MobacalAdapter) this.adapters.push(new MobacalAdapter());
         if (window.GmailAdapter) this.adapters.push(new GmailAdapter());
+        if (window.McsAdapter) this.adapters.push(new McsAdapter());
     }
 
     getAdapterForUrl(url) {

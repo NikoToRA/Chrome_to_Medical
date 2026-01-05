@@ -138,3 +138,4 @@ func azure functionapp publish func-karte-ai-1763705952 --build remote
 
 生成日時: 2025-11-30 11:08 JST
 
+

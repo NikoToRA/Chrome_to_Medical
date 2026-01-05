@@ -244,3 +244,4 @@ https://func-karte-ai-1763705952.azurewebsites.net/api/auth-verify-token?token=e
 
 次のステップは、Stripe Checkoutの完了処理と自動ログインの実装です。
 
+

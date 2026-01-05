@@ -13,7 +13,8 @@ class StorageManager {
     AI_SELECTED_AGENT_ID: 'aiSelectedAgentId',
     AI_CHAT_SESSIONS: 'aiChatSessions',
     AI_SELECTED_MODEL: 'aiSelectedModel',
-    TEXT_RETENTION: 'textRetentionAfterPaste'
+    TEXT_RETENTION: 'textRetentionAfterPaste',
+    LAST_ACTIVE_TAB_BY_USER: 'lastActiveTabByUser'
   };
 
   static STORAGE_SOFT_LIMIT_BYTES = 4 * 1024 * 1024; // 4MB
@@ -257,9 +258,23 @@ class StorageManager {
    * @returns {Promise<Object.<string, string[]>>}
    */
   static async getTemplates() {
-    const defaults = { diagnoses: [], phrases: [], medications: [] };
+    const defaults = {
+      diagnoses: ['急性上気道炎', 'インフルエンザ', '胃潰瘍', '高血圧症', '脂質異常症'],
+      phrases: ['2週間後再診', '栄養指導を行なった', '休養を指示した', '副作用について説明した', '経過良好'],
+      medications: []
+    };
     const value = await this.get(this.STORAGE_KEYS.TEMPLATES, defaults);
-    return value || defaults;
+    // 既存データが空配列の場合でもデフォルトを使いたい場合はマージが必要だが、
+    // ここでは初期値として設定するだけにする（既存ユーザーのデータを勝手に変えないため）
+    // ただし、初回起動時などはこれが返るはず
+    if (!value) return defaults;
+
+    // 値がある場合でも、各キーが存在するか確認
+    if (!value.diagnoses) value.diagnoses = [];
+    if (!value.phrases) value.phrases = [];
+    if (!value.medications) value.medications = [];
+
+    return value;
   }
 
   /**
@@ -368,6 +383,98 @@ class StorageManager {
    */
   static async getTextRetentionSetting() {
     return this.get(this.STORAGE_KEYS.TEXT_RETENTION, false);
+  }
+
+  /**
+   * 最後に開いていたタブ（ユーザーごと）を取得
+   * @param {string} userId - email等（未ログインは 'anonymous' など）
+   * @param {string} defaultTabId
+   * @returns {Promise<string>}
+   */
+  static async getLastActiveTabForUser(userId = 'anonymous', defaultTabId = 'aiTab') {
+    const map = await this.get(this.STORAGE_KEYS.LAST_ACTIVE_TAB_BY_USER, {});
+    const safeMap = map && typeof map === 'object' ? map : {};
+    const tabId = safeMap[userId];
+    return typeof tabId === 'string' && tabId ? tabId : defaultTabId;
+  }
+
+  /**
+   * 最後に開いていたタブ（ユーザーごと）を保存
+   * @param {string} userId - email等（未ログインは 'anonymous' など）
+   * @param {string} tabId
+   * @returns {Promise<void>}
+   */
+  static async saveLastActiveTabForUser(userId = 'anonymous', tabId = '') {
+    if (!tabId) return;
+    const map = await this.get(this.STORAGE_KEYS.LAST_ACTIVE_TAB_BY_USER, {});
+    const safeMap = map && typeof map === 'object' ? map : {};
+    safeMap[userId] = tabId;
+    return this.set(this.STORAGE_KEYS.LAST_ACTIVE_TAB_BY_USER, safeMap);
+  }
+
+  /**
+   * 同期用に設定をエクスポート
+   * @returns {Promise<Object>}
+   */
+  static async exportSettingsForSync() {
+    const aiAgents = await this.getAgents();
+    const templates = await this.getTemplates();
+    const templateCategories = await this.getTemplateCategories();
+
+    // デフォルトのエージェントを除外して、ユーザー作成のものだけにするか？
+    // シンプルにするため、現在はすべて保存する（重複排除はインポート側でやる）
+    return {
+      aiAgents,
+      templates,
+      templateCategories,
+      syncedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * 同期された設定をインポート（マージ）
+   * @param {Object} remoteSettings
+   */
+  static async importSyncedSettings(remoteSettings) {
+    if (!remoteSettings) return;
+
+    // 1. エージェントのマージ (IDベース)
+    const localAgents = await this.getAgents();
+    const remoteAgents = remoteSettings.aiAgents || [];
+    const agentMap = new Map();
+
+    // ローカルを先にマップに入れる
+    localAgents.forEach(a => agentMap.set(a.id, a));
+    // リモートで上書き（リモートが正）
+    remoteAgents.forEach(a => agentMap.set(a.id, a));
+
+    await this.saveAgents(Array.from(agentMap.values()));
+
+    // 2. テンプレートカテゴリのマージ (IDベース)
+    const localCategories = await this.getTemplateCategories();
+    const remoteCategories = remoteSettings.templateCategories || [];
+    const catMap = new Map();
+
+    localCategories.forEach(c => catMap.set(c.id, c));
+    remoteCategories.forEach(c => catMap.set(c.id, c));
+
+    await this.saveTemplateCategories(Array.from(catMap.values()));
+
+    // 3. テンプレートの中身のマージ
+    const localTemplates = await this.getTemplates();
+    const remoteTemplates = remoteSettings.templates || {};
+    const mergedTemplates = { ...localTemplates };
+
+    // カテゴリごとにリストをマージする（単純な上書きではなく、ユニークにする）
+    Object.keys(remoteTemplates).forEach(key => {
+      const localList = mergedTemplates[key] || [];
+      const remoteList = remoteTemplates[key] || [];
+      // Setを使って重複排除
+      const mergedList = [...new Set([...localList, ...remoteList])];
+      mergedTemplates[key] = mergedList;
+    });
+
+    await this.saveTemplates(mergedTemplates);
   }
 }
 

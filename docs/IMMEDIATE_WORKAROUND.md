@@ -121,3 +121,4 @@ func azure functionapp publish func-karte-ai-new
 **作成者**: AI Assistant  
 **最終更新**: 2025-11-30
 
+

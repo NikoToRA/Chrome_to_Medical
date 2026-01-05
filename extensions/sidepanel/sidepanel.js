@@ -28,6 +28,7 @@ const newCategoryInput = document.getElementById('newCategoryInput');
 const addCategoryBtn = document.getElementById('addCategoryBtn');
 const categoryList = document.getElementById('categoryList');
 const platformIndicator = document.getElementById('platformIndicator');
+const manualLink = document.getElementById('manualLink');
 // テキスト編集タブの定型文作成UI
 const quickTemplateCategorySelect = document.getElementById('quickTemplateCategorySelect');
 const quickTemplateInput = document.getElementById('quickTemplateInput');
@@ -52,6 +53,11 @@ let templates = { diagnoses: [], medications: [], phrases: [] };
 let templateCategories = [];
 let currentTemplateCategory = 'diagnoses';
 let currentPlatform = null;
+let tabPreferenceUserId = 'anonymous';
+const MANUAL_URLS = {
+  textTab: 'https://stkarteai1763705952.z11.web.core.windows.net/manuals/fixed_phrases.html',
+  aiTab: 'https://stkarteai1763705952.z11.web.core.windows.net/manuals/ai_chat.html'
+};
 const aiState = {
   agents: [],
   selectedAgentId: '',
@@ -66,6 +72,7 @@ let directTemplatePaste = false;
 // 初期化
 async function init() {
   await Promise.all([loadEditorState(), loadAiState()]);
+  await initTabPreferenceUserId();
   await detectPlatform();
   setupTabNavigation();
   setupEventListeners();
@@ -77,9 +84,67 @@ async function init() {
   setupJstTimeDisplay();
   setupAuthTokenListener();
   await checkAuthAndUpdateUI();
+
+  // 起動時に「前回開いていたタブ」を復元（未保存ならAIタブ）
+  await restoreLastActiveTab();
+
+  renderCategoryTabs();
+  renderTemplates();
   renderCategoryTabs();
   renderTemplates();
   renderImages();
+
+  // [Auto-Sync] Background Sync
+  syncUserSettings();
+}
+
+async function initTabPreferenceUserId() {
+  try {
+    const email = await new Promise((resolve) => {
+      try {
+        chrome.storage.local.get(['userEmail'], (res) => resolve(res?.userEmail || ''));
+      } catch (e) {
+        resolve('');
+      }
+    });
+    tabPreferenceUserId = email ? String(email) : 'anonymous';
+  } catch (e) {
+    tabPreferenceUserId = 'anonymous';
+  }
+}
+
+async function restoreLastActiveTab() {
+  try {
+    if (!StorageManager || typeof StorageManager.getLastActiveTabForUser !== 'function') {
+      // StorageManagerが利用できない場合はHTML側のactiveを尊重
+      const defaultTab =
+        Array.from(tabButtons).find((btn) => btn.classList.contains('active'))?.getAttribute('data-tab-target') ||
+        'aiTab';
+      activateTab(defaultTab, { persist: false });
+      return;
+    }
+    const tabId = await StorageManager.getLastActiveTabForUser(tabPreferenceUserId, 'aiTab');
+    activateTab(tabId, { persist: false });
+  } catch (e) {
+    activateTab('aiTab', { persist: false });
+  }
+}
+
+function updateHeaderManualLink(tabId) {
+  if (!manualLink) return;
+  const url = MANUAL_URLS[tabId];
+  if (!url) {
+    manualLink.style.display = 'none';
+    manualLink.removeAttribute('href');
+    return;
+  }
+  manualLink.href = url;
+  manualLink.style.display = 'inline-flex';
+}
+
+async function persistActiveTab(tabId) {
+  if (!StorageManager || typeof StorageManager.saveLastActiveTabForUser !== 'function') return;
+  await StorageManager.saveLastActiveTabForUser(tabPreferenceUserId, tabId);
 }
 
 // 認証状態をチェックしてUIを更新
@@ -547,7 +612,8 @@ async function saveData() {
 }
 
 // タブをアクティブにする関数（グローバルスコープ）
-function activateTab(targetId) {
+function activateTab(targetId, options = {}) {
+  const { persist = true } = options || {};
   if (!tabButtons.length || !tabPanels.length) {
     return;
   }
@@ -567,6 +633,12 @@ function activateTab(targetId) {
       panel.setAttribute('hidden', 'true');
     }
   });
+
+  updateHeaderManualLink(targetId);
+  if (persist) {
+    // fire-and-forget
+    persistActiveTab(targetId).catch(() => { });
+  }
 }
 
 // タブ切り替えを設定
@@ -579,18 +651,18 @@ function setupTabNavigation() {
     button.addEventListener('click', () => {
       const target = button.getAttribute('data-tab-target');
       if (!target) return;
-      activateTab(target);
+      activateTab(target, { persist: true });
     });
   });
 
   // 初期タブ設定
   const defaultTab = Array.from(tabButtons).find((btn) => btn.classList.contains('active'))?.getAttribute('data-tab-target') || tabButtons[0].getAttribute('data-tab-target');
-  activateTab(defaultTab);
+  activateTab(defaultTab, { persist: false });
 }
 
 // テキスト編集タブに切り替え
 function switchToTextTab() {
-  activateTab('textTab');
+  activateTab('textTab', { persist: true });
 }
 
 // イベントリスナーの設定
@@ -1298,6 +1370,9 @@ async function addCategory() {
   renderTemplateManageList();
   // クイック作成のセレクトも更新
   renderQuickTemplateCategorySelect();
+
+  // [Auto-Sync] Push changes
+  pushUserSettings();
 }
 
 // カテゴリ削除
@@ -1325,6 +1400,9 @@ async function deleteCategory(id) {
   renderTemplateManageList();
   // クイック作成のセレクトも更新
   renderQuickTemplateCategorySelect();
+
+  // [Auto-Sync] Push changes
+  pushUserSettings();
 }
 
 // 定型文 追加（管理画面用）
@@ -1343,6 +1421,9 @@ async function addTemplate() {
   newTemplateInput.value = '';
   renderTemplateManageList();
   if (cat === currentTemplateCategory) renderTemplates();
+
+  // [Auto-Sync] Push changes
+  pushUserSettings();
 }
 
 // 定型文 追加（テキスト編集タブのクイック作成用）
@@ -1367,6 +1448,9 @@ async function addQuickTemplate() {
   }
 
   showNotification('定型文を追加しました');
+
+  // [Auto-Sync] Push changes
+  pushUserSettings();
 }
 
 // 定型文の挿入（ハッシュタグは付けない）
@@ -1568,6 +1652,9 @@ function renderTemplateManageList() {
       await StorageManager.saveTemplates(templates);
       renderTemplateManageList();
       if (catNow === currentTemplateCategory) renderTemplates();
+
+      // [Auto-Sync] Push changes
+      pushUserSettings();
     });
   });
 }
@@ -2595,4 +2682,61 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', init);
 } else {
   init();
+}
+
+// [Auto-Sync] 設定を同期（基本はPullのみ）
+async function syncUserSettings() {
+  try {
+    // Auth Check
+    if (!window.AuthManager) return;
+    const user = window.AuthManager.getUser();
+    if (!user || !user.email) return;
+
+    const userId = user.email;
+    console.log('[SidePanel] Pulling settings for', userId);
+
+    // Pull Remote Settings
+    const remoteResponse = await window.ApiClient.getSettings(userId);
+
+    // Merge with Local
+    if (remoteResponse && remoteResponse.settings) {
+      console.log('[SidePanel] Import remote settings', remoteResponse.settings);
+      // StorageManagerがlocal storageを更新すると、onChangedイベントが発火してUIが更新される
+      if (window.StorageManager) {
+        await window.StorageManager.importSyncedSettings(remoteResponse.settings);
+      }
+    }
+  } catch (error) {
+    console.error('[SidePanel] Sync error:', error);
+  }
+}
+
+// [Auto-Sync] 設定をクラウドに保存（Push）
+async function pushUserSettings() {
+  try {
+    // Auth Check
+    if (!window.AuthManager) return;
+    const user = window.AuthManager.getUser();
+    if (!user || !user.email) return;
+
+    // 現在の設定をエクスポート
+    if (window.StorageManager) {
+      const localSettings = await window.StorageManager.exportSettingsForSync();
+      const userId = user.email;
+
+      console.log('[SidePanel] Pushing settings for', userId);
+      // 背景で保存（awaitしない、またはエラーログのみ）
+      window.ApiClient.saveSettings(userId, localSettings)
+        .then(res => {
+          if (res.success) {
+            console.log('[SidePanel] Settings pushed successfully');
+          } else {
+            console.warn('[SidePanel] Failed to push settings', res);
+          }
+        })
+        .catch(err => console.error('[SidePanel] Error pushing settings', err));
+    }
+  } catch (error) {
+    console.error('[SidePanel] Push setup error:', error);
+  }
 }

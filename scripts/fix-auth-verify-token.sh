@@ -120,3 +120,4 @@ echo "問題が続く場合は、Application Insightsでログを確認してく
 echo "Azure Portal → Function App → 監視 → ログ"
 echo "=========================================="
 
+

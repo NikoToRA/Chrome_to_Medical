@@ -119,7 +119,8 @@ class AuthManager {
         try {
             const response = await window.ApiClient.post('/create-checkout-session', {
                 email: this.user.email,
-                returnUrl: window.location.href
+                // Stripe決済完了後のリダイレクト先をLPの完了ページに指定
+                returnUrl: 'https://stkarteai1763705952.z11.web.core.windows.net/payment-success'
             });
 
             if (response.url) {

@@ -209,3 +209,4 @@ az functionapp cors add \
 
 次のステップとして、実際にメールが届いているか確認し、Magic Link → Stripe Checkoutまでの完全なフローをテストする必要があります。
 
+

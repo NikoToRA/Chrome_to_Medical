@@ -154,3 +154,4 @@ az functionapp restart --name func-karte-ai-1763705952 --resource-group rg-karte
 
 生成日時: 2025-11-30 10:56 JST
 
+

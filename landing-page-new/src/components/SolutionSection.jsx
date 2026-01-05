@@ -23,6 +23,22 @@ function SolutionSection() {
                     </p>
                 </motion.div>
 
+                <motion.div
+                    className="before-after-container"
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true }}
+                    variants={slideUp}
+                >
+                    <div className="before-after-image-wrapper">
+                        <img
+                            src="/before-after.png"
+                            alt="医師のビフォアフター：タイピングの苦痛からAIエージェントによる一瞬の解決へ"
+                            className="before-after-image"
+                        />
+                    </div>
+                </motion.div>
+
                 <div className="solution-steps">
                     <motion.div
                         className="step-card"
@@ -78,7 +94,7 @@ function SolutionSection() {
                 >
                     <a href="/register" className="result-box">
                         <span className="result-label">RESULT</span>
-                        <h3 className="result-text">1日2時間を取り戻す</h3>
+                        <h3 className="result-text">たった月4980円で、<br className="mobile-break" />1日2時間を取り戻す</h3>
                         <p className="result-desc">空いた時間は、患者様との対話や、あなたのプライベートへ。</p>
                     </a>
                 </motion.div>

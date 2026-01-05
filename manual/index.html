@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karte AI+ 定型文機能 利用マニュアル</title>
+    <style>
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        .page-break {
+            page-break-before: always;
+        }
+
+        h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            color: #0052cc;
+        }
+
+        h2 {
+            font-size: 24px;
+            margin-top: 30px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            color: #0052cc;
+        }
+
+        h3 {
+            font-size: 18px;
+            margin-top: 20px;
+            color: #444;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        .logo {
+            max-width: 200px;
+            margin-bottom: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+            padding-top: 60px;
+        }
+
+        /* Image Container for Highlights */
+        .image-container {
+            position: relative;
+            display: inline-block;
+            margin: 20px 0;
+            width: 100%;
+        }
+
+        .screenshot {
+            width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Highlight Box Style */
+        .highlight-box {
+            position: absolute;
+            border: 4px solid #ff0000;
+            background-color: rgba(255, 0, 0, 0.1);
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+            pointer-events: none;
+        }
+
+        .step {
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 1px dashed #eee;
+        }
+
+        .step-number {
+            display: inline-block;
+            background: #0052cc;
+            color: white;
+            width: 28px;
+            height: 28px;
+            text-align: center;
+            border-radius: 50%;
+            line-height: 28px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .footer {
+            margin-top: 60px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Cover Page -->
+    <div class="header">
+        <img src="../images/logo_blue_black.png" alt="Wonder Drill Logo" class="logo">
+        <h1>Karte AI+ 定型文機能<br>利用マニュアル</h1>
+        <p>ワンクリックでカルテ入力効率化</p>
+        <p>Ver 1.0</p>
+        <br><br>
+        <p><strong>Wonder Drill株式会社</strong></p>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Introduction -->
+    <h2>1. 定型文機能とは</h2>
+    <p>日常的によく使う医療用語、処方内容、挨拶文などを「定型文（テンプレート）」として登録・呼び出しができる機能です。
+        <br>電子カルテの入力欄にワンクリックで挿入できるため、入力の手間を大幅に削減できます。
+    </p>
+
+    <div class="page-break"></div>
+
+    <!-- Step 1 -->
+    <div class="step">
+        <h3><span class="step-number">1</span>サイドパネルを開く</h3>
+        <p>ブラウザ右上の拡張機能アイコンをクリックし、Karte AI+のメニューからサイドパネルを開きます。<br>
+            サイドパネルが表示されたら、上部のメニューから「定型文」タブが選択されていることを確認してください。</p>
+
+        <div class="image-container">
+            <!-- frame_001.png: Shows panel open on right -->
+            <img src="../images/manual_frames/frame_001.png" alt="サイドパネルを開く" class="screenshot">
+            <!-- Highlight: Top Right Extension Icon Area -->
+            <div class="highlight-box" style="top: 1%; right: 1%; width: 5%; height: 5%;"></div>
+        </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step">
+        <h3><span class="step-number">2</span>定型文カテゴリの選択</h3>
+        <p>「病名」「薬剤」などのボタンをクリックすると、それぞれのカテゴリに登録された定型文が表示されます。<br>
+            また、よく使う日付入力（2週間後など）もここからワンクリックで行えます。</p>
+
+        <div class="image-container">
+            <!-- frame_010.png: Shows category buttons -->
+            <img src="../images/manual_frames/frame_010.png" alt="カテゴリ選択" class="screenshot">
+            <!-- Highlight: Category Buttons Area (Right side panel, middle) -->
+            <div class="highlight-box" style="top: 28%; right: 2%; width: 22%; height: 15%;"></div>
+        </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step">
+        <h3><span class="step-number">3</span>カルテへの挿入</h3>
+        <p>使いたい定型文やボタンをクリックすると、左側の電子カルテ画面にテキストが自動的に挿入されます。<br>
+            （下図は「日付のみ」ボタン等をクリックして入力された例です）</p>
+
+        <div class="image-container">
+            <!-- frame_034.png: Shows insertion occurring/done -->
+            <img src="../images/manual_frames/frame_034.png" alt="定型文の挿入" class="screenshot">
+            <!-- Highlight: Insert Button (Date buttons area) -->
+            <div class="highlight-box" style="top: 62%; right: 2%; width: 22%; height: 15%;"></div>
+        </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step">
+        <h3><span class="step-number">4</span>定型文の追加・管理</h3>
+        <p>新しい定型文を登録したい場合は、右上にある「管理」ボタンをクリックします。<br>
+            管理画面でカテゴリの作成や、新しい文章の登録・削除が行えます。</p>
+
+        <div class="image-container">
+            <!-- frame_020.png: Shows management modal -->
+            <img src="../images/manual_frames/frame_020.png" alt="定型文管理画面" class="screenshot">
+            <!-- Highlight: Management Modal Area -->
+            <div class="highlight-box" style="top: 18%; right: 2%; width: 24%; height: 40%;"></div>
+        </div>
+    </div>
+
+    <div class="page-break"></div>
+
+    <!-- Troubleshooting -->
+    <h2>よくある質問</h2>
+
+    <br><br>
+    <div class="footer">
+        &copy; 2025 Wonder Drill株式会社
+    </div>
+
+</body>
+
+</html>

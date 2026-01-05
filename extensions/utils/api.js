@@ -137,6 +137,14 @@ class ApiClient {
     async checkSubscription(email) {
         return this.post('/check-subscription', { email });
     }
+
+    async saveSettings(userId, settings) {
+        return this.post('/save-settings', { userId, settings });
+    }
+
+    async getSettings(userId) {
+        return this.post('/get-settings', { userId });
+    }
 }
 
 // Create global instance

@@ -107,3 +107,4 @@ echo ""
 echo "詳細は docs/APPLICATION_INSIGHTS_AUTH_VERIFY_TOKEN.md を参照してください"
 echo "=========================================="
 
+

@@ -1,0 +1,12 @@
+拡張機能 変更履歴（extensions/）
+
+v0.2.1 (2026-01-04)
+- タブの初期表示/復元: デフォルトをAIチャットに変更し、次回起動時はユーザーごとに前回開いていたタブを復元
+  - 保存先: chrome.storage.local（lastActiveTabByUser）
+- マニュアル導線: テキスト編集/AIチャットの各タブ表示時に、ヘッダーへ該当マニュアルリンクを表示
+  - テキスト編集: manuals/fixed_phrases.html
+  - AIチャット: manuals/ai_chat.html
+- プラットフォーム認識: Medical Care Station (MCS) https://www.medical-care.net/ を認識できるように対応（アダプタ追加）
+- 配布物: karte-ai-plus-v0.2.1.zip を生成
+
+

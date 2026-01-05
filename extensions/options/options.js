@@ -16,6 +16,9 @@ async function initOptions() {
   await loadAgents();
   setupStorageWatchers();
   checkSubscriptionStatus(); // 非同期で実行
+
+  // [Auto-Sync] Pull on load (Silent)
+  handleSyncSettings({ pullOnly: true, silent: true });
 }
 
 async function checkSubscriptionStatus() {
@@ -193,6 +196,11 @@ function bindEvents() {
       }
     });
   }
+
+  const syncSettingsBtn = document.getElementById('syncSettingsBtn');
+  if (syncSettingsBtn) {
+    syncSettingsBtn.addEventListener('click', handleSyncSettings);
+  }
 }
 
 function setupStorageWatchers() {
@@ -369,6 +377,10 @@ async function persistAgents(nextAgents, successMessage) {
 
     renderAgents();
     showToast(successMessage, 'info');
+
+    // [Auto-Sync] Push on save (Silent)
+    handleSyncSettings({ pushOnly: true, silent: true });
+
   } catch (error) {
     console.error('[Options] エージェントの保存に失敗しました', error);
     showToast('エージェントの保存に失敗しました', 'warning');
@@ -666,3 +678,76 @@ async function handleCancelSubscription() {
 }
 
 
+
+
+/**
+ * 設定を同期
+ * @param {Object} options
+ * @param {boolean} options.pushOnly - プッシュ（保存）のみ行う
+ * @param {boolean} options.pullOnly - プル（取得）のみ行う
+ * @param {boolean} options.silent - Toastを表示しない（エラー以外）
+ */
+async function handleSyncSettings(options = {}) {
+  const { pushOnly = false, pullOnly = false, silent = false } = options;
+
+  // イベントリスナーから呼ばれた場合は options が Event オブジェクトになるのでリセット
+  const isEvent = options instanceof Event;
+  const actualPushOnly = isEvent ? false : pushOnly;
+  const actualPullOnly = isEvent ? false : pullOnly;
+  const actualSilent = isEvent ? false : silent;
+
+  const btn = document.getElementById('syncSettingsBtn');
+  // 自動同期のときはボタン無効状態でも裏で動くことがあるが、基本はチェック
+  if (!isEvent && btn && btn.disabled && !actualSilent) return;
+
+  try {
+    if (btn && !actualSilent) setButtonLoading(btn, true, '同期中...');
+
+    // Auth Check
+    if (!window.AuthManager) return; // まだロードされていない場合
+
+    // init() は負荷が高いので、すでにUserがいればスキップしたいが、念の為
+    // 自動同期の場合は、アクセストークンがない場合などは静かに終了する
+    const user = window.AuthManager.getUser();
+    if (!user || !user.email) {
+      if (!actualSilent) showToast('同期するにはログインが必要です', 'warning');
+      return;
+    }
+    const userId = user.email;
+
+    // 1. Pull Remote Settings (Pullモード または 双方向)
+    if (actualPullOnly || (!actualPushOnly)) {
+      console.log('[Sync] Pulling settings for', userId);
+      const remoteResponse = await window.ApiClient.getSettings(userId);
+
+      // Merge with Local
+      if (remoteResponse && remoteResponse.settings) {
+        console.log('[Sync] Import remote settings', remoteResponse.settings);
+        await StorageManager.importSyncedSettings(remoteResponse.settings);
+        // Pullした場合はUIをリロード
+        await loadAgents();
+      }
+    }
+
+    // 2. Push to Remote (Pushモード または 双方向)
+    if (actualPushOnly || (!actualPullOnly)) {
+      // Export Local (Merged)
+      const localSettings = await StorageManager.exportSettingsForSync();
+
+      console.log('[Sync] Pushing settings', localSettings);
+      const saveResponse = await window.ApiClient.saveSettings(userId, localSettings);
+
+      if (saveResponse && saveResponse.success) {
+        if (!actualSilent) showToast('設定を同期しました', 'success');
+      } else {
+        throw new Error(saveResponse?.error || 'Unknown error');
+      }
+    }
+
+  } catch (error) {
+    console.error('[Sync] Error:', error);
+    if (!actualSilent) showToast('同期に失敗しました: ' + error.message, 'warning');
+  } finally {
+    if (btn && !actualSilent) setButtonLoading(btn, false, '🔄 設定を同期');
+  }
+}

@@ -16,6 +16,9 @@
         <div class="platform-indicator" id="platformIndicator"></div>
       </div>
       <div class="header-actions">
+        <a id="manualLink" class="header-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;">
+          📖 マニュアル
+        </a>
 
         <button id="openSettingsBtn" class="header-icon-btn" title="設定を開く" aria-label="設定を開く">
           ⚙️
@@ -25,11 +28,11 @@
 
     <main class="main-content">
       <nav class="tab-bar" role="tablist">
-        <button class="tab-button active" data-tab-target="textTab" role="tab" aria-selected="true">テキスト編集</button>
-        <button class="tab-button" data-tab-target="aiTab" role="tab" aria-selected="false">AIチャット</button>
+        <button class="tab-button" data-tab-target="textTab" role="tab" aria-selected="false">テキスト編集</button>
+        <button class="tab-button active" data-tab-target="aiTab" role="tab" aria-selected="true">AIチャット</button>
       </nav>
 
-      <section class="tab-content active" data-tab="textTab" role="tabpanel" aria-labelledby="textTab">
+      <section class="tab-content" data-tab="textTab" role="tabpanel" aria-labelledby="textTab">
         <!-- 定型文エリア -->
         <section class="template-section">
           <div class="section-header">
@@ -141,7 +144,7 @@
         </section>
       </section>
 
-      <section class="tab-content" data-tab="aiTab" role="tabpanel" aria-labelledby="aiTab">
+      <section class="tab-content active" data-tab="aiTab" role="tabpanel" aria-labelledby="aiTab">
         <div class="ai-panel" role="application">
           <div class="ai-chat-wrapper">
             <div class="ai-chat-wrapper">
@@ -249,6 +252,7 @@
   <script src="../utils/adapters/clinics.js"></script>
   <script src="../utils/adapters/mobacal.js"></script>
   <script src="../utils/adapters/gmail.js"></script>
+  <script src="../utils/adapters/mcs.js"></script>
   <script src="../utils/adapters/manager.js"></script>
   <script src="../utils/auth.js"></script>
   <script src="sidepanel.js"></script>

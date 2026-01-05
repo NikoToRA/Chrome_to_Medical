@@ -219,3 +219,4 @@ az monitor app-insights query \
 - [ACS_EMAIL_SETUP.md](./ACS_EMAIL_SETUP.md) - 詳細な設定ガイド
 - [ACS_EMAIL_SETUP_SIMPLE.md](./ACS_EMAIL_SETUP_SIMPLE.md) - 簡単ガイド
 
+

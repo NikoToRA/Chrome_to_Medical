@@ -44,4 +44,4 @@
 - **Email Not Received**: Check Spam/Promotions folder. Sender is `DoNotReply@...azurecomm.net`.
 
 ## 8. Known Limitations & Roadmap
-- **CLINICS EMR Compatibility**: Currently, line breaks may not be reflected correctly when copying text to the CLINICS medical record system. This is a known issue and a fix is scheduled for a future update.
+- **CLINICS EMR Compatibility**: (Resolved) The issue with line breaks has been fixed in the latest update.

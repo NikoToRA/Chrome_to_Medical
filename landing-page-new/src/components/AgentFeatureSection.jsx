@@ -60,6 +60,12 @@ function AgentFeatureSection() {
                             <span className="note-icon">🔧</span>
                             <p><strong>カスタマイズ可能:</strong> あなたの診療スタイルに合わせて、エージェントの振る舞いを調整できます。</p>
                         </div>
+
+                        <div className="manual-link-container">
+                            <a href="/manuals/ai_chat.html" target="_blank" rel="noopener noreferrer" className="manual-link">
+                                AIチャット機能の操作マニュアルを見る <span aria-hidden="true">→</span>
+                            </a>
+                        </div>
                     </motion.div>
 
                     <motion.div
