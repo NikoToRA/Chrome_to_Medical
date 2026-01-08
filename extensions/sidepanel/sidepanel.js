@@ -202,7 +202,7 @@ function showAuthRequiredUI(isInactive = false) {
       let title = '🔒 ログインが必要です';
       let message = 'AI機能を使用するには、ログインが必要です。';
 
-      const restartLink = `<a href="#" id="forceRestartLink" style="display:block; margin-top:10px; font-size:12px; color:#667eea; text-decoration:underline;">新規登録・再登録はこちら</a>`;
+      const restartLink = `<a href="#" id="forceRestartLink" style="display:block; margin-top:10px; font-size:12px; color:#2563eb; text-decoration:underline;">新規登録・再登録はこちら</a>`;
       const settingsLink = `<div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px; width:100%;"><button id="overlaySettingsBtn" class="btn btn-ghost btn-small" style="color:#999; font-size:11px;">⚙️ 設定・ログアウト</button></div>`;
 
       if (isInactive) {
@@ -272,20 +272,28 @@ function showAuthRequiredUI(isInactive = false) {
         
         <div style="width: 100%; max-width: 400px; padding-top: 20px; border-top: 1px solid #eee;">
           <button id="goToLoginBtn" class="btn btn-secondary" style="padding: 12px 24px; font-size: 14px; width: 100%;">
-            Landing Pageでログイン
+            新規登録ページへ
           </button>
           <p style="margin-top: 15px; font-size: 12px; color: #999; text-align: center;">
             決済完了後、自動的にログインされます
           </p>
+          <button id="goToReloginBtn" class="btn btn-ghost" style="margin-top: 10px; padding: 10px 20px; font-size: 13px; width: 100%; color: #2563eb;">
+            既にアカウントをお持ちの方 → 再ログイン
+          </button>
         </div>
         ${settingsLink}
       `;
       // Attach to body to cover everything
       document.body.appendChild(authOverlay);
 
-      // ログインボタンのイベント
+      // 新規登録ボタンのイベント
       document.getElementById('goToLoginBtn').addEventListener('click', () => {
-        window.open('https://stkarteai1763705952.z11.web.core.windows.net', '_blank');
+        window.open('https://stkarteai1763705952.z11.web.core.windows.net/', '_blank');
+      });
+
+      // 再ログインボタンのイベント
+      document.getElementById('goToReloginBtn').addEventListener('click', () => {
+        window.open('https://stkarteai1763705952.z11.web.core.windows.net/#/login', '_blank');
       });
 
       // サブスクリプション管理ボタンのイベント
