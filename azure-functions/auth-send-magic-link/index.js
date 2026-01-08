@@ -69,7 +69,7 @@ Karte AI+ をご利用いただき、ありがとうございます。
 
 ${displayName} 様
 
-以下のリンクをクリックして、ログインと決済手続きを完了してください。
+以下のリンクをクリックしてログインしてください。
 
 ${magicLink}
 
@@ -92,7 +92,7 @@ Karte AI+
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
     <div style="background-color: #f8f9fa; border-radius: 8px; padding: 30px; margin-bottom: 20px;">
-        <h1 style="color: #667eea; margin-top: 0; font-size: 24px;">Karte AI+</h1>
+        <h1 style="color: #2563eb; margin-top: 0; font-size: 24px;">Karte AI+</h1>
         <p style="color: #666; margin-bottom: 0;">電子カルテ作成をAIで効率化</p>
     </div>
     
@@ -105,20 +105,20 @@ Karte AI+
         
         <p style="color: #333; font-size: 16px;">
             Karte AI+ をご利用いただき、ありがとうございます。<br>
-            以下のボタンをクリックして、ログインと決済手続きを完了してください。
+            以下のボタンをクリックしてログインしてください。
         </p>
         
         <div style="text-align: center; margin: 30px 0;">
             <a href="${magicLink}" 
-               style="display: inline-block; background-color: #667eea; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-size: 16px; font-weight: 600;">
-                ログインして決済手続きを進める
+               style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-size: 16px; font-weight: 600;">
+                ログインする
             </a>
         </div>
         
         <p style="color: #666; font-size: 14px; margin-top: 30px;">
             ボタンがクリックできない場合は、以下のリンクをコピーしてブラウザのアドレスバーに貼り付けてください：
         </p>
-        <p style="color: #667eea; font-size: 12px; word-break: break-all; background-color: #f8f9fa; padding: 12px; border-radius: 4px; margin: 10px 0;">
+        <p style="color: #2563eb; font-size: 12px; word-break: break-all; background-color: #f8f9fa; padding: 12px; border-radius: 4px; margin: 10px 0;">
             ${magicLink}
         </p>
         

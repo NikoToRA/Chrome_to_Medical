@@ -5,5 +5,5 @@
   "email": "support@wonder-drill.com",
   "invoiceNumber": "T4430001092106",
   "trialDays": 14,
-  "trialWarningDay": 10
+  "trialWarningDaysBeforeEnd": 2
 }

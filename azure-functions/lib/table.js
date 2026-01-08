@@ -104,6 +104,7 @@ module.exports = {
     upsertUser,
     getUser,
     getSubscriptionByCreatedDate,
+    getSubscriptionsByTrialEndRange,
     upsertReceipt
 };
 
@@ -149,4 +150,32 @@ async function upsertReceipt(receiptData) {
     };
 
     await client.upsertEntity(entity, "Merge");
+}
+
+/**
+ * Get subscriptions where trialEnd falls within the specified date range
+ * Used for sending trial warning emails (e.g., 2 days before trial ends)
+ * @param {string} startDate - ISO date string (start of range)
+ * @param {string} endDate - ISO date string (end of range)
+ */
+async function getSubscriptionsByTrialEndRange(startDate, endDate) {
+    const client = await getTableClient('Subscriptions');
+    try {
+        const subscriptions = [];
+
+        // Query for trialing subscriptions where trialEnd is within the range
+        const entities = client.listEntities({
+            queryOptions: {
+                filter: `status eq 'trialing' and trialEnd ge '${startDate}' and trialEnd lt '${endDate}'`
+            }
+        });
+
+        for await (const entity of entities) {
+            subscriptions.push(entity);
+        }
+        return subscriptions;
+    } catch (error) {
+        console.error("Error getting subscriptions by trial end range:", error);
+        return [];
+    }
 }

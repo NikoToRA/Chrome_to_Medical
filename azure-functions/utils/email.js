@@ -11,17 +11,20 @@ class EmailService {
     // Constructor no longer needed for client init as we use lib/email
 
     /**
-     * Send trial warning email (10 days after registration)
+     * Send trial warning email (2 days before trial ends)
+     * @param {string} email - User email
+     * @param {string} userName - User name (optional)
+     * @param {string} trialEndDate - Formatted trial end date (e.g., "2026年1月10日")
      */
-    async sendTrialWarningEmail(email, userName = null) {
+    async sendTrialWarningEmail(email, userName = null, trialEndDate = null) {
         const displayName = userName || email.split('@')[0];
 
         // Generate Customer Portal link
         const portalUrl = await this.generatePortalUrl(email);
 
-        const subject = "【重要】お試し期間がまもなく終了します";
-        const text = this.getTrialWarningPlainText(displayName, portalUrl);
-        const html = this.getTrialWarningHtml(displayName, portalUrl);
+        const subject = "【重要】お試し期間があと2日で終了します";
+        const text = this.getTrialWarningPlainText(displayName, portalUrl, trialEndDate);
+        const html = this.getTrialWarningHtml(displayName, portalUrl, trialEndDate);
 
         try {
             // Delegate availability check to lib/email (it throws if not configured)
@@ -102,19 +105,21 @@ class EmailService {
         }
     }
 
-    getTrialWarningPlainText(name, portalUrl) {
+    getTrialWarningPlainText(name, portalUrl, trialEndDate) {
         const cancelSection = portalUrl
-            ? `\n\n継続を希望されない場合は、以下のリンクからキャンセルしてください：\n${portalUrl} \n`
+            ? `\n\n継続を希望されない場合は、以下のリンクからキャンセルしてください：\n${portalUrl}\n`
             : '\n\n継続を希望されない場合は、サポートまでお問い合わせください。\n';
+
+        const endDateText = trialEndDate ? `お試し期間終了日: ${trialEndDate}` : '';
 
         return `${name} 様
 
 この度は、Karte AI Plusをご利用いただき、誠にありがとうございます。
 
-お試し期間（2週間）がまもなく終了いたします。
-現在、登録から10日が経過しており、あと4日でお試し期間が終了いたします。
+【重要】お試し期間があと2日で終了いたします。
+${endDateText}
 
-このままご利用を継続される場合、お試し期間終了後、自動的に有料プランへ移行いたします。
+このままご利用を継続される場合、お試し期間終了後、自動的に有料プランへ移行し、月額料金の課金が開始されます。
 ${cancelSection}
 ご不明な点がございましたら、お気軽にお問い合わせください。
 
@@ -123,24 +128,26 @@ ${cancelSection}
 ${companyConfig.name}
 ${companyConfig.representative}
 ${companyConfig.address}
-お問い合わせ: ${companyConfig.email || 'support@wonder-drill.com'} `;
+お問い合わせ: ${companyConfig.email || 'support@wonder-drill.com'}`;
     }
 
-    getTrialWarningHtml(name, portalUrl) {
+    getTrialWarningHtml(name, portalUrl, trialEndDate) {
         const cancelButton = portalUrl
             ? `<div style="text-align: center; margin: 30px 0;">
     <a href="${portalUrl}" style="display: inline-block; background-color: #dc3545; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">サブスクリプションをキャンセル</a>
             </div>`
             : '';
 
-        return `< !DOCTYPE html >
+        const endDateText = trialEndDate ? `<p><strong>お試し期間終了日: ${trialEndDate}</strong></p>` : '';
+
+        return `<!DOCTYPE html>
     <html>
         <head>
             <meta charset="UTF-8">
                 <style>
                     body {font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; line-height: 1.6; color: #333;}
                     .container {max-width: 600px; margin: 0 auto; padding: 20px;}
-                    .header {background-color: #4CAF50; color: white; padding: 20px; text-align: center;}
+                    .header {background-color: #2563eb; color: white; padding: 20px; text-align: center;}
                     .content {padding: 20px; background-color: #f9f9f9;}
                     .warning {background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;}
                     .footer {text-align: center; padding: 20px; color: #666; font-size: 12px;}
@@ -156,12 +163,11 @@ ${companyConfig.address}
                     <p>この度は、Karte AI Plusをご利用いただき、誠にありがとうございます。</p>
 
                     <div class="warning">
-                        <strong>【重要】お試し期間がまもなく終了します</strong>
-                        <p>お試し期間（2週間）がまもなく終了いたします。<br>
-                            現在、登録から10日が経過しており、あと4日でお試し期間が終了いたします。</p>
+                        <strong>【重要】お試し期間があと2日で終了します</strong>
+                        ${endDateText}
                     </div>
 
-                    <p>このままご利用を継続される場合、お試し期間終了後、自動的に有料プランへ移行いたします。</p>
+                    <p>このままご利用を継続される場合、お試し期間終了後、自動的に有料プランへ移行し、月額料金の課金が開始されます。</p>
 
                     ${cancelButton}
 

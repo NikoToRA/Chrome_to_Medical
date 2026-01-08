@@ -1,15 +1,16 @@
 /**
- * Stripe同期バッチ処理
+ * Stripe同期 + トライアル警告バッチ処理
  *
- * 1日1回（毎日AM3:00 UTC = 正午 JST）実行
- * Webhookの失敗をカバーし、DBを最新のStripe情報で更新
+ * 1日1回（毎日AM0:00 UTC = 朝9:00 JST）実行
  *
- * 課金ユーザー/トライアル延長ユーザーに不利益がないよう、
- * DBを常に最新化する
+ * 処理内容:
+ * 1. Stripeから全サブスクリプションを同期（DBを最新化）
+ * 2. trialEnd が2日後のユーザーに警告メールを送信
  */
 
 const Stripe = require('stripe');
-const { upsertSubscription, getSubscription } = require('../lib/table');
+const { upsertSubscription, getSubscription, getSubscriptionsByTrialEndRange } = require('../lib/table');
+const { addDays, startOfDay, endOfDay, format } = require('date-fns');
 
 module.exports = async function (context, myTimer) {
     const timeStamp = new Date().toISOString();
@@ -21,6 +22,11 @@ module.exports = async function (context, myTimer) {
     }
 
     const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
+    // ========================================
+    // PHASE 1: Stripe同期
+    // ========================================
+    context.log('[SyncStripe] === PHASE 1: Stripe Sync ===');
 
     let syncedCount = 0;
     let errorCount = 0;
@@ -106,10 +112,82 @@ module.exports = async function (context, myTimer) {
             }
         }
 
-        context.log('[SyncStripe] Completed. Total:', totalProcessed, 'Synced:', syncedCount, 'Errors:', errorCount);
+        context.log('[SyncStripe] Phase 1 Completed. Total:', totalProcessed, 'Synced:', syncedCount, 'Errors:', errorCount);
 
     } catch (error) {
-        context.log.error('[SyncStripe] Critical error:', error.message);
-        throw error;
+        context.log.error('[SyncStripe] Critical error in Phase 1:', error.message);
+        // Phase 1でエラーが起きてもPhase 2は試みる
     }
+
+    // ========================================
+    // PHASE 2: トライアル警告メール送信
+    // ========================================
+    context.log('[SyncStripe] === PHASE 2: Trial Warning Emails ===');
+
+    let warningsSent = 0;
+    let warningsSkipped = 0;
+    let warningsError = 0;
+
+    try {
+        // 遅延ロード（メール送信が必要な時だけ）
+        const emailService = require('../utils/email');
+
+        const today = new Date();
+        const warningDate = addDays(today, 2);
+        const startOfWarningDay = startOfDay(warningDate).toISOString();
+        const endOfWarningDay = endOfDay(warningDate).toISOString();
+
+        context.log(`[SyncStripe] Checking trials ending between: ${startOfWarningDay} and ${endOfWarningDay}`);
+
+        // trialEnd が 2日後のサブスクリプションを取得
+        const subscriptionsToWarn = await getSubscriptionsByTrialEndRange(startOfWarningDay, endOfWarningDay);
+
+        if (!subscriptionsToWarn || subscriptionsToWarn.length === 0) {
+            context.log('[SyncStripe] No subscriptions need trial warning');
+        } else {
+            context.log(`[SyncStripe] Found ${subscriptionsToWarn.length} subscription(s) for trial warning`);
+
+            for (const sub of subscriptionsToWarn) {
+                // 既に警告送信済みならスキップ
+                if (sub.trialWarningSent) {
+                    context.log(`[SyncStripe] Trial warning already sent to ${sub.email}`);
+                    warningsSkipped++;
+                    continue;
+                }
+
+                try {
+                    // trialEnd日付をフォーマット
+                    const trialEndDate = new Date(sub.trialEnd);
+                    const formattedEndDate = format(trialEndDate, 'yyyy年M月d日');
+
+                    await emailService.sendTrialWarningEmail(sub.email, null, formattedEndDate);
+
+                    // 送信済みフラグを更新
+                    await upsertSubscription(sub.email, {
+                        trialWarningSent: true,
+                        trialWarningSentAt: new Date().toISOString()
+                    });
+
+                    context.log(`[SyncStripe] Trial warning sent to ${sub.email}`);
+                    warningsSent++;
+
+                } catch (emailError) {
+                    context.log.error(`[SyncStripe] Failed to send trial warning to ${sub.email}:`, emailError.message);
+                    warningsError++;
+                }
+            }
+        }
+
+        context.log('[SyncStripe] Phase 2 Completed. Sent:', warningsSent, 'Skipped:', warningsSkipped, 'Errors:', warningsError);
+
+    } catch (error) {
+        context.log.error('[SyncStripe] Critical error in Phase 2:', error.message);
+    }
+
+    // ========================================
+    // 完了サマリー
+    // ========================================
+    context.log('[SyncStripe] === BATCH COMPLETED ===');
+    context.log('[SyncStripe] Sync: Total=' + totalProcessed + ', Synced=' + syncedCount + ', Errors=' + errorCount);
+    context.log('[SyncStripe] Warnings: Sent=' + warningsSent + ', Skipped=' + warningsSkipped + ', Errors=' + warningsError);
 };
