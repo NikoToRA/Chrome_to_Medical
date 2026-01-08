@@ -173,6 +173,29 @@ export default function RegisterPage() {
                     <p className="terms-text">
                         {isLoginMode ? '続行' : '登録'}することで、<a href="/terms">利用規約</a>と<a href="/privacy">プライバシーポリシー</a>に同意したものとみなされます。
                     </p>
+
+                    {!isLoginMode && (
+                        <div className="login-link-section" style={{
+                            marginTop: '24px',
+                            paddingTop: '20px',
+                            borderTop: '1px solid #e0e0e0',
+                            textAlign: 'center'
+                        }}>
+                            <p style={{ fontSize: '14px', color: '#666', marginBottom: '8px' }}>
+                                既にご登録済みの方
+                            </p>
+                            <a
+                                href="/#/login"
+                                style={{
+                                    color: '#2563eb',
+                                    textDecoration: 'none',
+                                    fontWeight: '500'
+                                }}
+                            >
+                                再ログイン / トークン再発行はこちら →
+                            </a>
+                        </div>
+                    )}
                 </form>
             </div>
         </div>
