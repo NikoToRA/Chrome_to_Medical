@@ -15,42 +15,67 @@ module.exports = async function (context, req) {
         return;
     }
 
-    // START DEBUG LOG
     context.log('[CheckSubscription] Processing for email:', email);
 
     try {
-        let sub = null;
-        try {
-            sub = await getSubscription(email);
-        } catch (dbError) {
-            context.log.error('[CheckSubscription] Database Error:', dbError);
-            // Consume error and treat as no subscription
-        }
-
-        // Default to inactive if no record found
+        // Default values
         let status = 'inactive';
         let expiry = null;
         let isActive = false;
         let canceledAt = null;
         let cancelAtPeriodEnd = false;
+        let trialEnd = null;
+        let trialDaysRemaining = null;
+
+        // DBからサブスクリプション情報を取得
+        // ※DBはWebhook + 1日1回バッチ同期で最新化される
+        let sub = null;
+        try {
+            sub = await getSubscription(email);
+        } catch (dbError) {
+            context.log.error('[CheckSubscription] Database Error:', dbError);
+        }
+
+        const now = new Date();
 
         if (sub) {
             status = sub.status || 'inactive';
             expiry = sub.currentPeriodEnd;
             canceledAt = sub.canceledAt || null;
             cancelAtPeriodEnd = sub.cancelAtPeriodEnd || false;
+            trialEnd = sub.trialEnd || null;
 
-            // Active判定:
-            // - status が 'active' または 'trialing'
-            // - または 'canceled' だが有効期限内 (periodEnd > now)
-            // - かつ currentPeriodEnd が未来（まだ有効期限内）
-            const now = new Date();
             const periodEnd = expiry ? new Date(expiry) : null;
+            const trialEndDate = trialEnd ? new Date(trialEnd) : null;
 
-            isActive = (
-                periodEnd && periodEnd > now &&
-                (status === 'active' || status === 'trialing' || status === 'canceled')
-            );
+            // Active判定ロジック:
+            // A: トライアル中（trial_end未来、status=trialing）→ 継続利用OK
+            // B: トライアル終了・未課金（trial_end過去、status=trialing）→ ログアウト
+            // C: 課金中（status=active）→ 継続利用OK
+            // D: キャンセル予約・猶予期間中（status=canceled、currentPeriodEnd未来）→ 継続利用OK
+            // E: 完全終了（status=canceled、currentPeriodEnd過去）→ ログアウト
+
+            if (status === 'active') {
+                // C: 課金中は常にOK
+                isActive = periodEnd && periodEnd > now;
+            } else if (status === 'trialing') {
+                // A/B: トライアル中はtrialEndで判定
+                if (trialEndDate) {
+                    isActive = trialEndDate > now;
+                    if (trialEndDate > now) {
+                        trialDaysRemaining = Math.ceil((trialEndDate - now) / (1000 * 60 * 60 * 24));
+                    }
+                } else {
+                    // trialEndがない場合はcurrentPeriodEndで判定（後方互換）
+                    isActive = periodEnd && periodEnd > now;
+                    context.log('[CheckSubscription] trialEnd not found, using currentPeriodEnd');
+                }
+            } else if (status === 'canceled') {
+                // D/E: キャンセル済みはcurrentPeriodEndで判定（猶予期間）
+                isActive = periodEnd && periodEnd > now;
+            } else {
+                isActive = false;
+            }
         } else {
             context.log('[CheckSubscription] No subscription found for:', email);
         }
@@ -72,11 +97,13 @@ module.exports = async function (context, req) {
                 hasSubscriptionRecord: !!sub,
                 status,
                 expiry,
+                trialEnd,
+                trialDaysRemaining,
                 canceledAt,
                 cancelAtPeriodEnd
             }
         };
-        context.log('[CheckSubscription] Response set successfully');
+        context.log('[CheckSubscription] Response:', { active: isActive, status, trialEnd });
 
     } catch (error) {
         context.log.error("[CheckSubscription] Critical Error:", error);

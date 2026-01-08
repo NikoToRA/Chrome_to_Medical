@@ -38,6 +38,7 @@ module.exports = async function (context, req) {
                 let currentPeriodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
                 let createdDate = format(new Date(), 'yyyy-MM-dd');
                 let trialEnd = null;
+                let trialEndTimestamp = null; // ISO 8601形式で保存
 
                 if (session.subscription) {
                     const subscription = await stripe.subscriptions.retrieve(session.subscription);
@@ -46,26 +47,25 @@ module.exports = async function (context, req) {
                     // Use subscription start date for consistent trial calculations
                     createdDate = format(new Date(subscription.created * 1000), 'yyyy-MM-dd');
                     if (subscription.trial_end) {
+                        trialEndTimestamp = new Date(subscription.trial_end * 1000).toISOString();
                         trialEnd = format(new Date(subscription.trial_end * 1000), 'yyyy-MM-dd');
                     }
                 }
 
                 // If trial end is not set but we have a calculated currentPeriodEnd (e.g. for trial duration)
                 if (!trialEnd && subscriptionStatus === 'trialing') {
+                    trialEndTimestamp = currentPeriodEnd.toISOString();
                     trialEnd = format(currentPeriodEnd, 'yyyy-MM-dd');
                 }
-                // Fallback for welcome email if no specific trial end
-                if (!trialEnd) {
-                    trialEnd = format(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
-                }
 
-                context.log(`[Webhook] Upserting subscription for ${email}, Status: ${subscriptionStatus}`);
+                context.log(`[Webhook] Upserting subscription for ${email}, Status: ${subscriptionStatus}, TrialEnd: ${trialEnd || 'N/A'}`);
 
                 await upsertSubscription(email, {
                     status: subscriptionStatus,
                     stripeCustomerId: session.customer,
                     stripeSubscriptionId: session.subscription,
                     currentPeriodEnd: currentPeriodEnd.toISOString(),
+                    trialEnd: trialEndTimestamp, // Stripeのtrial_endを保存
                     canceledAt: null,
                     cancelAtPeriodEnd: false,
                     createdDate: createdDate // Save YYYY-MM-DD for trial warning query
@@ -80,6 +80,7 @@ module.exports = async function (context, req) {
                 // Send Welcome Email
                 try {
                     context.log('[Webhook] Sending welcome email...');
+                    // trialEndがnullの場合はemailServiceで適切なメッセージを表示
                     await emailService.sendWelcomeEmail(email, name, trialEnd, sessionToken);
                     context.log('[Webhook] Welcome email sent.');
                 } catch (e) {
@@ -144,6 +145,11 @@ module.exports = async function (context, req) {
                     currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
                     cancelAtPeriodEnd: subscription.cancel_at_period_end || false
                 };
+
+                // trial_endが設定されている場合は保存
+                if (subscription.trial_end) {
+                    updateData.trialEnd = new Date(subscription.trial_end * 1000).toISOString();
+                }
 
                 // キャンセルされた場合
                 if (subscription.canceled_at) {

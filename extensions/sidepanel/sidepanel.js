@@ -237,7 +237,27 @@ function showAuthRequiredUI(isInactive = false) {
         <div style="width: 100%; max-width: 400px; margin-bottom: 20px;">
           ${manageButtonHtml}
           
-          <label style="display: block; margin-top: 15px; margin-bottom: 8px; font-size: 14px; color: #333; font-weight: bold;">
+          <!-- メールアドレス入力による復帰UI（課金正常なのにログアウトした場合用） -->
+          <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 6px; border: 1px solid #e0e0e0;">
+            <p style="margin-bottom: 10px; font-size: 13px; color: #666; font-weight: bold;">
+              💡 課金中なのにログアウトしてしまった場合
+            </p>
+            <p style="margin-bottom: 10px; font-size: 12px; color: #888;">
+              メールアドレスを入力すると、ログイン用のリンクをメールで送信します
+            </p>
+            <input
+              type="email"
+              id="recoverEmailInput"
+              placeholder="メールアドレスを入力"
+              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 8px;"
+            />
+            <button id="recoverSubscriptionBtn" class="btn btn-secondary" style="width: 100%; padding: 8px; font-size: 13px;">
+              ログインリンクを送信
+            </button>
+            <div id="recoverStatus" style="margin-top: 8px; font-size: 12px; min-height: 20px;"></div>
+          </div>
+          
+          <label style="display: block; margin-top: 20px; margin-bottom: 8px; font-size: 14px; color: #333; font-weight: bold;">
             トークンを入力（手動ログイン）
           </label>
           <textarea 
@@ -324,6 +344,67 @@ function showAuthRequiredUI(isInactive = false) {
             chrome.runtime.openOptionsPage();
           } else {
             window.open(chrome.runtime.getURL('options/options.html'));
+          }
+        });
+      }
+
+      // メールアドレスによる復帰機能（Magic Link送信）
+      const recoverSubscriptionBtn = document.getElementById('recoverSubscriptionBtn');
+      const recoverEmailInput = document.getElementById('recoverEmailInput');
+      const recoverStatus = document.getElementById('recoverStatus');
+
+      if (recoverSubscriptionBtn && recoverEmailInput && recoverStatus) {
+        recoverSubscriptionBtn.addEventListener('click', async () => {
+          const email = recoverEmailInput.value.trim();
+          if (!email) {
+            recoverStatus.textContent = 'メールアドレスを入力してください';
+            recoverStatus.style.color = '#e74c3c';
+            return;
+          }
+
+          // メールアドレスの簡易バリデーション
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(email)) {
+            recoverStatus.textContent = '有効なメールアドレスを入力してください';
+            recoverStatus.style.color = '#e74c3c';
+            return;
+          }
+
+          recoverSubscriptionBtn.disabled = true;
+          recoverSubscriptionBtn.textContent = '送信中...';
+          recoverStatus.textContent = '';
+          recoverStatus.style.color = '';
+
+          try {
+            // Magic Linkを直接送信
+            await window.AuthManager.sendMagicLink(email);
+
+            recoverStatus.innerHTML = `
+              <div style="color: #27ae60; margin-bottom: 8px;">
+                ✅ ${email} にログイン用のメールを送信しました
+              </div>
+              <div style="font-size: 11px; color: #666;">
+                メール内のリンクをクリックしてログインしてください
+              </div>
+            `;
+            recoverStatus.style.color = '#27ae60';
+
+            // 入力欄をクリア
+            recoverEmailInput.value = '';
+          } catch (error) {
+            console.error('Magic Link送信エラー:', error);
+            recoverStatus.innerHTML = `
+              <div style="color: #e74c3c; margin-bottom: 8px;">
+                ❌ 送信に失敗しました
+              </div>
+              <div style="font-size: 11px; color: #666;">
+                ${error.message || '不明なエラーが発生しました'}
+              </div>
+            `;
+            recoverStatus.style.color = '#e74c3c';
+          } finally {
+            recoverSubscriptionBtn.disabled = false;
+            recoverSubscriptionBtn.textContent = 'ログインリンクを送信';
           }
         });
       }
@@ -1832,7 +1913,7 @@ async function handleAiChatSend() {
     return;
   }
 
-  // 認証チェック
+  // 認証とサブスクリプションチェック
   if (window.AuthManager) {
     const token = await window.AuthManager.getToken();
     if (!token) {
@@ -1844,6 +1925,24 @@ async function handleAiChatSend() {
       }
       await checkAuthAndUpdateUI();
       return;
+    }
+
+    // サブスクリプション状態をチェック（AI使用時）
+    try {
+      const isSubscribed = await window.AuthManager.refreshAuth();
+      if (!isSubscribed) {
+        showNotification('有効なサブスクリプションがありません。サブスクリプションを開始してください。', 'error');
+        // AIタブに切り替えて認証UIを表示
+        const aiTab = document.querySelector('[data-tab-target="aiTab"]');
+        if (aiTab) {
+          aiTab.click();
+        }
+        await checkAuthAndUpdateUI();
+        return;
+      }
+    } catch (error) {
+      console.error('[handleAiChatSend] サブスクリプションチェックエラー:', error);
+      // チェックに失敗してもAI実行は許可（ネットワークエラー等の可能性があるため）
     }
   }
 
