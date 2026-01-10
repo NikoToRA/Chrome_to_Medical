@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Simple hospital building -->
+  <rect x="25" y="45" width="50" height="40" rx="2" fill="none" stroke="#9CA3AF" stroke-width="2"/>
+  
+  <!-- Hospital cross -->
+  <line x1="50" y1="15" x2="50" y2="35" stroke="#F87171" stroke-width="4" stroke-linecap="round"/>
+  <line x1="40" y1="25" x2="60" y2="25" stroke="#F87171" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Simple windows -->
+  <rect x="32" y="52" width="10" height="10" rx="1" fill="none" stroke="#9CA3AF" stroke-width="1.5"/>
+  <rect x="45" y="52" width="10" height="10" rx="1" fill="none" stroke="#9CA3AF" stroke-width="1.5"/>
+  <rect x="58" y="52" width="10" height="10" rx="1" fill="none" stroke="#9CA3AF" stroke-width="1.5"/>
+  
+  <!-- Door -->
+  <rect x="46" y="70" width="8" height="15" rx="1" fill="none" stroke="#6B7280" stroke-width="2"/>
+  
+  <!-- Document icon -->
+  <rect x="15" y="60" width="15" height="20" rx="1" fill="none" stroke="#F59E0B" stroke-width="2"/>
+  <line x1="17" y1="67" x2="28" y2="67" stroke="#F59E0B" stroke-width="1.5"/>
+</svg>

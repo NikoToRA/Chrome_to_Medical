@@ -87,7 +87,7 @@ export default function LoginPage() {
                     </button>
 
                     <p className="terms-text" style={{ marginTop: '20px' }}>
-                        <a href="/#/">新規登録はこちら</a>
+                        <a href="/register">新規登録はこちら</a>
                     </p>
                 </form>
             </div>

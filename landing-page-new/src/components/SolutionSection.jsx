@@ -17,10 +17,6 @@ function SolutionSection() {
                         その悩み、解決します。<br />
                         <span className="highlight-blue">Karte AI+</span>が、あなたのカルテ作成をサポート
                     </h2>
-                    <p className="section-subtitle">
-                        Chromeブラウザで動作するクラウド型カルテに、<br />
-                        拡張機能をインストールするだけ。
-                    </p>
                 </motion.div>
 
                 <motion.div
