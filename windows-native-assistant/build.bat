@@ -1,7 +1,10 @@
 @echo off
-REM Windows Native Assistant Build Script
+REM Karte AI+ Assistant Build Script
 
-echo Building Windows Native Assistant...
+echo ============================================
+echo Karte AI+ Assistant - Build Script
+echo ============================================
+echo.
 
 cd /d %~dp0\src
 
@@ -29,8 +32,8 @@ if %ERRORLEVEL% neq 0 (
 
 REM Publish
 echo.
-echo [3/3] Publishing application...
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ..\publish
+echo [3/3] Publishing single EXE...
+dotnet publish -c Release -o ..\publish
 
 if %ERRORLEVEL% neq 0 (
     echo ERROR: Publish failed
@@ -39,12 +42,13 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo ========================================
+echo ============================================
 echo Build completed successfully!
 echo.
-echo Executable location:
-echo %~dp0publish\WindowsNativeAssistant.exe
-echo ========================================
+echo Output: publish\KarteAI-Assistant.exe
+echo ============================================
 echo.
+
+dir ..\publish\*.exe
 
 pause

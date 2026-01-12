@@ -4,18 +4,31 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <AssemblyName>WindowsNativeAssistant</AssemblyName>
+    <AssemblyName>KarteAI-Assistant</AssemblyName>
     <RootNamespace>WindowsNativeAssistant</RootNamespace>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Authors>Karte AI Plus</Authors>
-    <Description>Windows Native Assistant for EMS MAPS - AI-powered medical record generation</Description>
+    <Product>Karte AI+ Assistant</Product>
+    <Description>Windows Native Assistant for Karte AI+ - AI-powered medical record generation</Description>
+
+    <!-- 単一EXEビルド設定 -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <!-- トリミング設定（サイズ削減） -->
+    <PublishTrimmed>false</PublishTrimmed>
+
+    <!-- ReadyToRun（起動高速化） -->
+    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 

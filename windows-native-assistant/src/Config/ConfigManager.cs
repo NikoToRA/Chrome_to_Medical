@@ -12,7 +12,7 @@ namespace WindowsNativeAssistant.Config
         private static readonly string ConfigFileName = "config.json";
         private static readonly string ConfigDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "WindowsNativeAssistant"
+            "KarteAI"
         );
 
         private static readonly string ConfigFilePath = Path.Combine(ConfigDirectory, ConfigFileName);

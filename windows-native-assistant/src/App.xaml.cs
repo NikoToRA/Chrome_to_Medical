@@ -11,15 +11,18 @@ namespace WindowsNativeAssistant
     public partial class App : Application
     {
         private TaskbarIcon? _trayIcon;
-        private AppController? _appController;
         private Window? _hiddenWindow;
+        private MainWindow? _mainWindow;
+        private HotkeyManager? _hotkeyManager;
+        private PasteEngine? _pasteEngine;
+        private AppConfig? _config;
 
         private void OnStartup(object sender, StartupEventArgs e)
         {
             try
             {
                 // Load configuration
-                var config = ConfigManager.Load();
+                _config = ConfigManager.Load();
 
                 // Create hidden window for receiving hotkey messages
                 _hiddenWindow = new Window
@@ -36,49 +39,45 @@ namespace WindowsNativeAssistant
                 var windowHandle = new WindowInteropHelper(_hiddenWindow).Handle;
 
                 // Initialize core components
-                var hotkeyManager = new HotkeyManager(windowHandle);
-                var pasteEngine = new PasteEngine(config);
-                var aiClient = new AIClient(config);
-                var logger = new Logger(config);
-                var mainPanel = new MainPanel();
+                _hotkeyManager = new HotkeyManager(windowHandle);
+                _pasteEngine = new PasteEngine(_config);
 
-                // Initialize app controller
-                _appController = new AppController(
-                    config,
-                    hotkeyManager,
-                    pasteEngine,
-                    aiClient,
-                    logger,
-                    mainPanel
+                // Initialize main window
+                _mainWindow = new MainWindow();
+                _mainWindow.PasteRequested += OnPasteRequested;
+
+                // Register hotkey
+                bool hotkeyRegistered = _hotkeyManager.Register(
+                    _config.Hotkey.Modifiers,
+                    _config.Hotkey.Key
                 );
 
-                if (!_appController.Initialize())
+                if (!hotkeyRegistered)
                 {
                     MessageBox.Show(
-                        "アプリケーションの初期化に失敗しました。",
+                        $"ホットキー {_config.Hotkey.Modifiers}+{_config.Hotkey.Key} の登録に失敗しました。\n" +
+                        "別のアプリケーションが使用している可能性があります。",
                         "エラー",
                         MessageBoxButton.OK,
                         MessageBoxImage.Error
                     );
-                    Shutdown();
-                    return;
                 }
+
+                // Wire up hotkey event
+                _hotkeyManager.HotkeyPressed += OnHotkeyPressed;
 
                 // Setup tray icon
                 _trayIcon = (TaskbarIcon)FindResource("TrayIcon");
                 if (_trayIcon != null)
                 {
-                    _trayIcon.ToolTipText = "Windows Native Assistant - Ready";
+                    _trayIcon.ToolTipText = "Karte AI+ Assistant - Ready";
                 }
 
-                // Show startup notification
-                MessageBox.Show(
-                    $"Windows Native Assistant が起動しました。\n\n" +
-                    $"ホットキー: {config.Hotkey.Modifiers}+{config.Hotkey.Key}\n\n" +
-                    "システムトレイアイコンから設定を変更できます。",
-                    "起動完了",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information
+                // Show startup notification (簡略化)
+                _trayIcon?.ShowBalloonTip(
+                    "Karte AI+ Assistant",
+                    $"起動しました。ホットキー: {_config.Hotkey.Modifiers}+{_config.Hotkey.Key}",
+                    BalloonIcon.Info
                 );
             }
             catch (Exception ex)
@@ -93,32 +92,131 @@ namespace WindowsNativeAssistant
             }
         }
 
+        /// <summary>
+        /// ホットキー押下時の処理
+        /// </summary>
+        private void OnHotkeyPressed(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_mainWindow == null || _pasteEngine == null) return;
+
+                // 現在のアクティブウィンドウを記録
+                var targetWindow = _pasteEngine.GetCurrentActiveWindow();
+                _mainWindow.SetTargetWindow(targetWindow);
+
+                // ウィンドウを表示
+                _mainWindow.Dispatcher.Invoke(() =>
+                {
+                    if (_mainWindow.IsVisible)
+                    {
+                        _mainWindow.Hide();
+                    }
+                    else
+                    {
+                        _mainWindow.Show();
+                        _mainWindow.Activate();
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[App] OnHotkeyPressed error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 貼り付けリクエスト時の処理
+        /// </summary>
+        private void OnPasteRequested(object? sender, PasteRequestEventArgs e)
+        {
+            try
+            {
+                if (_pasteEngine == null || string.IsNullOrEmpty(e.Text)) return;
+
+                // ウィンドウを非表示にしてから貼り付け
+                _mainWindow?.Dispatcher.Invoke(() =>
+                {
+                    _mainWindow?.Hide();
+                });
+
+                // 少し待ってから貼り付け（ウィンドウが隠れるのを待つ）
+                System.Threading.Thread.Sleep(100);
+
+                // 貼り付け実行
+                var result = _pasteEngine.ExecutePaste(e.TargetWindow, e.Text);
+
+                if (!result.Success)
+                {
+                    Console.WriteLine($"[App] Paste failed: {result.Reason}");
+
+                    // 失敗した場合はクリップボードにコピーのみ
+                    _mainWindow?.Dispatcher.Invoke(() =>
+                    {
+                        try
+                        {
+                            Clipboard.SetText(e.Text);
+                            _trayIcon?.ShowBalloonTip(
+                                "貼り付け失敗",
+                                "クリップボードにコピーしました。手動でCtrl+Vで貼り付けてください。",
+                                BalloonIcon.Warning
+                            );
+                        }
+                        catch { }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[App] OnPasteRequested error: {ex.Message}");
+            }
+        }
+
         private void OnExit(object sender, ExitEventArgs e)
         {
-            _appController?.Cleanup();
+            _hotkeyManager?.Dispose();
             _trayIcon?.Dispose();
             _hiddenWindow?.Close();
+            _mainWindow?.Close();
         }
 
         private void ShowPanel_Click(object sender, RoutedEventArgs e)
         {
-            // Panel is shown via hotkey, this is just for manual access
-            MessageBox.Show(
-                "パネルを開くには、ホットキーを使用してください。",
-                "情報",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information
-            );
+            _mainWindow?.Dispatcher.Invoke(() =>
+            {
+                _mainWindow?.Show();
+                _mainWindow?.Activate();
+            });
         }
 
         private void ShowSettings_Click(object sender, RoutedEventArgs e)
         {
-            _appController?.ShowSettings();
+            if (_config != null)
+            {
+                var settingsWindow = new SettingsWindow(_config);
+                settingsWindow.ShowDialog();
+            }
         }
 
         private void Exit_Click(object sender, RoutedEventArgs e)
         {
-            Shutdown();
+            // 閉じる前に確認
+            var result = MessageBox.Show(
+                "Karte AI+ Assistantを終了しますか？",
+                "確認",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question
+            );
+
+            if (result == MessageBoxResult.Yes)
+            {
+                // メインウィンドウの閉じるイベントをキャンセルしないようにする
+                if (_mainWindow != null)
+                {
+                    _mainWindow.Closing -= (s, args) => args.Cancel = true;
+                }
+                Shutdown();
+            }
         }
     }
 }
