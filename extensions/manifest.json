@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Karte AI+",
-  "version": "0.2.6",
+  "version": "0.2.60",
   "description": "クラウド型電子カルテ向けサポート拡張機能 - AIによる診療記録作成支援と固定文挿入で医療現場の業務を効率化",
   "permissions": [
     "sidePanel",
