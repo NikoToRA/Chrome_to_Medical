@@ -1,8 +1,35 @@
 import { motion } from 'framer-motion'
-import { slideUp, staggerContainer, staggerItem } from '../utils/animations'
+import { slideUp } from '../utils/animations'
 import './SolutionSection.css'
 
 function SolutionSection() {
+    const solutions = [
+        {
+            target: '患者さん',
+            future: '「お待たせしました」\nのない診療へ',
+            image: '/images/future/dostor_waiting.png',
+            imageAlt: '笑顔で帰る患者さん'
+        },
+        {
+            target: 'スタッフ',
+            future: '書類の山が消え、\n本来の仕事に集中できる',
+            image: '/images/future/Nurse_happy.png',
+            imageAlt: 'スムーズに働くスタッフ'
+        },
+        {
+            target: '紹介先',
+            future: '紹介を決めた瞬間、\n紹介状はもう完成している',
+            image: '/images/future/ivitation_future2.png',
+            imageAlt: 'スムーズな病院連携'
+        },
+        {
+            target: '家族',
+            future: '「今日は早く帰れるよ」が\n日常になる',
+            image: '/images/future/family_future.png',
+            imageAlt: '家族との団らん'
+        }
+    ]
+
     return (
         <section className="solution-section section-lg">
             <div className="container">
@@ -14,88 +41,31 @@ function SolutionSection() {
                     variants={slideUp}
                 >
                     <h2 className="section-title">
-                        その悩み、解決します。<br />
-                        <span className="highlight-blue">Karte AI+</span>が、あなたのカルテ作成をサポート
+                        その悩み、<span className="highlight-blue">Karte AI+</span>が解決します
                     </h2>
                 </motion.div>
 
-                <motion.div
-                    className="before-after-container"
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true }}
-                    variants={slideUp}
-                >
-                    <div className="before-after-image-wrapper">
-                        <img
-                            src="/before-after.png"
-                            alt="医師のビフォアフター：タイピングの苦痛からAIエージェントによる一瞬の解決へ"
-                            className="before-after-image"
-                        />
-                    </div>
-                </motion.div>
+                <div className="solutions-list">
+                    {solutions.map((solution, index) => (
+                        <motion.div
+                            key={index}
+                            className={`solution-row ${index % 2 === 1 ? 'reverse' : ''}`}
+                            initial="hidden"
+                            whileInView="visible"
+                            viewport={{ once: true, margin: "-100px" }}
+                            variants={slideUp}
+                        >
+                            <div className="solution-image">
+                                <img src={solution.image} alt={solution.imageAlt} />
+                            </div>
 
-                <div className="solution-steps">
-                    <motion.div
-                        className="step-card"
-                        initial="hidden"
-                        whileInView="visible"
-                        viewport={{ once: true }}
-                        variants={slideUp}
-                    >
-                        <div className="step-number">01</div>
-                        <div className="step-content">
-                            <h3>導入は簡単</h3>
-                            <p>Chrome拡張機能を入れるだけ。<br />今のカルテがそのまま使えます。</p>
-                        </div>
-                    </motion.div>
-
-                    <motion.div
-                        className="step-card"
-                        initial="hidden"
-                        whileInView="visible"
-                        viewport={{ once: true }}
-                        variants={slideUp}
-                        transition={{ delay: 0.2 }}
-                    >
-                        <div className="step-number">02</div>
-                        <div className="step-content">
-                            <h3>操作は直感</h3>
-                            <p>いつもの画面にボタンが増えるだけ。<br />ワンクリックで定型文を貼り付け。</p>
-                        </div>
-                    </motion.div>
-
-                    <motion.div
-                        className="step-card"
-                        initial="hidden"
-                        whileInView="visible"
-                        viewport={{ once: true }}
-                        variants={slideUp}
-                        transition={{ delay: 0.4 }}
-                    >
-                        <div className="step-number">03</div>
-                        <div className="step-content">
-                            <h3>AIがサポート</h3>
-                            <p>4つのエージェントが<br />あなたの診療をバックアップ。</p>
-                        </div>
-                    </motion.div>
+                            <div className="solution-content">
+                                <span className="solution-label">{solution.target}を待たせない</span>
+                                <h3 className="solution-future">{solution.future}</h3>
+                            </div>
+                        </motion.div>
+                    ))}
                 </div>
-
-                <motion.div
-                    className="solution-result"
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true }}
-                    variants={slideUp}
-                >
-                    <a href="/register" className="result-box">
-                        <span className="result-label">RESULT</span>
-                        <h3 className="result-text">たった月4980円で、<br className="mobile-break" />1日2時間を取り戻す</h3>
-                        <p className="result-desc">空いた時間は、患者様との対話や、あなたのプライベートへ。</p>
-                    </a>
-                </motion.div>
-
-                {/* Supported Emrs Section removed - moved to CompatibilitySection */}
 
             </div>
         </section>

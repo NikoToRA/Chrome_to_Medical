@@ -42,8 +42,8 @@ function PricingSection() {
 
                         <ul className="plan-features">
                             <li>全ての機能が利用可能</li>
-                            <li>定型文システム無制限</li>
-                            <li>4つのAIエージェント</li>
+                            <li>基本AIエージェント4つ</li>
+                            <li>定型文無制限</li>
                             <li>いつでもキャンセル可能</li>
                         </ul>
 
@@ -65,9 +65,10 @@ function PricingSection() {
                         </div>
 
                         <ul className="plan-features">
-                            <li>4つのAIエージェント使い放題</li>
-                            <li>定型文システム無制限</li>
-                            <li>全クラウドカルテ対応</li>
+                            <li>AIの使用無制限</li>
+                            <li>基本エージェント4つ＋追加4つ可能</li>
+                            <li>定型文無制限</li>
+                            <li>Webブラウザ型クラウドカルテに全対応</li>
                             <li>メールサポート</li>
                             <li>14日間無料トライアル</li>
                         </ul>

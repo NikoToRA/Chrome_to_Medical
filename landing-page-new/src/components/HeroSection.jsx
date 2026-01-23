@@ -37,7 +37,7 @@ function HeroSection() {
                 {/* Middle: Hero Image */}
                 <div className="hero-image-area">
                     <img
-                        src="/hero-v3.png"
+                        src="/Hero3.png"
                         alt="Medical AI Assistant"
                         className="hero-img-refactored"
                     />

@@ -16,13 +16,31 @@ module.exports = async function (context, req) {
         return;
     }
 
-    // Auth check (Basic check for now, ideally verify token)
+    // Auth check (JWT required)
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        context.res = { status: 401, body: JSON.stringify({ error: 'Unauthorized: Missing token' }) };
+        return;
+    }
+    const token = authHeader.split(' ')[1];
+    let tokenEmail = null;
+    try {
+        const jwt = require('jsonwebtoken');
+        const secret = process.env.JWT_SECRET;
+        if (!secret) throw new Error('JWT_SECRET missing');
+        const decoded = jwt.verify(token, secret);
+        tokenEmail = decoded.email || decoded.sub;
+    } catch (e) {
+        context.res = { status: 401, body: JSON.stringify({ error: 'Unauthorized: Invalid token' }) };
+        return;
+    }
+
     const { userId, settings } = req.body;
 
     if (!userId || !settings) {
         context.res = {
             status: 400,
-            body: { error: "Missing userId or settings" }
+            body: JSON.stringify({ error: "Missing userId or settings" })
         };
         return;
     }
@@ -30,7 +48,13 @@ module.exports = async function (context, req) {
     try {
         // Save to user-data container
         // Path: userId/settings.json
-        const blobName = `${userId}/settings.json`;
+        // userId and token identity must match
+        if (!userId || !tokenEmail || (userId.toLowerCase() !== tokenEmail.toLowerCase())) {
+            context.res = { status: 401, body: JSON.stringify({ error: 'Unauthorized: userId mismatch' }) };
+            return;
+        }
+
+        const blobName = `${tokenEmail}/settings.json`;
 
         // Metadata to specific what was saved
         const dataToSave = {
@@ -42,7 +66,7 @@ module.exports = async function (context, req) {
         const url = await saveToBlob('user-data', blobName, dataToSave);
 
         context.res = {
-            body: { success: true, url, updatedAt: dataToSave.updatedAt }
+            body: JSON.stringify({ success: true, url, updatedAt: dataToSave.updatedAt })
         };
     } catch (error) {
         context.log.error("Error saving settings:", error);

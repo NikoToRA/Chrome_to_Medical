@@ -910,3 +910,36 @@ section {
     opacity: 1;
   }
 }
+
+/* v0.2.6: Prescription Calendar */
+.prescription-calendar-section {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-top: 12px;
+}
+
+.prescription-calendar-section input[type="date"] {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.prescription-calendar-section input[type="date"]:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.1);
+}
+
+.prescription-calendar-section input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.prescription-calendar-section input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  background-color: var(--primary-light);
+}

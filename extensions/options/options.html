@@ -22,9 +22,9 @@
         </div>
       </div>
       <div class="header-actions">
-        <button type="button" class="btn btn-ghost" id="openDocsBtn" disabled>ドキュメント</button>
-        <button type="button" class="btn btn-danger btn-small" id="headerLogoutBtn"
-          style="margin-right: 8px;">ログアウト</button>
+        <span id="currentUserEmailDisplay" style="font-size: 12px; color: #666; margin-right: 12px;">📧 ログイン中</span>
+        <button type="button" class="btn btn-ghost btn-small" id="headerLogoutBtn"
+          style="margin-right: 8px; color: #999; font-size: 11px;">ログアウト</button>
         <button type="button" class="btn btn-ghost btn-icon" id="closeSettingsBtn" aria-label="設定を閉じる">✖️</button>
       </div>
     </header>
@@ -41,6 +41,16 @@
           <button type="button" id="addAgentBtn" class="btn btn-secondary">＋ 新規エージェント</button>
         </div>
         <div id="agentsList" class="agent-list"></div>
+
+        <!-- v0.2.7: 削除済みエージェント（ゴミ箱） -->
+        <details style="margin-top: 16px; border-top: 1px solid #eee; padding-top: 12px;">
+          <summary style="cursor: pointer; color: #666; font-size: 13px; user-select: none;">
+            🗑️ 最近削除したエージェント（7日間復元可能）
+          </summary>
+          <div id="deletedAgentsList" style="margin-top: 8px; background: #fafafa; border-radius: 6px;">
+            <!-- 動的に挿入 -->
+          </div>
+        </details>
       </section>
 
       <section class="card card-data" style="margin-top: 24px;">
@@ -49,7 +59,10 @@
             <h2>データ同期</h2>
             <p class="card-subtitle">エージェントや定型文の設定をクラウドに保存し、他の端末と同期します。</p>
           </div>
-          <button type="button" id="syncSettingsBtn" class="btn btn-primary">🔄 設定を同期</button>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="pushSettingsBtn" class="btn btn-primary">⬆️ 今の設定を保存</button>
+            <button type="button" id="pullSettingsBtn" class="btn btn-secondary">⬇️ クラウドから取得</button>
+          </div>
         </div>
       </section>
 

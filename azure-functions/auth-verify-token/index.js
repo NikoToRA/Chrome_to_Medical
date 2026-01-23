@@ -197,7 +197,7 @@ module.exports = async function (context, req) {
                         });
                     }
                     (function(){
-                      var extId = ${extensionId ? '`' + '${extensionId}' + '`' : '""'};
+                      var extId = "${extensionId}";
                       if (!extId || !(window.chrome && chrome.runtime && chrome.runtime.sendMessage)) return;
                       try {
                         chrome.runtime.sendMessage(extId, { action: 'loginWithToken', token: '${sessionToken}' }, function(resp){

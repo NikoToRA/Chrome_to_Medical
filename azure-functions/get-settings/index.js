@@ -21,7 +21,7 @@ module.exports = async function (context, req) {
     if (!userId) {
         context.res = {
             status: 400,
-            body: { error: "Missing userId" }
+            body: JSON.stringify({ error: "Missing userId" })
         };
         return;
     }
@@ -35,12 +35,12 @@ module.exports = async function (context, req) {
 
         if (settings) {
             context.res = {
-                body: { success: true, settings }
+                body: JSON.stringify({ success: true, settings })
             };
         } else {
             // Not found - return empty/default state (Client will handle)
             context.res = {
-                body: { success: true, settings: null, message: "No remote settings found" }
+                body: JSON.stringify({ success: true, settings: null, message: "No remote settings found" })
             };
         }
 

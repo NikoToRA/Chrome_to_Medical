@@ -144,7 +144,7 @@ export const SOCIAL_LINKS = {
 export const FOOTER_LINKS = {
     company: [
         { label: '会社概要', href: 'https://wonder-drill.com/about#corp' },
-        { label: 'お問い合わせ', href: '/contact' }
+        { label: 'お問い合わせ', href: 'https://wonder-drill.com/contact' }
     ],
     legal: [
         { label: 'プライバシーポリシー', href: 'https://stkarteai1763705952.z11.web.core.windows.net/privacy' },
@@ -154,7 +154,7 @@ export const FOOTER_LINKS = {
     support: [
         { label: '無料から始める', href: 'https://stkarteai1763705952.z11.web.core.windows.net/' },
         { label: 'よくある質問', href: '#faq' },
-        { label: 'お問い合わせ', href: '/contact' }
+        { label: 'お問い合わせ', href: 'https://wonder-drill.com/contact' }
     ]
 }
 

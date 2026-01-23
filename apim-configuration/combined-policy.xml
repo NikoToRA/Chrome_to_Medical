@@ -1,22 +1,41 @@
 <policies>
     <inbound>
-        <!-- CORS -->
-        <cors allow-credentials="true">
+        <!-- CORS: allow LP + Chrome extension only -->
+        <cors allow-credentials="false">
             <allowed-origins>
-                <origin>https://brave-moss-071a93e00.4.azurestaticapps.net</origin>
-                <origin>chrome-extension://knldjmfmopnpolahpmmgbagdohdbeiep</origin>
                 <origin>https://stkarteai1763705952.z11.web.core.windows.net</origin>
+                <origin>chrome-extension://knldjmfmopnpolahpmmgbagdohdbeiep</origin>
             </allowed-origins>
             <allowed-methods>
-                <method>GET</method>
                 <method>POST</method>
                 <method>OPTIONS</method>
+                <method>GET</method>
             </allowed-methods>
             <allowed-headers>
-                <header>*</header>
+                <header>Authorization</header>
+                <header>Content-Type</header>
             </allowed-headers>
+            <expose-headers>
+                <header>Retry-After</header>
+            </expose-headers>
         </cors>
-        <!-- Rate Limit (100 calls per 60s per IP) -->
+
+        <!-- Minimal rate-limit: protect magic link endpoint by IP (5/min) -->
+        <choose>
+            <when condition="@(context.Request.MatchedPath.Equals("/api/auth-send-magic-link"))">
+                <rate-limit-by-key calls="5" renewal-period="60" counter-key="@(context.Request.IpAddress)" />
+            </when>
+        </choose>
+
+        <!-- Forward request with sensible timeouts: 180s for chat*, else 120s -->
+        <choose>
+            <when condition="@(context.Request.MatchedPath.Equals("/api/chat") || context.Request.MatchedPath.Equals("/api/chat-stream"))">
+                <forward-request timeout-in-seconds="180" />
+            </when>
+            <otherwise>
+                <forward-request timeout-in-seconds="120" />
+            </otherwise>
+        </choose>
 
         <base />
     </inbound>

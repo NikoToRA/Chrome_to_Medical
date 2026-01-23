@@ -33,10 +33,10 @@ module.exports = async function (context, req) {
         });
 
         context.res = {
-            body: { url: session.url }
+            body: JSON.stringify({ url: session.url })
         };
     } catch (error) {
         context.log.error("Error creating checkout session:", error);
-        context.res = { status: 500, body: { error: error.message } };
+        context.res = { status: 500, body: JSON.stringify({ error: error.message }) };
     }
 }

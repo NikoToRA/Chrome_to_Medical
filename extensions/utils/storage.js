@@ -10,12 +10,21 @@ class StorageManager {
     TEMPLATE_CATEGORIES: 'templateCategories',
     TEMPLATES_DIRECT_PASTE: 'templatesDirectPaste',
     AI_AGENTS: 'aiAgents',
+    AI_DELETED_AGENTS: 'aiDeletedAgents',  // v0.2.7: 削除済みエージェント一時保持
     AI_SELECTED_AGENT_ID: 'aiSelectedAgentId',
     AI_CHAT_SESSIONS: 'aiChatSessions',
     AI_SELECTED_MODEL: 'aiSelectedModel',
     TEXT_RETENTION: 'textRetentionAfterPaste',
-    LAST_ACTIVE_TAB_BY_USER: 'lastActiveTabByUser'
+    LAST_ACTIVE_TAB_BY_USER: 'lastActiveTabByUser',
+    // v0.2.52: サブスクリプション1日1回チェック用
+    SUBSCRIPTION_CACHE: 'subscriptionCache',           // サブスク状態キャッシュ
+    LAST_SUBSCRIPTION_CHECK: 'lastSubscriptionCheck'   // 最終チェック日時
   };
+
+  // 削除済みエージェントの保持期間（7日間）
+  static DELETED_AGENT_RETENTION_DAYS = 7;
+  // 削除済みエージェントの最大保持数
+  static MAX_DELETED_AGENTS = 8;
 
   static STORAGE_SOFT_LIMIT_BYTES = 4 * 1024 * 1024; // 4MB
 
@@ -316,6 +325,107 @@ class StorageManager {
     return Array.isArray(defaultAgents) ? defaultAgents : [];
   }
 
+  // ========== 削除済みエージェント管理 (v0.2.7) ==========
+
+  /**
+   * 削除済みエージェント一覧を取得
+   * @returns {Promise<Array>}
+   */
+  static async getDeletedAgents() {
+    const deleted = await this.get(this.STORAGE_KEYS.AI_DELETED_AGENTS, []);
+    return Array.isArray(deleted) ? deleted : [];
+  }
+
+  /**
+   * 削除済みエージェントを保存
+   * @param {Array} deletedAgents
+   */
+  static async saveDeletedAgents(deletedAgents = []) {
+    return this.set(this.STORAGE_KEYS.AI_DELETED_AGENTS, Array.isArray(deletedAgents) ? deletedAgents : []);
+  }
+
+  /**
+   * エージェントを削除済みリストに追加
+   * @param {Object} agent - 削除するエージェント
+   * @returns {Promise<void>}
+   */
+  static async addToDeletedAgents(agent) {
+    if (!agent || !agent.id) return;
+
+    const deleted = await this.getDeletedAgents();
+
+    // 既に削除済みリストにある場合は更新
+    const existingIndex = deleted.findIndex(d => d.id === agent.id);
+    const deletedEntry = {
+      ...agent,
+      deletedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + this.DELETED_AGENT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString()
+    };
+
+    if (existingIndex !== -1) {
+      deleted[existingIndex] = deletedEntry;
+    } else {
+      deleted.push(deletedEntry);
+    }
+
+    // 最大数を超えた場合、古いものから削除
+    const sorted = deleted.sort((a, b) => new Date(b.deletedAt) - new Date(a.deletedAt));
+    const trimmed = sorted.slice(0, this.MAX_DELETED_AGENTS);
+
+    await this.saveDeletedAgents(trimmed);
+  }
+
+  /**
+   * 削除済みリストからエージェントを削除（復元時 or 完全削除時）
+   * @param {string} agentId
+   * @returns {Promise<Object|null>} 削除されたエージェント（復元用）
+   */
+  static async removeFromDeletedAgents(agentId) {
+    const deleted = await this.getDeletedAgents();
+    const agent = deleted.find(d => d.id === agentId);
+    const filtered = deleted.filter(d => d.id !== agentId);
+    await this.saveDeletedAgents(filtered);
+    return agent || null;
+  }
+
+  /**
+   * 期限切れの削除済みエージェントをクリーンアップ
+   * @returns {Promise<Array>} 削除されたエージェントID一覧（リモート同期用）
+   */
+  static async cleanupExpiredDeletedAgents() {
+    const deleted = await this.getDeletedAgents();
+    const now = new Date();
+    const expired = [];
+    const active = [];
+
+    deleted.forEach(agent => {
+      if (new Date(agent.expiresAt) <= now) {
+        expired.push(agent.id);
+      } else {
+        active.push(agent);
+      }
+    });
+
+    if (expired.length > 0) {
+      await this.saveDeletedAgents(active);
+      console.log(`[StorageManager] ${expired.length}件の期限切れ削除済みエージェントをクリーンアップしました`);
+    }
+
+    return expired;
+  }
+
+  /**
+   * 有効な（期限内の）削除済みエージェント一覧を取得
+   * @returns {Promise<Array>}
+   */
+  static async getActiveDeletedAgents() {
+    const deleted = await this.getDeletedAgents();
+    const now = new Date();
+    return deleted.filter(agent => new Date(agent.expiresAt) > now);
+  }
+
+  // ========== 削除済みエージェント管理ここまで ==========
+
   /**
    * 選択中のAIエージェントIDを保存
    * @param {string|null} agentId
@@ -443,10 +553,20 @@ class StorageManager {
     const remoteAgents = remoteSettings.aiAgents || [];
     const agentMap = new Map();
 
+    // v0.2.7: 削除済みリストのIDを取得（これらはPull時に復活させない）
+    const deletedAgents = await this.getDeletedAgents();
+    const deletedAgentIds = new Set(deletedAgents.map(a => a.id));
+
     // ローカルを先にマップに入れる
     localAgents.forEach(a => agentMap.set(a.id, a));
-    // リモートで上書き（リモートが正）
-    remoteAgents.forEach(a => agentMap.set(a.id, a));
+    // リモートで上書き（リモートが正）ただし削除済みリストにあるものはスキップ
+    remoteAgents.forEach(a => {
+      if (!deletedAgentIds.has(a.id)) {
+        agentMap.set(a.id, a);
+      } else {
+        console.log(`[StorageManager] 削除済みエージェント "${a.name || a.id}" はPull時にスキップしました`);
+      }
+    });
 
     await this.saveAgents(Array.from(agentMap.values()));
 

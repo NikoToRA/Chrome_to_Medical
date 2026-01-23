@@ -17,8 +17,33 @@ async function initOptions() {
   setupStorageWatchers();
   checkSubscriptionStatus(); // 非同期で実行
 
-  // [Auto-Sync] Pull on load (Silent)
-  handleSyncSettings({ pullOnly: true, silent: true });
+  // v0.2.7: 削除済みエージェントUIの初期化
+  setupDeletedAgentsEvents();
+  renderDeletedAgents();
+  // 期限切れの削除済みエージェントをクリーンアップ
+  StorageManager.cleanupExpiredDeletedAgents();
+
+  // [Auto-Sync] Pull on load (Silent) - ローカルにデータがある場合はスキップ
+  const localAgents = await StorageManager.getAgents();
+  const localCategories = await StorageManager.getTemplateCategories();
+  if ((!localAgents || localAgents.length === 0) && (!localCategories || localCategories.length === 0)) {
+    console.log('[Options] ローカルデータなし、自動Pull実行');
+    handleSyncSettings({ pullOnly: true, silent: true });
+  } else {
+    console.log('[Options] ローカルにデータあり、自動Pullスキップ');
+  }
+
+  // v0.2.5: メールアドレス表示
+  updateCurrentUserEmailDisplay();
+}
+
+// v0.2.5: 現在のユーザーメールアドレスを表示
+function updateCurrentUserEmailDisplay() {
+  const emailDisplay = document.getElementById('currentUserEmailDisplay');
+  if (emailDisplay && window.AuthManager) {
+    const user = window.AuthManager.getUser();
+    emailDisplay.textContent = user?.email ? `📧 ${user.email}` : '📧 未ログイン';
+  }
 }
 
 async function checkSubscriptionStatus() {
@@ -185,10 +210,11 @@ function bindEvents() {
     agentsList.addEventListener('click', handleAgentAction);
   }
 
+  // v0.2.5: ログアウトボタン（Pushは編集時に自動で行われるため、ログアウト時は不要）
   const headerLogoutBtn = document.getElementById('headerLogoutBtn');
   if (headerLogoutBtn) {
     headerLogoutBtn.addEventListener('click', async () => {
-      if (confirm('ログアウトしますか？')) {
+      if (confirm('ログアウトしますか？\n\n設定はクラウドに保存されているため、再ログイン時に復元されます。')) {
         if (window.AuthManager) {
           await window.AuthManager.logout();
           window.close(); // オプションページを閉じる
@@ -197,9 +223,18 @@ function bindEvents() {
     });
   }
 
-  const syncSettingsBtn = document.getElementById('syncSettingsBtn');
-  if (syncSettingsBtn) {
-    syncSettingsBtn.addEventListener('click', handleSyncSettings);
+  // v0.2.5: Push/Pullを分離したボタン
+  const pushSettingsBtn = document.getElementById('pushSettingsBtn');
+  if (pushSettingsBtn) {
+    pushSettingsBtn.addEventListener('click', () => handleSyncSettings({ pushOnly: true, btn: pushSettingsBtn }));
+  }
+  const pullSettingsBtn = document.getElementById('pullSettingsBtn');
+  if (pullSettingsBtn) {
+    pullSettingsBtn.addEventListener('click', () => {
+      if (confirm('クラウドから設定を取得すると、現在のローカル設定が上書きされます。続行しますか？')) {
+        handleSyncSettings({ pullOnly: true, btn: pullSettingsBtn });
+      }
+    });
   }
 }
 
@@ -308,12 +343,23 @@ async function handleSaveAgent(card, agentId) {
 
 async function handleDeleteAgent(agentId) {
   if (state.isSavingAgents) return;
-  if (!confirm('このエージェントを削除しますか？')) {
+  if (!confirm('このエージェントを削除しますか？\n\n※ 7日間はローカルに保持され、復元可能です。')) {
     return;
   }
 
+  // 削除するエージェントを取得
+  const agentToDelete = state.agents.find((agent) => agent.id === agentId);
+  if (agentToDelete) {
+    // 削除済みリストに追加（7日間保持）
+    await StorageManager.addToDeletedAgents(agentToDelete);
+  }
+
   const nextAgents = state.agents.filter((agent) => agent.id !== agentId);
-  await persistAgents(nextAgents, 'エージェントを削除しました');
+  // 削除時は自動Pushをスキップ（後で復元可能にするため）
+  await persistAgents(nextAgents, 'エージェントを削除しました（7日間復元可能）', { skipAutoSync: true });
+
+  // 削除済みエージェントUIを更新
+  renderDeletedAgents();
 }
 
 async function handleDuplicateAgent(agentId) {
@@ -362,7 +408,9 @@ async function handleResetAgent(agentId) {
   await persistAgents(nextAgents, 'エージェントを初期値に戻しました');
 }
 
-async function persistAgents(nextAgents, successMessage) {
+async function persistAgents(nextAgents, successMessage, options = {}) {
+  const { skipAutoSync = false } = options;
+
   try {
     state.isSavingAgents = true;
     setButtonLoading(addAgentBtn, true, '保存中…');
@@ -378,8 +426,10 @@ async function persistAgents(nextAgents, successMessage) {
     renderAgents();
     showToast(successMessage, 'info');
 
-    // [Auto-Sync] Push on save (Silent)
-    handleSyncSettings({ pushOnly: true, silent: true });
+    // [Auto-Sync] Push on save (Silent) - 削除時はスキップ可能
+    if (!skipAutoSync) {
+      handleSyncSettings({ pushOnly: true, silent: true });
+    }
 
   } catch (error) {
     console.error('[Options] エージェントの保存に失敗しました', error);
@@ -516,6 +566,113 @@ function renderAgents() {
     })
     .join('');
 }
+
+// ========== 削除済みエージェント管理UI (v0.2.7) ==========
+
+/**
+ * 削除済みエージェントセクションをレンダリング
+ */
+async function renderDeletedAgents() {
+  const container = document.getElementById('deletedAgentsList');
+  if (!container) return;
+
+  const deletedAgents = await StorageManager.getActiveDeletedAgents();
+
+  if (!deletedAgents || deletedAgents.length === 0) {
+    container.innerHTML = '<div class="empty-state" style="padding: 12px; color: #999; font-size: 12px;">削除済みのエージェントはありません</div>';
+    return;
+  }
+
+  container.innerHTML = deletedAgents
+    .map((agent) => {
+      const expiresAt = new Date(agent.expiresAt);
+      const now = new Date();
+      const daysLeft = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+      const safe = {
+        id: agent.id,
+        name: escapeHtml(agent.name || agent.label || 'エージェント'),
+        deletedAt: new Date(agent.deletedAt).toLocaleDateString('ja-JP')
+      };
+
+      return `
+        <div class="deleted-agent-item" data-agent-id="${safe.id}" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #eee;">
+          <div style="flex: 1;">
+            <span style="font-weight: 500;">${safe.name}</span>
+            <span style="font-size: 11px; color: #999; margin-left: 8px;">削除: ${safe.deletedAt} / 残り${daysLeft}日</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-action="restore" data-agent-id="${safe.id}">復元</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="permanent-delete" data-agent-id="${safe.id}" style="color: #d32f2f;">完全削除</button>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+}
+
+/**
+ * 削除済みエージェントを復元
+ * @param {string} agentId
+ */
+async function handleRestoreAgent(agentId) {
+  if (state.isSavingAgents) return;
+
+  // 削除済みリストから取得して削除
+  const restoredAgent = await StorageManager.removeFromDeletedAgents(agentId);
+  if (!restoredAgent) {
+    showToast('復元するエージェントが見つかりませんでした', 'warning');
+    return;
+  }
+
+  // deletedAt, expiresAt を削除してクリーンな状態に
+  const { deletedAt, expiresAt, ...cleanAgent } = restoredAgent;
+  cleanAgent.updatedAt = new Date().toISOString();
+
+  // 現在のエージェントリストに追加
+  const nextAgents = [...state.agents, cleanAgent];
+  await persistAgents(nextAgents, 'エージェントを復元しました');
+
+  // 削除済みリストUIを更新
+  renderDeletedAgents();
+}
+
+/**
+ * 削除済みエージェントを完全削除
+ * @param {string} agentId
+ */
+async function handlePermanentDeleteAgent(agentId) {
+  if (!confirm('このエージェントを完全に削除しますか？\n\n※ この操作は取り消せません。')) {
+    return;
+  }
+
+  await StorageManager.removeFromDeletedAgents(agentId);
+  showToast('エージェントを完全に削除しました', 'info');
+  renderDeletedAgents();
+}
+
+/**
+ * 削除済みエージェントセクションのイベントハンドラを設定
+ */
+function setupDeletedAgentsEvents() {
+  const container = document.getElementById('deletedAgentsList');
+  if (!container) return;
+
+  container.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    const agentId = btn.dataset.agentId;
+
+    if (action === 'restore') {
+      await handleRestoreAgent(agentId);
+    } else if (action === 'permanent-delete') {
+      await handlePermanentDeleteAgent(agentId);
+    }
+  });
+}
+
+// ========== 削除済みエージェント管理UIここまで ==========
 
 function setButtonLoading(button, isLoading, labelWhenIdle) {
   if (!button) return;
@@ -686,9 +843,10 @@ async function handleCancelSubscription() {
  * @param {boolean} options.pushOnly - プッシュ（保存）のみ行う
  * @param {boolean} options.pullOnly - プル（取得）のみ行う
  * @param {boolean} options.silent - Toastを表示しない（エラー以外）
+ * @param {HTMLElement} options.btn - 操作対象のボタン要素
  */
 async function handleSyncSettings(options = {}) {
-  const { pushOnly = false, pullOnly = false, silent = false } = options;
+  const { pushOnly = false, pullOnly = false, silent = false, btn = null } = options;
 
   // イベントリスナーから呼ばれた場合は options が Event オブジェクトになるのでリセット
   const isEvent = options instanceof Event;
@@ -696,12 +854,16 @@ async function handleSyncSettings(options = {}) {
   const actualPullOnly = isEvent ? false : pullOnly;
   const actualSilent = isEvent ? false : silent;
 
-  const btn = document.getElementById('syncSettingsBtn');
+  // v0.2.5: ボタンを引数から取得、またはフォールバック
+  const targetBtn = btn || document.getElementById('pushSettingsBtn');
   // 自動同期のときはボタン無効状態でも裏で動くことがあるが、基本はチェック
-  if (!isEvent && btn && btn.disabled && !actualSilent) return;
+  if (!isEvent && targetBtn && targetBtn.disabled && !actualSilent) return;
+
+  // v0.2.5: ボタンのデフォルトテキストを保存
+  const originalBtnText = targetBtn?.textContent || '';
 
   try {
-    if (btn && !actualSilent) setButtonLoading(btn, true, '同期中...');
+    if (targetBtn && !actualSilent) setButtonLoading(targetBtn, true, '処理中...');
 
     // Auth Check
     if (!window.AuthManager) return; // まだロードされていない場合
@@ -719,13 +881,19 @@ async function handleSyncSettings(options = {}) {
     if (actualPullOnly || (!actualPushOnly)) {
       console.log('[Sync] Pulling settings for', userId);
       const remoteResponse = await window.ApiClient.getSettings(userId);
+      console.log('[Sync] API Response:', JSON.stringify(remoteResponse, null, 2));
 
       // Merge with Local
       if (remoteResponse && remoteResponse.settings) {
-        console.log('[Sync] Import remote settings', remoteResponse.settings);
+        console.log('[Sync] Import remote settings - agents:', remoteResponse.settings.aiAgents?.length || 0);
+        console.log('[Sync] Import remote settings - categories:', remoteResponse.settings.templateCategories?.length || 0);
         await StorageManager.importSyncedSettings(remoteResponse.settings);
         // Pullした場合はUIをリロード
         await loadAgents();
+        if (!actualSilent) showToast('クラウドから設定を取得しました（エージェント: ' + (remoteResponse.settings.aiAgents?.length || 0) + '件）', 'success');
+      } else {
+        console.log('[Sync] No settings in response:', remoteResponse);
+        if (!actualSilent) showToast('クラウドに保存された設定がありません', 'info');
       }
     }
 
@@ -738,7 +906,7 @@ async function handleSyncSettings(options = {}) {
       const saveResponse = await window.ApiClient.saveSettings(userId, localSettings);
 
       if (saveResponse && saveResponse.success) {
-        if (!actualSilent) showToast('設定を同期しました', 'success');
+        if (!actualSilent) showToast('設定をクラウドに保存しました', 'success');
       } else {
         throw new Error(saveResponse?.error || 'Unknown error');
       }
@@ -748,6 +916,6 @@ async function handleSyncSettings(options = {}) {
     console.error('[Sync] Error:', error);
     if (!actualSilent) showToast('同期に失敗しました: ' + error.message, 'warning');
   } finally {
-    if (btn && !actualSilent) setButtonLoading(btn, false, '🔄 設定を同期');
+    if (targetBtn && !actualSilent) setButtonLoading(targetBtn, false, originalBtnText);
   }
 }

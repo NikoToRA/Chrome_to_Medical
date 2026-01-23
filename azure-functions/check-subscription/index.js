@@ -54,6 +54,7 @@ module.exports = async function (context, req) {
             // C: 課金中（status=active）→ 継続利用OK
             // D: キャンセル予約・猶予期間中（status=canceled、currentPeriodEnd未来）→ 継続利用OK
             // E: 完全終了（status=canceled、currentPeriodEnd過去）→ ログアウト
+            // F: 決済失敗・リトライ中（status=past_due、currentPeriodEnd未来）→ 猶予期間として継続利用OK
 
             if (status === 'active') {
                 // C: 課金中は常にOK
@@ -70,9 +71,13 @@ module.exports = async function (context, req) {
                     isActive = periodEnd && periodEnd > now;
                     context.log('[CheckSubscription] trialEnd not found, using currentPeriodEnd');
                 }
-            } else if (status === 'canceled') {
-                // D/E: キャンセル済みはcurrentPeriodEndで判定（猶予期間）
+            } else if (status === 'canceled' || status === 'past_due') {
+                // D/E/F: キャンセル済み・決済失敗はcurrentPeriodEndで判定（猶予期間）
+                // past_due: Stripeがリトライ中。periodEndまでは猶予期間として利用可能
                 isActive = periodEnd && periodEnd > now;
+                if (status === 'past_due') {
+                    context.log('[CheckSubscription] Payment past_due, grace period until:', periodEnd);
+                }
             } else {
                 isActive = false;
             }
@@ -92,7 +97,7 @@ module.exports = async function (context, req) {
                 'Access-Control-Allow-Origin': '*',
                 'Content-Type': 'application/json'
             },
-            body: {
+            body: JSON.stringify({
                 active: isActive,
                 hasSubscriptionRecord: !!sub,
                 status,
@@ -101,7 +106,7 @@ module.exports = async function (context, req) {
                 trialDaysRemaining,
                 canceledAt,
                 cancelAtPeriodEnd
-            }
+            })
         };
         context.log('[CheckSubscription] Response:', { active: isActive, status, trialEnd });
 
@@ -113,10 +118,10 @@ module.exports = async function (context, req) {
                 'Access-Control-Allow-Origin': '*',
                 'Content-Type': 'application/json'
             },
-            body: {
+            body: JSON.stringify({
                 active: false,
                 error: error.message
-            }
+            })
         };
     }
 }

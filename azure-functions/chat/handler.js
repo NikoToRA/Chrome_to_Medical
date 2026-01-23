@@ -37,7 +37,7 @@ module.exports = async function (context, req) {
         const authHeader = req.headers.authorization;
 
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            context.res = { status: 401, body: { error: "Unauthorized: Missing token" } };
+            context.res = { status: 401, body: JSON.stringify({ error: "Unauthorized: Missing token" }) };
             return;
         }
 
@@ -48,18 +48,29 @@ module.exports = async function (context, req) {
         const email = decoded.email || decoded.sub;
 
         if (!email) {
-            context.res = { status: 401, body: { error: "Unauthorized: Invalid token claims" } };
+            context.res = { status: 401, body: JSON.stringify({ error: "Unauthorized: Invalid token claims" }) };
             return;
         }
 
         const sub = await getSubscription(email);
-        const isActive = sub && (sub.status === 'active' || sub.status === 'trialing');
+        let isActive = false;
+        if (sub) {
+            const status = sub.status || 'inactive';
+            const periodEnd = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
+            const now = new Date();
+            if (status === 'active' || status === 'trialing') {
+                isActive = true;
+            } else if ((status === 'canceled' || status === 'past_due') && periodEnd && periodEnd > now) {
+                // Align with check-subscription: grace period allowed until currentPeriodEnd
+                isActive = true;
+            }
+        }
 
         if (!isActive) {
             context.log.warn(`[CHAT] Access denied for ${email}: status=${sub ? sub.status : 'none'}`);
             context.res = {
                 status: 403,
-                body: { error: "Subscription required", code: "SUBSCRIPTION_INACTIVE" }
+                body: JSON.stringify({ error: "Subscription required", code: "SUBSCRIPTION_INACTIVE" })
             };
             return;
         }
@@ -68,7 +79,7 @@ module.exports = async function (context, req) {
         context.log.error('[CHAT] Auth verification failed:', authError);
         context.res = {
             status: 401,
-            body: { error: "Unauthorized", details: authError.message }
+            body: JSON.stringify({ error: "Unauthorized", details: authError.message })
         };
         return;
     }
@@ -98,13 +109,18 @@ module.exports = async function (context, req) {
         });
 
         // 5. Return Response
-        const reply = response.choices[0].message;
+        const choice = response.choices && response.choices[0] ? response.choices[0] : null;
+        const reply = choice ? choice.message : { role: 'assistant', content: '' };
+        const finishReason = choice ? choice.finish_reason : undefined;
 
         const responseBody = {
             role: reply.role,
-            content: reply.content || "", // Ensure content is not null
+            content: (reply && typeof reply.content === 'string') ? reply.content : (Array.isArray(reply?.content) ? (reply.content[0]?.text || '') : ''),
             usage: response.usage,
-            model: deployment
+            model: deployment,
+            finish_reason: finishReason,
+            // Some models may include refusal; surface it for client-side messaging
+            refusal: reply?.refusal || undefined
         };
 
         context.log('[CHAT] Response payload:', JSON.stringify(responseBody));
@@ -114,17 +130,17 @@ module.exports = async function (context, req) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: responseBody
+            body: JSON.stringify(responseBody)
         };
 
     } catch (error) {
         context.log.error('[CHAT] OpenAI Error:', error);
         context.res = {
             status: 500,
-            body: {
+            body: JSON.stringify({
                 error: "OpenAI API Error",
                 details: error.message
-            }
+            })
         };
     }
 };

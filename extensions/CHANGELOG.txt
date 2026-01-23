@@ -1,5 +1,64 @@
 拡張機能 変更履歴（extensions/）
 
+【バージョニング方針】
+- Google公開版: 0.2.X（例: 0.2.5, 0.2.6）
+- 内部パッチ版: 0.2.X1, 0.2.X2...（例: 0.2.51, 0.2.52）
+- Googleにアップ後、3桁目でパッチを管理
+
+v0.2.6 (2026-01-23) - APIM導入 & 処方日数カレンダー
+- API呼び出しをAPIM (Azure API Management) 経由に変更
+  - Rate Limiting対応（429エラーハンドリング追加）
+  - Application Insights監視統合準備
+  - api.js: API_BASE_URLをAPIM URLに変更
+  - background.js: サブスクチェックURLをAPIM経由に変更
+- 新機能: 処方日数カレンダー
+  - 定型文セクションの下にカレンダーUIを設置
+  - 次回受診予定日を選択して処方日数を自動計算
+  - 「処方日数: XX日分」形式でカルテに貼り付け可能
+  - オプションで次回受診日も含めて出力可能（例: 処方日数: 14日分 次回: 2026/02/06）
+  - 過去の日付選択時はエラーメッセージを表示
+- 対象ファイル: api.js, background.js, sidepanel.html, sidepanel.js, sidepanel.css
+
+v0.2.52 (2026-01-15) - サブスクリプションチェック最適化 ★Google公開版
+- 🎉 2026-01-15 Chrome Web Store にアップロード完了
+- alarms権限の理由説明を追加（プライバシーへの取り組みタブ）
+- DEBUGログ削除（本番リリース用クリーンアップ）
+
+v0.2.52 (2026-01-12) - 内部開発版
+- サブスクリプション状態チェックを1日1回に最適化
+  - サイドパネル起動時: キャッシュを使用（APIコールなし、軽量）
+  - ログイン/再ログイン時: 必ずAPIコール（再課金後すぐ使える）
+  - 24時間ごと: background.jsでバックグラウンドチェック
+- 通信コスト削減: 頻繁なサイドパネル開閉でも1日1回のみAPIコール
+- Stripeトライアル延長対応: 深夜のバックグラウンドチェックで反映
+- hasSubscriptionRecord をクライアントで受け取るよう修正（UIメッセージ改善）
+- manifest.json: alarms権限追加
+- storage.js: subscriptionCache, lastSubscriptionCheck キー追加
+- auth.js: checkSubscription() をキャッシュベースに改修
+- background.js: dailySubscriptionCheck alarm追加
+- [サーバー] check-subscription: past_due（決済失敗・リトライ中）に猶予期間を追加
+  - Stripeがリトライ中でもperiodEndまでは利用可能
+- 配布物: karte-ai-plus-v0.2.52.zip を生成
+
+v0.2.51 (2026-01-12) - Google 0.2.5 ベース
+- v0.2.4〜v0.2.7の全変更を統合した安定版
+- バージョニング方針を整備（Google公開版 + 内部パッチ版）
+- 主な統合内容:
+  - v0.2.4: ログイン処理をloginWithToken()に統一、トークン処理バグ修正
+  - v0.2.5: 自動ログアウト廃止、一時的エラーでログアウトしない、Push/Pull分離
+  - v0.2.6: サブスク無効時のUI改善、subscriptionInactiveReason追加
+  - v0.2.7: エージェント削除時のゴミ箱機能（7日間復元可能）
+- 配布物: karte-ai-plus-v0.2.51.zip を生成
+
+v0.2.7 (2026-01-11) - 内部版
+- エージェント削除時のゴミ箱機能を追加
+  - 削除されたエージェントは7日間ローカルに保持され、復元可能
+  - 削除時は自動Pushをスキップ（リモートには即座に反映されない）
+  - 「最近削除したエージェント」UIから復元・完全削除が可能
+  - Pull時に削除済みリストにあるエージェントは復活しない
+- storage.js: aiDeletedAgents ストレージキー追加
+- options.html/js: 削除済みエージェント管理UI追加
+
 v0.2.1 (2026-01-04)
 - タブの初期表示/復元: デフォルトをAIチャットに変更し、次回起動時はユーザーごとに前回開いていたタブを復元
   - 保存先: chrome.storage.local（lastActiveTabByUser）

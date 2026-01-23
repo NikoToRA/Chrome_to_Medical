@@ -1,0 +1,150 @@
+/* Solution Section - Light blue background with red accents */
+.solution-section {
+    padding: 4rem 0 5rem;
+    background: #f0f9ff;
+}
+
+.solution-section .section-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 2rem;
+}
+
+/* Title with underline decoration */
+.solution-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #dc2626;
+    text-align: center;
+    margin-bottom: 3rem;
+    position: relative;
+    display: inline-block;
+    width: 100%;
+}
+
+.solution-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 3px;
+    background: #dc2626;
+}
+
+.solution-title .highlight {
+    color: #dc2626;
+}
+
+/* Content Layout - Image left, Text right */
+.solution-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items: start;
+}
+
+/* Image */
+.solution-image-wrapper {
+    width: 100%;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f8fafc;
+}
+
+.solution-image {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* Text Content */
+.solution-text {
+    padding-top: 0.5rem;
+}
+
+.solution-subtitle {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #dc2626;
+    line-height: 1.6;
+    margin: 0 0 1.5rem;
+}
+
+.solution-description {
+    margin-bottom: 2rem;
+}
+
+.solution-description p {
+    font-size: 0.95rem;
+    color: #374151;
+    line-height: 1.8;
+    margin: 0 0 0.75rem;
+}
+
+.solution-description p:last-child {
+    margin-bottom: 0;
+}
+
+.solution-description strong {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.trial-note {
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+/* CTA Button */
+.solution-cta-button {
+    display: inline-block;
+    padding: 0.875rem 2rem;
+    border: 2px solid #1e293b;
+    border-radius: 4px;
+    color: #1e293b;
+    font-size: 1rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.solution-cta-button:hover {
+    background: #1e293b;
+    color: white;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .solution-section {
+        padding: 3rem 1.5rem 4rem;
+    }
+
+    .solution-title {
+        font-size: 1.5rem;
+    }
+
+    .solution-title::after {
+        width: 150px;
+    }
+
+    .solution-content {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+
+    .solution-subtitle {
+        font-size: 1.15rem;
+    }
+
+    .solution-description p {
+        font-size: 0.9rem;
+    }
+
+    .solution-cta-button {
+        display: block;
+        text-align: center;
+    }
+}

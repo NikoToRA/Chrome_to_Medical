@@ -1,18 +1,22 @@
 <policies>
     <inbound>
-        <cors allow-credentials="true">
+        <cors allow-credentials="false">
             <allowed-origins>
-                <origin>https://brave-moss-071a93e00.4.azurestaticapps.net</origin>
+                <origin>https://stkarteai1763705952.z11.web.core.windows.net</origin>
                 <origin>chrome-extension://knldjmfmopnpolahpmmgbagdohdbeiep</origin>
             </allowed-origins>
             <allowed-methods>
-                <method>GET</method>
                 <method>POST</method>
                 <method>OPTIONS</method>
+                <method>GET</method>
             </allowed-methods>
             <allowed-headers>
-                <header>*</header>
+                <header>Authorization</header>
+                <header>Content-Type</header>
             </allowed-headers>
+            <expose-headers>
+                <header>Retry-After</header>
+            </expose-headers>
         </cors>
         <base />
     </inbound>

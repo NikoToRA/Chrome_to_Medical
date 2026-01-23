@@ -4,6 +4,7 @@ module.exports = async function (context, req) {
     try {
         // Lazy load to catch initialization errors
         const { sendEmail } = require('../lib/email');
+        const { checkRateLimit } = require('../lib/table');
         const secret = process.env.JWT_SECRET;
 
         // Handle CORS preflight
@@ -20,6 +21,56 @@ module.exports = async function (context, req) {
         }
 
         const { email, name, facilityName, address, phone } = req.body || {};
+
+        // ==================== Rate Limiting ====================
+        // Get client IP (consider X-Forwarded-For for proxied requests)
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+                      || req.headers['x-real-ip']
+                      || req.socket?.remoteAddress
+                      || 'unknown';
+
+        // Check IP rate limit: 5 requests per minute
+        const ipLimit = await checkRateLimit(clientIp, 'ip_magic', 5, 60);
+        if (!ipLimit.allowed) {
+            context.log.warn(`[Rate Limit] IP blocked: ${clientIp}`);
+            context.res = {
+                status: 429,
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json',
+                    'Retry-After': String(ipLimit.retryAfter || 60)
+                },
+                body: JSON.stringify({
+                    error: 'リクエスト制限中です',
+                    message: `${ipLimit.retryAfter || 60}秒後に再試行してください`,
+                    retryAfter: ipLimit.retryAfter || 60
+                })
+            };
+            return;
+        }
+
+        // Check email rate limit: 1 request per 5 minutes (prevent spam to same address)
+        if (email) {
+            const emailLimit = await checkRateLimit(email, 'email_magic', 1, 300);
+            if (!emailLimit.allowed) {
+                context.log.warn(`[Rate Limit] Email blocked: ${email}`);
+                context.res = {
+                    status: 429,
+                    headers: {
+                        'Access-Control-Allow-Origin': '*',
+                        'Content-Type': 'application/json',
+                        'Retry-After': String(emailLimit.retryAfter || 300)
+                    },
+                    body: JSON.stringify({
+                        error: 'メール送信制限中です',
+                        message: 'すでにログインリンクを送信済みです。メールをご確認ください。届いていない場合は数分後に再試行してください。',
+                        retryAfter: emailLimit.retryAfter || 300
+                    })
+                };
+                return;
+            }
+        }
+        // ==================== End Rate Limiting ====================
 
         if (!secret) {
             context.res = {
@@ -197,11 +248,14 @@ Karte AI+
 
             context.res = {
                 status: 200,
-                headers: { 'Access-Control-Allow-Origin': '*' },
-                body: Object.assign(
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(Object.assign(
                     { message: "Magic link generated (email send skipped)" },
                     returnMagicLink ? { magicLink, sessionToken } : {}
-                )
+                ))
             };
             return;
         }
@@ -210,8 +264,11 @@ Karte AI+
             await sendEmail({ to: email, subject, text, html });
             context.res = {
                 status: 200,
-                headers: { 'Access-Control-Allow-Origin': '*' },
-                body: { message: "Magic link sent" }
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ message: "Magic link sent" })
             };
         } catch (error) {
             context.log.error("[auth-send-magic-link] Failed to send email:", error);
@@ -222,11 +279,14 @@ Karte AI+
         context.log.error("[auth-send-magic-link] Critical Startup Error:", criticalError);
         context.res = {
             status: 500,
-            headers: { 'Access-Control-Allow-Origin': '*' },
-            body: {
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
                 error: "Critical Server Error",
                 details: criticalError.message
-            }
+            })
         };
     }
 };

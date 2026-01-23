@@ -1,0 +1,142 @@
+/* Header.css - Clean Medical Theme */
+.header-wrapper {
+    width: 100%;
+    position: fixed;
+    /* Fixed to keep it on top */
+    top: 0;
+    z-index: 50;
+    background-color: rgba(255, 255, 255, 0.8);
+    /* Glass White */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+}
+
+.header-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    height: 4.5rem;
+    /* Slightly taller */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.header-logo-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+    color: #111827;
+    /* Dark text */
+}
+
+/* Logo Background is less needed in light mode, but can keep as subtle container */
+.header-logo-bg {
+    /* Removed heavy background */
+    padding: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.header-logo-img {
+    height: 2rem;
+    /* h-8 */
+    width: auto;
+    display: block;
+}
+
+.header-site-name {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: #111827;
+    /* Gray 900 */
+    letter-spacing: -0.025em;
+}
+
+.header-nav {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .header-nav {
+        display: flex;
+        align-items: center;
+        gap: 2.5rem;
+    }
+}
+
+.header-nav-link {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #4B5563;
+    /* Gray 600 */
+    text-decoration: none;
+    position: relative;
+    transition: color 0.3s ease;
+    padding-bottom: 2px;
+}
+
+.header-nav-link:hover {
+    color: #2563EB;
+    /* Blue 600 */
+}
+
+.header-nav-line {
+    /* Keep visual indicator but simpler */
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: #2563EB;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s ease;
+}
+
+.header-nav-link:hover .header-nav-line {
+    transform: scaleX(1);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.header-login-btn {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #4B5563;
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.header-login-btn:hover {
+    color: #111827;
+    /* Black on hover */
+}
+
+.header-cta-btn {
+    font-size: 0.875rem;
+    font-weight: 700;
+    background-color: #2563EB;
+    /* Blue 600 */
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 9999px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+}
+
+.header-cta-btn:hover {
+    background-color: #1D4ED8;
+    /* Blue 700 */
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+    transform: translateY(-1px);
+}

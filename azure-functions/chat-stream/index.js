@@ -55,7 +55,18 @@ module.exports = async function (context, req) {
         // For streaming, we might want to skip full DB check every chunk to save latency,
         // but we MUST check at start.
         const sub = await getSubscription(email);
-        const isActive = sub && (sub.status === 'active' || sub.status === 'trialing');
+        let isActive = false;
+        if (sub) {
+            const status = sub.status || 'inactive';
+            const periodEnd = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
+            const now = new Date();
+            if (status === 'active' || status === 'trialing') {
+                isActive = true;
+            } else if ((status === 'canceled' || status === 'past_due') && periodEnd && periodEnd > now) {
+                // Align with non-streaming chat: allow grace period until currentPeriodEnd
+                isActive = true;
+            }
+        }
 
         if (!isActive) {
             context.log.warn(`[CHAT-STREAM] Access denied for ${email}: status=${sub ? sub.status : 'none'}`);

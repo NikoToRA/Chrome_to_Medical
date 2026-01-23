@@ -1,0 +1,107 @@
+.cancel-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    padding: 20px;
+}
+
+.cancel-container {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 600px;
+    width: 100%;
+    padding: 48px;
+    text-align: center;
+    z-index: 10;
+    position: relative;
+}
+
+.cancel-icon {
+    font-size: 64px;
+    margin-bottom: 24px;
+}
+
+.cancel-container h1 {
+    font-size: 32px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.cancel-subtitle {
+    font-size: 16px;
+    color: #666;
+    margin-bottom: 40px;
+    line-height: 1.6;
+}
+
+.info-box {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 32px;
+    text-align: left;
+}
+
+.info-box h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #333;
+    text-align: center;
+}
+
+.features-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.features-list li {
+    font-size: 16px;
+    color: #555;
+    padding: 8px 0;
+    line-height: 1.6;
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+}
+
+.retry-button {
+    display: inline-block;
+    padding: 14px 32px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 16px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.retry-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+}
+
+.help-text {
+    font-size: 14px;
+    color: #666;
+    line-height: 1.6;
+}
+
+.help-text a {
+    color: #667eea;
+    text-decoration: none;
+}
+
+.help-text a:hover {
+    text-decoration: underline;
+}

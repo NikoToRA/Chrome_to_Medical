@@ -1,6 +1,8 @@
 // API Client for Azure Functions
 
-const API_BASE_URL = 'https://func-karte-ai-1763705952.azurewebsites.net/api'; // Reverted to Direct Function App for debugging
+// v0.2.6+: APIMへ一本化（フェイルバックでFunction直叩きもサポート）
+const API_BASE_URL = 'https://apim-karte-ai-1763705952.azure-api.net/api';
+const FALLBACK_BASE_URL = 'https://func-karte-ai-1763705952.azurewebsites.net/api';
 
 class ApiClient {
     constructor() {
@@ -9,7 +11,7 @@ class ApiClient {
 
     async post(endpoint, data, options = {}) {
         const { timeout = 180000, retries = 1 } = options; // Default 180s timeout, 1 retry
-        const url = `${this.baseUrl}${endpoint}`;
+        const primaryUrl = `${this.baseUrl}${endpoint}`;
 
         const headers = {
             'Content-Type': 'application/json'
@@ -28,7 +30,7 @@ class ApiClient {
             }
         }
 
-        const executeFetch = async (attempt) => {
+        const doFetch = async (url) => {
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), timeout);
 
@@ -58,13 +60,32 @@ class ApiClient {
                     }
 
                     // Handle specific HTTP errors
+                    if (response.status === 429) {
+                        // Rate Limiting (APIM)
+                        const retryAfter = response.headers.get('Retry-After') || '60';
+                        throw new Error(`APIリクエスト制限中です。${retryAfter}秒後に再試行してください。`);
+                    }
                     if (response.status === 504 || response.status === 503) {
                         throw new Error(`Server Busy (Status: ${response.status})`);
                     }
                     throw new Error(errorMessage);
                 }
 
-                return await response.json();
+                // Parse JSON response with error handling
+                const text = await response.text();
+                if (!text || text.trim() === '') {
+                    console.warn('[ApiClient] Empty response body');
+                    // Return a sentinel so caller can handle gracefully
+                    return { error: 'EMPTY_RESPONSE' };
+                }
+
+                try {
+                    return JSON.parse(text);
+                } catch (jsonError) {
+                    console.error('[ApiClient] JSON parse error:', jsonError);
+                    console.error('[ApiClient] Response text:', text.substring(0, 200));
+                    throw new Error(`Invalid JSON response from server: ${jsonError.message}`);
+                }
             } catch (error) {
                 clearTimeout(id);
                 if (error.name === 'AbortError') {
@@ -75,7 +96,24 @@ class ApiClient {
         };
 
         try {
-            return await executeFetch(0);
+            // Try APIM first
+            try {
+                return await doFetch(primaryUrl);
+            } catch (e) {
+                // Network/CORS/5xx fallback to direct Function URL
+                const shouldFallback = (
+                    e.message?.includes('Failed to fetch') || // CORS/Network
+                    e.message?.includes('NetworkError') ||
+                    e.message?.includes('Server Busy') ||
+                    /API Error: (5\d\d)/.test(e.message || '')
+                );
+                if (shouldFallback) {
+                    const fallbackUrl = `${FALLBACK_BASE_URL}${endpoint}`;
+                    console.warn('[ApiClient] APIM失敗のためフェイルバック実行:', e.message);
+                    return await doFetch(fallbackUrl);
+                }
+                throw e;
+            }
         } catch (error) {
             if (retries > 0) {
                 console.log(`API Request failed, retrying... (${retries} attempts left)`);

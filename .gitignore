@@ -2,3 +2,9 @@ azure-functions/local.settings.json
 node_modules/
 .DS_Store
 *.log
+
+# 配布用ZIPファイル（GitHubにあげない）
+*.zip
+
+# ビルド成果物（コミット不要）
+landing-page-new/dist/

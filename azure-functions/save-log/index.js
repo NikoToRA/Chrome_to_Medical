@@ -17,6 +17,29 @@ module.exports = async function (context, req) {
 
     const { userId, type, content, metadata } = req.body;
 
+    // JWT check (require for non-anonymous logs)
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (userId !== 'anonymous') {
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            context.res = { status: 401, body: JSON.stringify({ error: 'Unauthorized: Missing token' }) };
+            return;
+        }
+        try {
+            const jwt = require('jsonwebtoken');
+            const secret = process.env.JWT_SECRET;
+            if (!secret) throw new Error('JWT_SECRET missing');
+            const decoded = jwt.verify(authHeader.split(' ')[1], secret);
+            const tokenEmail = decoded.email || decoded.sub;
+            if (!tokenEmail || tokenEmail.toLowerCase() !== String(userId).toLowerCase()) {
+                context.res = { status: 401, body: JSON.stringify({ error: 'Unauthorized: userId mismatch' }) };
+                return;
+            }
+        } catch (e) {
+            context.res = { status: 401, body: JSON.stringify({ error: 'Unauthorized: Invalid token' }) };
+            return;
+        }
+    }
+
     if (!userId || !content) {
         context.res = {
             status: 400,
@@ -28,7 +51,8 @@ module.exports = async function (context, req) {
     try {
         const date = new Date().toISOString().split('T')[0];
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const blobName = `${userId}/${date}/${timestamp}-${type || 'log'}.json`;
+        const safeUser = (userId || 'anonymous').toLowerCase();
+        const blobName = `${safeUser}/${date}/${timestamp}-${type || 'log'}.json`;
 
         const logData = {
             userId,
@@ -41,13 +65,13 @@ module.exports = async function (context, req) {
         const url = await saveToBlob('user-logs', blobName, logData);
 
         context.res = {
-            body: { success: true, url }
+            body: JSON.stringify({ success: true, url })
         };
     } catch (error) {
         context.log.error("Error saving log:", error);
         context.res = {
             status: 500,
-            body: { error: error.message }
+            body: JSON.stringify({ error: error.message })
         };
     }
 }

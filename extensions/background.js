@@ -6,7 +6,90 @@ chrome.action.onClicked.addListener((tab) => {
 // 拡張機能がインストールされたときの処理
 chrome.runtime.onInstalled.addListener(() => {
   // console.log('Chrome to X 拡張機能がインストールされました');
+
+  // v0.2.52: 24時間ごとのサブスクリプションチェックalarmを設定
+  chrome.alarms.create('dailySubscriptionCheck', {
+    periodInMinutes: 1440 // 24時間 = 1440分
+  });
+  console.log('[Background] 24時間ごとのサブスクチェックalarmを設定');
 });
+
+// v0.2.52: Alarm発火時のサブスクリプションチェック
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'dailySubscriptionCheck') {
+    console.log('[Background] 定期サブスクリプションチェック開始');
+    await performDailySubscriptionCheck();
+  }
+});
+
+/**
+ * 定期サブスクリプションチェック（background.js内で完結）
+ * Service WorkerなのでAuthManagerは使えず、直接APIコール
+ */
+async function performDailySubscriptionCheck() {
+  try {
+    // ストレージからトークンとユーザー情報を取得
+    const storage = await chrome.storage.local.get(['authToken', 'user']);
+
+    if (!storage.authToken || !storage.user?.email) {
+      console.log('[Background] ログイン情報なし、チェックスキップ');
+      return;
+    }
+
+    const email = storage.user.email;
+    const token = storage.authToken;
+
+    console.log('[Background] サブスクチェック実行:', email);
+
+    // APIコール: APIM優先 + フェイルバックでFunction直
+    const apimUrl = 'https://apim-karte-ai-1763705952.azure-api.net/api/check-subscription';
+    const funcUrl = 'https://func-karte-ai-1763705952.azurewebsites.net/api/check-subscription';
+    let data = null;
+    try {
+      const res = await fetch(apimUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ email })
+      });
+      if (!res.ok) throw new Error('APIM error: ' + res.status);
+      data = await res.json();
+    } catch (e) {
+      console.warn('[Background] APIM失敗のためフェイルバック:', e.message);
+      const res2 = await fetch(funcUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ email })
+      });
+      if (!res2.ok) {
+        console.error('[Background] フェイルバックも失敗:', res2.status);
+        return;
+      }
+      data = await res2.json();
+    }
+
+    // キャッシュを更新
+    const cacheData = {
+      ...data,
+      checkedAt: new Date().toISOString()
+    };
+
+    await chrome.storage.local.set({
+      subscriptionCache: cacheData,
+      lastSubscriptionCheck: cacheData.checkedAt
+    });
+
+    console.log('[Background] サブスクキャッシュ更新完了:', data.active ? '有効' : '無効');
+
+  } catch (error) {
+    console.error('[Background] 定期サブスクチェックエラー:', error);
+  }
+}
 
 // サイドパネルからタブ情報を取得するためのメッセージハンドラ
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

@@ -63,8 +63,20 @@ async function getSubscription(email) {
         const entity = await client.getEntity("Subscription", rowKey);
         return entity;
     } catch (e) {
-        if (e.statusCode === 404) return null;
-        throw e;
+        if (e.statusCode !== 404) throw e;
+        // Fallback: try raw casing rowKey for legacy records
+        if (email && email !== safeEmail) {
+            try {
+                const rawKey = Buffer.from(String(email)).toString('base64');
+                const legacy = await client.getEntity("Subscription", rawKey);
+                // Migrate to normalized key for future reads
+                await client.upsertEntity({ ...legacy, partitionKey: 'Subscription', rowKey, email: safeEmail }, "Merge");
+                return { ...legacy, rowKey, email: safeEmail };
+            } catch (e2) {
+                if (e2.statusCode !== 404) throw e2;
+            }
+        }
+        return null;
     }
 }
 
@@ -93,8 +105,107 @@ async function getUser(email) {
         const entity = await client.getEntity("User", rowKey);
         return entity;
     } catch (e) {
-        if (e.statusCode === 404) return null;
-        throw e;
+        if (e.statusCode !== 404) throw e;
+        // Fallback: try raw casing rowKey for legacy records
+        if (email && email !== safeEmail) {
+            try {
+                const rawKey = Buffer.from(String(email)).toString('base64');
+                const legacy = await client.getEntity("User", rawKey);
+                await client.upsertEntity({ ...legacy, partitionKey: 'User', rowKey, email: safeEmail }, "Merge");
+                return { ...legacy, rowKey, email: safeEmail };
+            } catch (e2) {
+                if (e2.statusCode !== 404) throw e2;
+            }
+        }
+        return null;
+    }
+}
+
+// ==================== Rate Limiting ====================
+
+/**
+ * Check and update rate limit for a given key
+ * @param {string} key - Rate limit key (e.g., IP address or email)
+ * @param {string} type - Type of rate limit ('ip' or 'email')
+ * @param {number} maxRequests - Maximum requests allowed
+ * @param {number} windowSeconds - Time window in seconds
+ * @returns {object} { allowed: boolean, remaining: number, resetAt: string }
+ */
+async function checkRateLimit(key, type = 'ip', maxRequests = 5, windowSeconds = 60) {
+    const client = await getTableClient('RateLimit');
+    const safeKey = Buffer.from(key.toLowerCase()).toString('base64').replace(/[/+=]/g, '_');
+    const rowKey = `${type}_${safeKey}`;
+    const now = Date.now();
+    const windowMs = windowSeconds * 1000;
+
+    try {
+        let entity;
+        try {
+            entity = await client.getEntity("RateLimit", rowKey);
+        } catch (e) {
+            if (e.statusCode !== 404) throw e;
+            entity = null;
+        }
+
+        // Check if window has expired
+        if (entity && entity.windowStart) {
+            const windowStart = new Date(entity.windowStart).getTime();
+            if (now - windowStart > windowMs) {
+                // Window expired, reset
+                entity = null;
+            }
+        }
+
+        if (!entity) {
+            // First request in window
+            await client.upsertEntity({
+                partitionKey: "RateLimit",
+                rowKey: rowKey,
+                key: key.toLowerCase(),
+                type: type,
+                count: 1,
+                windowStart: new Date(now).toISOString(),
+                lastRequest: new Date(now).toISOString()
+            }, "Replace");
+
+            return {
+                allowed: true,
+                remaining: maxRequests - 1,
+                resetAt: new Date(now + windowMs).toISOString()
+            };
+        }
+
+        const currentCount = entity.count || 0;
+
+        if (currentCount >= maxRequests) {
+            // Rate limit exceeded
+            const windowStart = new Date(entity.windowStart).getTime();
+            const resetAt = new Date(windowStart + windowMs).toISOString();
+            return {
+                allowed: false,
+                remaining: 0,
+                resetAt: resetAt,
+                retryAfter: Math.ceil((windowStart + windowMs - now) / 1000)
+            };
+        }
+
+        // Increment counter
+        await client.upsertEntity({
+            ...entity,
+            count: currentCount + 1,
+            lastRequest: new Date(now).toISOString()
+        }, "Replace");
+
+        return {
+            allowed: true,
+            remaining: maxRequests - currentCount - 1,
+            resetAt: new Date(new Date(entity.windowStart).getTime() + windowMs).toISOString()
+        };
+
+    } catch (error) {
+        console.error("[RateLimit] Error:", error);
+        // On error, allow the request (fail open) but log
+        return { allowed: true, remaining: -1, error: error.message };
     }
 }
 
@@ -105,7 +216,8 @@ module.exports = {
     getUser,
     getSubscriptionByCreatedDate,
     getSubscriptionsByTrialEndRange,
-    upsertReceipt
+    upsertReceipt,
+    checkRateLimit
 };
 
 async function getSubscriptionByCreatedDate(dateStr) {

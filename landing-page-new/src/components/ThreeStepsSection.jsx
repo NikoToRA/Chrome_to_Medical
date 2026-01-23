@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion'
 import { slideUp, staggerContainer, staggerItem } from '../utils/animations'
-import { CTA_URL, PURCHASE_URL } from '../utils/constants'
 import './ThreeStepsSection.css'
 
 function ThreeStepsSection() {
@@ -51,18 +50,6 @@ function ThreeStepsSection() {
                             <p>面倒な設定なしで、すぐに使い始められます。</p>
                         </div>
                     </motion.div>
-                </motion.div>
-
-                <motion.div
-                    className="steps-cta"
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true }}
-                    variants={slideUp}
-                >
-                    <a href={CTA_URL} className="btn btn-primary btn-lg">
-                        今すぐ3ステップで始める
-                    </a>
                 </motion.div>
             </div>
         </section>

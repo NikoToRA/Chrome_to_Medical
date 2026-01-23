@@ -1,0 +1,142 @@
+/* Persona Challenges Section - Pain Points Cards */
+.persona-challenges-section {
+    padding: 2rem 0 3rem;
+    background: #fff;
+}
+
+.persona-challenges-section .section-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 2rem;
+}
+
+/* Pain Points Grid */
+.pain-points-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.pain-point-card {
+    background: #fff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e2e8f0;
+    transition: all 0.3s ease;
+}
+
+.pain-point-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.pain-point-image-wrapper {
+    width: 100%;
+    height: 180px;
+    overflow: hidden;
+    background: #f8fafc;
+}
+
+.pain-point-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.pain-point-content {
+    padding: 1.25rem;
+}
+
+.pain-point-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1.5;
+    margin: 0 0 0.5rem;
+    white-space: pre-line;
+}
+
+.pain-point-description {
+    font-size: 0.875rem;
+    color: #64748b;
+    line-height: 1.6;
+    margin: 0;
+}
+
+/* Solution Arrow */
+.solution-arrow {
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.arrow-down {
+    font-size: 2rem;
+    color: #dc2626;
+    animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(10px);
+    }
+}
+
+/* Tablet */
+@media (max-width: 1024px) {
+    .pain-points-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+    }
+
+    .pain-point-image-wrapper {
+        height: 150px;
+    }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .persona-challenges-section {
+        padding: 1.5rem 1.5rem 2rem;
+    }
+
+    .pain-points-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .pain-point-card {
+        display: flex;
+        flex-direction: row;
+    }
+
+    .pain-point-image-wrapper {
+        width: 120px;
+        height: auto;
+        min-height: 100px;
+        flex-shrink: 0;
+    }
+
+    .pain-point-content {
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .pain-point-title {
+        font-size: 0.9rem;
+    }
+
+    .pain-point-description {
+        font-size: 0.8rem;
+    }
+
+    .arrow-down {
+        font-size: 1.5rem;
+    }
+}

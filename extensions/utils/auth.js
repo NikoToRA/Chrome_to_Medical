@@ -12,6 +12,8 @@ class AuthManager {
         this.periodEnd = null;
         this.subscriptionStatus = null;
         this.trialDaysRemaining = null;
+        // v0.2.5: サブスク無効時の理由（ログアウトせずUIで表示用）
+        this.subscriptionInactiveReason = null;
         this.init();
     }
 
@@ -29,16 +31,23 @@ class AuthManager {
                         console.log('[AuthManager] 保存されたトークンを検出');
                         this.token = result.authToken;
                         this.user = result.user;
-                        
+
                         // トークンの有効性を検証
+                        // v0.2.5: 検証失敗時もログアウトしない（一時的なネットワークエラーを考慮）
                         try {
                             await this.verifyTokenWithServer(result.authToken);
                             await this.checkSubscription();
                             console.log('[AuthManager] トークン検証成功');
                         } catch (verifyError) {
-                            console.warn('[AuthManager] トークン検証失敗:', verifyError);
-                            // 無効なトークンは削除
-                            await this.logout();
+                            console.warn('[AuthManager] トークン検証失敗（ログアウトはしません）:', verifyError);
+                            // v0.2.5: 一時的なエラーでログアウトしない
+                            // トークンは保持し、次回のAPI呼び出しで再検証
+                            // 明確にトークンが無効（JWT形式エラー等）な場合のみログアウト
+                            if (verifyError.message && verifyError.message.includes('トークンの形式が無効')) {
+                                console.warn('[AuthManager] トークン形式が無効のためログアウト');
+                                await this.logout();
+                            }
+                            // それ以外（ネットワークエラー、サーバーエラー等）はトークンを保持
                         }
                     } else {
                         console.log('[AuthManager] 保存されたトークンなし');
@@ -150,7 +159,8 @@ class AuthManager {
             // サーバー側でトークンを検証
             try {
                 await this.verifyTokenWithServer(token);
-                await this.checkSubscription();
+                // v0.2.52: ログイン時は必ず最新のサブスク状態を取得（再課金後すぐ使えるように）
+                await this.checkSubscription(true); // forceRefresh = true
                 console.log('[AuthManager] ログイン成功:', payload.email);
                 return this.user;
             } catch (verifyError) {
@@ -219,15 +229,15 @@ class AuthManager {
     }
 
     /**
-     * サブスクリプション状態をチェックし、無効な場合は自動ログアウト
-     * サーバー側（check-subscription）でStripeのtrialEndベースで判定済み
+     * サブスクリプション状態をチェックし、無効な場合は通知のみ（ログアウトしない）
+     * v0.2.5: 自動ログアウトを廃止。サブスク無効でもトークンを保持し、UIでブロックする方針に変更。
+     * 理由: 一時的なサーバーエラーやStripe Webhook遅延で誤ってログアウトされる問題を防止
      */
     async checkSubscriptionExpiration() {
-        // サーバー側でactive判定されていない場合は、自動ログアウト
         if (!this.isSubscribed) {
-            console.warn('[AuthManager] サブスクリプションが無効です。自動ログアウトします。');
+            console.warn('[AuthManager] サブスクリプションが無効です（ログアウトはしません）');
 
-            // ログアウト理由を判定
+            // ログアウトせずに理由を記録するのみ
             let reason = 'サブスクリプションが無効です。';
             if (this.subscriptionStatus === 'trialing' && this.trialEnd) {
                 const trialEndDate = new Date(this.trialEnd);
@@ -239,19 +249,24 @@ class AuthManager {
                 reason = 'サブスクリプションがキャンセルされました。';
             }
 
-            // ログアウト前に通知
-            if (typeof showNotification === 'function') {
-                showNotification(reason, 'warning');
-            }
+            // 理由をプロパティに保存（UIで表示用）
+            this.subscriptionInactiveReason = reason;
 
-            // 自動ログアウト
-            await this.logout();
-            return true; // ログアウトしたことを返す
+            // 注意: ログアウトは行わない。トークンを保持し、UIでブロックする
+            // 自動ログアウトは一時的なエラーでユーザー体験を損なうため廃止
+            return false; // ログアウトしていない（サブスク無効を示すためfalseを返す）
         }
+        this.subscriptionInactiveReason = null;
         return false; // ログアウトしていない
     }
 
-    async checkSubscription() {
+    /**
+     * サブスクリプション状態を確認（キャッシュベース）
+     * v0.2.52: 1日1回のみAPIコール、それ以外はキャッシュを使用
+     * @param {boolean} forceRefresh - trueならキャッシュを無視してAPIコール
+     * @returns {Promise<boolean>}
+     */
+    async checkSubscription(forceRefresh = false) {
         if (!this.user || !this.user.email) {
             console.warn('[AuthManager] ユーザー情報がないため、サブスクリプション確認をスキップ');
             return false;
@@ -262,57 +277,131 @@ class AuthManager {
             return false;
         }
 
+        // v0.2.52: キャッシュを確認（forceRefreshでない場合）
+        if (!forceRefresh && typeof chrome !== 'undefined' && chrome.storage) {
+            try {
+                const cached = await this._getSubscriptionCache();
+                if (cached && cached.checkedAt) {
+                    const hoursSinceCheck = (Date.now() - new Date(cached.checkedAt).getTime()) / (1000 * 60 * 60);
+                    if (hoursSinceCheck < 24) {
+                        console.log('[AuthManager] キャッシュを使用（最終チェック:', cached.checkedAt, '）');
+                        this._applySubscriptionData(cached);
+                        return this.isSubscribed;
+                    }
+                }
+            } catch (cacheError) {
+                console.warn('[AuthManager] キャッシュ読み込みエラー:', cacheError);
+            }
+        }
+
+        // APIコールでサブスクリプション確認
+        return this._fetchSubscriptionFromServer();
+    }
+
+    /**
+     * サーバーからサブスクリプション状態を取得（強制）
+     * background.jsの定期チェックから呼ばれる
+     */
+    async forceCheckSubscription() {
+        return this.checkSubscription(true);
+    }
+
+    /**
+     * サーバーからサブスクリプション状態を取得
+     * @private
+     */
+    async _fetchSubscriptionFromServer() {
         try {
-            console.log('[AuthManager] サブスクリプション確認開始:', this.user.email);
-            // Call Azure Function
+            console.log('[AuthManager] サブスクリプション確認開始（API）:', this.user.email);
             const response = await window.ApiClient.post('/check-subscription', { email: this.user.email }, {
                 retries: 1,
                 timeout: 10000
             });
-            
-            this.isSubscribed = response.active === true;
-            
-            // サブスクリプションの詳細情報を保存（trialEnd, periodEnd等）
-            if (response.trialEnd) {
-                this.trialEnd = new Date(response.trialEnd);
-            }
-            if (response.periodEnd) {
-                this.periodEnd = new Date(response.periodEnd);
-            }
-            if (response.status) {
-                this.subscriptionStatus = response.status;
-            }
-            if (response.trialDaysRemaining !== undefined) {
-                this.trialDaysRemaining = response.trialDaysRemaining;
-            }
-            
+
+            // レスポンスを適用
+            this._applySubscriptionData(response);
+
+            // v0.2.52: キャッシュに保存
+            await this._saveSubscriptionCache(response);
+
             console.log('[AuthManager] サブスクリプション状態:', this.isSubscribed ? '有効' : '無効');
             if (this.trialEnd) {
                 console.log('[AuthManager] トライアル終了日:', this.trialEnd.toISOString());
             }
-            if (this.periodEnd) {
-                console.log('[AuthManager] サブスクリプション期間終了日:', this.periodEnd.toISOString());
-            }
-            
+
             return this.isSubscribed;
         } catch (e) {
             console.error('[AuthManager] サブスクリプション確認失敗:', e);
-            // 401エラーの場合は認証エラーとして扱う
-            // ただし、サブスクリプション確認エンドポイントは認証エラーではなく、
-            // サブスクリプション状態を返すべきなので、401が返ってきた場合は
-            // トークンの有効性を別途確認する必要がある
-            // ここでは、401が返ってきてもログアウトせず、サブスクリプションが無効とみなす
             if (e.status === 401 || e.message?.includes('401') || e.message?.includes('Unauthorized')) {
-                console.warn('[AuthManager] 401エラーが発生しましたが、サブスクリプション確認エンドポイントでは認証エラーとして扱わず、サブスクリプション無効として処理します');
-                // トークンの有効性を確認するために、別のエンドポイントを呼び出すか、
-                // ここではサブスクリプション無効として扱う
+                console.warn('[AuthManager] 401エラー、サブスクリプション無効として処理');
                 this.isSubscribed = false;
                 return false;
             }
-            // Don't logout on check fail, just assume not subscribed or retry
+            // エラー時はキャッシュがあればそれを使用、なければfalse
+            const cached = await this._getSubscriptionCache();
+            if (cached) {
+                console.log('[AuthManager] API失敗、キャッシュを使用');
+                this._applySubscriptionData(cached);
+                return this.isSubscribed;
+            }
             this.isSubscribed = false;
             return false;
         }
+    }
+
+    /**
+     * サブスクリプションデータをプロパティに適用
+     * @private
+     */
+    _applySubscriptionData(data) {
+        this.isSubscribed = data.active === true;
+        this.hasSubscriptionRecord = data.hasSubscriptionRecord || false;
+
+        if (data.trialEnd) {
+            this.trialEnd = new Date(data.trialEnd);
+        }
+        if (data.periodEnd || data.expiry) {
+            this.periodEnd = new Date(data.periodEnd || data.expiry);
+        }
+        if (data.status) {
+            this.subscriptionStatus = data.status;
+        }
+        if (data.trialDaysRemaining !== undefined) {
+            this.trialDaysRemaining = data.trialDaysRemaining;
+        }
+    }
+
+    /**
+     * サブスクリプションキャッシュを保存
+     * @private
+     */
+    async _saveSubscriptionCache(data) {
+        if (typeof chrome === 'undefined' || !chrome.storage) return;
+
+        const cacheData = {
+            ...data,
+            checkedAt: new Date().toISOString()
+        };
+
+        await chrome.storage.local.set({
+            subscriptionCache: cacheData,
+            lastSubscriptionCheck: cacheData.checkedAt
+        });
+        console.log('[AuthManager] サブスクリプションキャッシュを保存');
+    }
+
+    /**
+     * サブスクリプションキャッシュを取得
+     * @private
+     */
+    async _getSubscriptionCache() {
+        if (typeof chrome === 'undefined' || !chrome.storage) return null;
+
+        return new Promise((resolve) => {
+            chrome.storage.local.get(['subscriptionCache'], (result) => {
+                resolve(result.subscriptionCache || null);
+            });
+        });
     }
 
     async subscribe() {

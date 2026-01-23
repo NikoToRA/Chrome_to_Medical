@@ -4,8 +4,7 @@ import HeroSection from '../components/HeroSection'
 import PainPointsSection from '../components/PainPointsSection'
 import SolutionSection from '../components/SolutionSection'
 import TemplateFeatureSection from '../components/TemplateFeatureSection'
-import AgentFeatureSection from '../components/AgentFeatureSection'
-import UsageSceneSection from '../components/UsageSceneSection'
+import CompatibilitySection from '../components/CompatibilitySection'
 import SecuritySection from '../components/SecuritySection'
 import ThreeStepsSection from '../components/ThreeStepsSection'
 import TestimonialsSection from '../components/TestimonialsSection'
@@ -23,8 +22,7 @@ function Home() {
             <PainPointsSection />
             <SolutionSection />
             <TemplateFeatureSection />
-            <AgentFeatureSection />
-            <UsageSceneSection />
+            <CompatibilitySection />
             <SecuritySection />
             <ThreeStepsSection />
             <TestimonialsSection />

@@ -47,6 +47,12 @@ const openSettingsBtn = document.getElementById('openSettingsBtn');
 const retainTextToggle = document.getElementById('retainTextToggle');
 const clearChatBtn = document.getElementById('clearChatBtn');
 const directTemplatePasteToggle = document.getElementById('directTemplatePasteToggle');
+// v0.2.6: 処方日数カレンダーUI
+const prescriptionDatePicker = document.getElementById('prescriptionDatePicker');
+const prescriptionDaysResult = document.getElementById('prescriptionDaysResult');
+const pastePrescriptionDaysBtn = document.getElementById('pastePrescriptionDaysBtn');
+const copyPrescriptionDaysBtn = document.getElementById('copyPrescriptionDaysBtn');
+const includeDateInPrescription = document.getElementById('includeDateInPrescription');
 // 状態管理
 let currentImages = [];
 let templates = { diagnoses: [], medications: [], phrases: [] };
@@ -82,6 +88,7 @@ async function init() {
   setupTextRetentionToggle();
   await setupTemplateDirectPasteToggle();
   setupJstTimeDisplay();
+  setupPrescriptionCalendar(); // v0.2.6: 処方日数カレンダー
   setupAuthTokenListener();
   await checkAuthAndUpdateUI();
 
@@ -90,12 +97,15 @@ async function init() {
 
   renderCategoryTabs();
   renderTemplates();
-  renderCategoryTabs();
-  renderTemplates();
   renderImages();
 
-  // [Auto-Sync] Background Sync
-  syncUserSettings();
+  // [Auto-Sync] Background Sync - await して同期完了後にUIを再描画
+  await syncUserSettings();
+
+  // 同期後にUIを再描画（リモートからのデータ反映）
+  renderCategoryTabs();
+  renderTemplates();
+  renderAgentSelector();
 }
 
 async function initTabPreferenceUserId() {
@@ -293,7 +303,7 @@ function showAuthRequiredUI(isInactive = false) {
 
       // 再ログインボタンのイベント
       document.getElementById('goToReloginBtn').addEventListener('click', () => {
-        window.open('https://stkarteai1763705952.z11.web.core.windows.net/#/login', '_blank');
+        window.open('https://stkarteai1763705952.z11.web.core.windows.net/login', '_blank');
       });
 
       // サブスクリプション管理ボタンのイベント
@@ -436,11 +446,10 @@ function showAuthRequiredUI(isInactive = false) {
 
             // AuthManagerにトークンを設定
             if (window.AuthManager) {
-              await window.AuthManager.setToken(token, email);
-              window.AuthManager.user = { id: email, email: email };
+              await window.AuthManager.loginWithToken(token);
 
               // 購読状態を確認
-              const isSubscribed = await window.AuthManager.checkSubscription();
+              const isSubscribed = window.AuthManager.isSubscribed;
 
               // ストレージにも保存
               chrome.storage.local.set({
@@ -456,6 +465,15 @@ function showAuthRequiredUI(isInactive = false) {
                 // Do not hide UI, just refresh it to reflect "Expired" or "Start" state correctly
                 checkAuthAndUpdateUI();
               }
+
+              // v0.2.5: 手動ログイン時にもクラウドから設定を同期（定型文・エージェント）
+              console.log('[SidePanel] 手動ログイン時の設定同期を開始');
+              await syncUserSettings();
+              // 同期後にUIを再描画
+              renderCategoryTabs();
+              renderTemplates();
+              renderAgentSelector();
+              console.log('[SidePanel] 設定同期完了、UIを再描画しました');
             }
           } catch (error) {
             console.error('[SidePanel] トークン処理エラー:', error);
@@ -487,18 +505,25 @@ function setupAuthTokenListener() {
 
       // AuthManagerにトークンを設定
       if (window.AuthManager) {
-        window.AuthManager.setToken(request.token, request.email).then(() => {
-          // ユーザー情報を更新
-          window.AuthManager.user = { id: request.email, email: request.email };
-          // 購読状態を確認
-          window.AuthManager.checkSubscription().then(() => {
-            console.log('[SidePanel] ✅ 認証完了、購読状態を確認しました');
-            showNotification('ログインに成功しました！', 'success');
-            // 認証UIを非表示
-            hideAuthRequiredUI();
-            // UIを再チェック
-            checkAuthAndUpdateUI();
-          });
+        window.AuthManager.loginWithToken(request.token).then(async () => {
+          console.log('[SidePanel] ✅ 認証完了、購読状態を確認しました');
+          showNotification('ログインに成功しました！', 'success');
+          // 認証UIを非表示
+          hideAuthRequiredUI();
+          // UIを再チェック
+          checkAuthAndUpdateUI();
+
+          // v0.2.5: 再ログイン時にクラウドから設定を同期（定型文・エージェント）
+          console.log('[SidePanel] 再ログイン時の設定同期を開始');
+          await syncUserSettings();
+          // 同期後にUIを再描画
+          renderCategoryTabs();
+          renderTemplates();
+          renderAgentSelector();
+          console.log('[SidePanel] 設定同期完了、UIを再描画しました');
+        }).catch(err => {
+          console.error('[SidePanel] ログイン失敗:', err);
+          showNotification('ログインに失敗しました: ' + err.message, 'error');
         });
       }
 
@@ -899,17 +924,16 @@ function setupEventListeners() {
     });
   }
 
+  // v0.2.5: 歯車ボタンで直接オプション画面を開く（モーダル廃止）
   if (openSettingsBtn) {
     openSettingsBtn.addEventListener('click', () => {
       if (chrome.runtime?.openOptionsPage) {
         chrome.runtime.openOptionsPage();
-      } else {
-        window.open(chrome.runtime.getURL('options/options.html'));
       }
     });
   }
 
-
+  // v0.2.5: 設定モーダル関連のコードを削除（歯車ボタンで直接オプション画面を開くため）
 
   if (aiChatForm) {
     aiChatForm.addEventListener('submit', (e) => {
@@ -2035,11 +2059,12 @@ async function handleAiChatSend() {
     } else if (Array.isArray(response.content) && response.content[0] && response.content[0].text) {
       replyText = response.content[0].text;
     } else if (response.content === null || response.content === undefined) {
-      console.warn('[SidePanel] Content is null/undefined');
-      throw new Error('AIからの応答にコンテンツが含まれていません');
+      console.warn('[SidePanel] Content is null/undefined. Raw response:', response);
+      // Graceful fallback: show error/explanation instead of throwing
+      replyText = response.message || response.error || '応答の生成に失敗しました。時間をおいて再試行してください。';
     } else {
       console.error('[SidePanel] Unknown response format:', response);
-      throw new Error('AIからの応答形式が不明です');
+      replyText = '応答形式を解釈できませんでした。もう一度お試しください。';
     }
 
     assistantMessage.content = replyText;
@@ -2316,6 +2341,21 @@ function setupStorageObservers() {
 
     if (changes[StorageManager.STORAGE_KEYS.AI_CHAT_SESSIONS]) {
       loadChatHistory();
+    }
+
+    // テンプレート変更のハンドラ（同期からの更新を反映）
+    if (changes[StorageManager.STORAGE_KEYS.TEMPLATES]) {
+      templates = changes[StorageManager.STORAGE_KEYS.TEMPLATES].newValue || {};
+      renderTemplates();
+      console.log('[SidePanel] テンプレートを同期から更新しました');
+    }
+
+    // テンプレートカテゴリ変更のハンドラ
+    if (changes[StorageManager.STORAGE_KEYS.TEMPLATE_CATEGORIES]) {
+      templateCategories = changes[StorageManager.STORAGE_KEYS.TEMPLATE_CATEGORIES].newValue || [];
+      renderCategoryTabs();
+      renderTemplates();
+      console.log('[SidePanel] カテゴリを同期から更新しました');
     }
   });
 }
@@ -2778,8 +2818,140 @@ function setupJstTimeDisplay() {
   }, 1000);
 }
 
-// Debug: Check if ApiClient is loaded
-console.log('[DEBUG] ApiClient loaded:', window.ApiClient);
+// v0.2.6: 処方日数カレンダー機能
+function calculatePrescriptionDays(targetDateStr) {
+  if (!targetDateStr) return null;
+
+  const now = new Date();
+  // JST変換
+  const jstNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+  // 時刻をリセット（日付のみで計算）
+  jstNow.setHours(0, 0, 0, 0);
+
+  const targetDate = new Date(targetDateStr + 'T00:00:00');
+
+  // 差分を日数で計算
+  const diffTime = targetDate.getTime() - jstNow.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  return diffDays;
+}
+
+function formatPrescriptionText(days, targetDateStr, includeDate) {
+  if (days === null || days < 0) return null;
+
+  let text = `処方日数: ${days}日分`;
+
+  if (includeDate && targetDateStr) {
+    const targetDate = new Date(targetDateStr);
+    const year = targetDate.getFullYear();
+    const month = String(targetDate.getMonth() + 1).padStart(2, '0');
+    const day = String(targetDate.getDate()).padStart(2, '0');
+    text += ` 次回: ${year}/${month}/${day}`;
+  }
+
+  return text;
+}
+
+function updatePrescriptionDaysUI() {
+  if (!prescriptionDatePicker || !prescriptionDaysResult) return;
+
+  const targetDate = prescriptionDatePicker.value;
+  const days = calculatePrescriptionDays(targetDate);
+
+  if (days === null) {
+    prescriptionDaysResult.innerHTML = '<span style="color: #888; font-size: 12px;">日付を選択してください</span>';
+    if (pastePrescriptionDaysBtn) pastePrescriptionDaysBtn.disabled = true;
+    if (copyPrescriptionDaysBtn) copyPrescriptionDaysBtn.disabled = true;
+    return;
+  }
+
+  if (days < 0) {
+    prescriptionDaysResult.innerHTML = '<span style="color: #dc3545; font-size: 12px;">⚠️ 過去の日付は選択できません</span>';
+    if (pastePrescriptionDaysBtn) pastePrescriptionDaysBtn.disabled = true;
+    if (copyPrescriptionDaysBtn) copyPrescriptionDaysBtn.disabled = true;
+    return;
+  }
+
+  if (days === 0) {
+    prescriptionDaysResult.innerHTML = '<span style="color: #ffc107; font-size: 14px; font-weight: bold;">📅 本日</span>';
+  } else {
+    prescriptionDaysResult.innerHTML = `<span style="color: #0056b3; font-size: 18px; font-weight: bold;">📋 ${days}日分</span>`;
+  }
+
+  if (pastePrescriptionDaysBtn) pastePrescriptionDaysBtn.disabled = false;
+  if (copyPrescriptionDaysBtn) copyPrescriptionDaysBtn.disabled = false;
+}
+
+function setupPrescriptionCalendar() {
+  if (!prescriptionDatePicker) return;
+
+  // 日付選択時のイベント
+  prescriptionDatePicker.addEventListener('change', updatePrescriptionDaysUI);
+
+  // 貼り付けボタン
+  if (pastePrescriptionDaysBtn) {
+    pastePrescriptionDaysBtn.addEventListener('click', () => {
+      const targetDate = prescriptionDatePicker.value;
+      const days = calculatePrescriptionDays(targetDate);
+      const includeDate = includeDateInPrescription?.checked || false;
+      const text = formatPrescriptionText(days, targetDate, includeDate);
+
+      if (!text) {
+        showNotification('処方日数を計算できません');
+        return;
+      }
+
+      chrome.runtime.sendMessage({
+        action: 'pasteToActiveTab',
+        text: text,
+        images: []
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          showNotification('貼り付けに失敗しました: ' + chrome.runtime.lastError.message);
+          return;
+        }
+        if (response && response.success === false) {
+          showNotification('貼り付けに失敗しました: ' + (response.error || '不明なエラー'));
+        } else {
+          showNotification('処方日数を貼り付けました');
+        }
+      });
+    });
+  }
+
+  // コピーボタン
+  if (copyPrescriptionDaysBtn) {
+    copyPrescriptionDaysBtn.addEventListener('click', async () => {
+      const targetDate = prescriptionDatePicker.value;
+      const days = calculatePrescriptionDays(targetDate);
+      const includeDate = includeDateInPrescription?.checked || false;
+      const text = formatPrescriptionText(days, targetDate, includeDate);
+
+      if (!text) {
+        showNotification('処方日数を計算できません');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(text);
+        showNotification('処方日数をコピーしました');
+      } catch (err) {
+        showNotification('コピーに失敗しました');
+      }
+    });
+  }
+
+  // チェックボックス変更時にUIを更新
+  if (includeDateInPrescription) {
+    includeDateInPrescription.addEventListener('change', updatePrescriptionDaysUI);
+  }
+
+  // 初期表示
+  updatePrescriptionDaysUI();
+}
+
+// ApiClient存在チェック（エラー時のみログ出力）
 if (!window.ApiClient) {
   console.error('[ERROR] ApiClient is not loaded! Check api.js');
 }
@@ -2792,6 +2964,7 @@ if (document.readyState === 'loading') {
 }
 
 // [Auto-Sync] 設定を同期（基本はPullのみ）
+// v0.2.5: ローカルにデータがある場合はスキップ（ローカルデータ保護）
 async function syncUserSettings() {
   try {
     // Auth Check
@@ -2800,7 +2973,20 @@ async function syncUserSettings() {
     if (!user || !user.email) return;
 
     const userId = user.email;
-    console.log('[SidePanel] Pulling settings for', userId);
+
+    // v0.2.5: ローカルにデータがある場合はPullをスキップ
+    // 新規ユーザーやローカルが空の場合のみクラウドからPull
+    if (window.StorageManager) {
+      const localAgents = await window.StorageManager.getAgents();
+      const localCategories = await window.StorageManager.getTemplateCategories();
+
+      if ((localAgents && localAgents.length > 0) || (localCategories && localCategories.length > 0)) {
+        console.log('[SidePanel] ローカルにデータあり、自動Pullスキップ（エージェント:', localAgents?.length || 0, 'カテゴリ:', localCategories?.length || 0, '）');
+        return;
+      }
+    }
+
+    console.log('[SidePanel] ローカル空、クラウドからPull:', userId);
 
     // Pull Remote Settings
     const remoteResponse = await window.ApiClient.getSettings(userId);
@@ -2808,7 +2994,6 @@ async function syncUserSettings() {
     // Merge with Local
     if (remoteResponse && remoteResponse.settings) {
       console.log('[SidePanel] Import remote settings', remoteResponse.settings);
-      // StorageManagerがlocal storageを更新すると、onChangedイベントが発火してUIが更新される
       if (window.StorageManager) {
         await window.StorageManager.importSyncedSettings(remoteResponse.settings);
       }

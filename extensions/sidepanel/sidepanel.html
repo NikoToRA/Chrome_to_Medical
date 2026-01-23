@@ -90,6 +90,38 @@
                 style="flex: 1; font-size: 12px; padding: 4px;">計算して貼付</button>
             </div>
           </div>
+
+          <!-- v0.2.6: 処方日数カレンダー -->
+          <div class="prescription-calendar-section" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
+            <div class="section-subheader" style="margin-bottom: 8px;">
+              <span style="font-size: 13px; font-weight: 600; color: #333;">📅 処方日数カレンダー</span>
+            </div>
+
+            <div style="margin-bottom: 8px;">
+              <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">次回受診予定日</label>
+              <input type="date" id="prescriptionDatePicker" class="input" style="width: 100%; padding: 8px; font-size: 14px;">
+            </div>
+
+            <div id="prescriptionDaysResult" style="margin-bottom: 8px; text-align: center; min-height: 32px;">
+              <!-- 計算結果がここに表示される -->
+            </div>
+
+            <div style="display: flex; gap: 8px;">
+              <button id="pastePrescriptionDaysBtn" class="btn btn-primary" style="flex: 1; font-size: 12px; padding: 8px;" disabled>
+                📋 処方日数を貼り付け
+              </button>
+              <button id="copyPrescriptionDaysBtn" class="btn btn-secondary" style="flex-shrink: 0; font-size: 12px; padding: 8px;" disabled>
+                コピー
+              </button>
+            </div>
+
+            <div style="margin-top: 8px;">
+              <label style="font-size: 11px; color: #888;">
+                <input type="checkbox" id="includeDateInPrescription" style="margin-right: 4px;">
+                次回受診日も含める（例: 処方日数: 14日分 次回: 2026/02/06）
+              </label>
+            </div>
+          </div>
         </section>
 
         <!-- テキスト編集エリア（定型文の下へ移動） -->
@@ -212,30 +244,6 @@
             <button id="addCategoryBtn" class="btn btn-secondary">追加</button>
           </div>
           <div id="categoryList" class="category-list" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 設定モーダル（新規追加） -->
-  <div id="settingsModal" class="modal">
-    <div class="modal-content" style="max-width: 400px;">
-      <div class="modal-header">
-        <h2>設定</h2>
-        <button class="modal-close" id="closeSettingsModal">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div style="margin-bottom: 20px;">
-          <h3 style="font-size: 14px; margin-bottom: 10px; color: #666;">アカウント</h3>
-          <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; border: 1px solid #eee;">
-            <p style="font-size: 12px; color: #333; margin-bottom: 8px;">現在のアカウントからログアウトします。</p>
-            <button id="logoutBtn" class="btn btn-danger" style="width: 100%;">ログアウト</button>
-          </div>
-        </div>
-
-        <div>
-          <h3 style="font-size: 14px; margin-bottom: 10px; color: #666;">その他</h3>
-          <button id="openExtensionOptionsBtn" class="btn btn-secondary" style="width: 100%;">拡張機能のオプションを開く</button>
         </div>
       </div>
     </div>

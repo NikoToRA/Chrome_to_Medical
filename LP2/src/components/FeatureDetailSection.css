@@ -1,0 +1,161 @@
+/* Feature Detail Section */
+.feature-detail-section {
+    padding: 4rem 0;
+    background: #fff;
+}
+
+.feature-detail-section .section-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 2rem;
+}
+
+/* Feature Block */
+.feature-block {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+    align-items: stretch;
+    margin-bottom: 4rem;
+}
+
+.feature-block:last-child {
+    margin-bottom: 0;
+}
+
+/* Image Side */
+.feature-image-side {
+    display: flex;
+    flex-direction: column;
+}
+
+.feature-image-placeholder {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border: 2px solid #1e293b;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+}
+
+.placeholder-text {
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+
+/* Content Side - flexで上下配置 */
+.feature-content-side {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.feature-content-inner {
+    flex: 1;
+    text-align: left;
+}
+
+.feature-number {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 0 0 0.5rem;
+}
+
+.feature-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 1rem;
+    line-height: 1.4;
+}
+
+.feature-title.underline {
+    display: inline-block;
+    padding-bottom: 0.5rem;
+    border-bottom: 3px solid #dc2626;
+    text-align: left;
+}
+
+.feature-desc {
+    font-size: 0.9rem;
+    color: #374151;
+    line-height: 1.8;
+    margin: 0 0 1rem;
+}
+
+/* Tags */
+.feature-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.tag {
+    font-size: 0.9rem;
+    color: #374151;
+    padding: 0.5rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: #fff;
+}
+
+.feature-note {
+    font-size: 0.8rem;
+    color: #64748b;
+    line-height: 1.7;
+    margin: 0;
+}
+
+/* Links and Buttons - コンテンツ下部に配置 */
+.feature-link-button {
+    display: inline-block;
+    padding: 0.6rem 1.25rem;
+    border: 2px solid #1e293b;
+    border-radius: 4px;
+    color: #1e293b;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    text-align: center;
+    transition: all 0.3s ease;
+    align-self: flex-start;
+    margin-top: auto;
+}
+
+.feature-link-button:hover {
+    background: #1e293b;
+    color: #fff;
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .feature-detail-section {
+        padding: 3rem 0;
+    }
+
+    .feature-block {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+        margin-bottom: 3rem;
+    }
+
+    .feature-title {
+        font-size: 1.25rem;
+    }
+
+    .feature-desc {
+        font-size: 0.85rem;
+    }
+
+    .feature-desc br,
+    .feature-note br {
+        display: none;
+    }
+
+    .feature-link-button {
+        margin-top: 1rem;
+    }
+}
