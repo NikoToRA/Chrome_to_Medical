@@ -2,7 +2,10 @@
  * 認証エラーページのHTMLテンプレート生成
  */
 
-function createErrorPage({ title, icon, message, details, actionUrl = '/', actionText = 'トップページに戻る' }) {
+// LPのURL（環境変数から取得、なければデフォルト）
+const LP_URL = process.env.LP_URL || 'https://stkarteai1763705952.z11.web.core.windows.net';
+
+function createErrorPage({ title, icon, message, details, actionUrl = LP_URL, actionText = 'トップページに戻る' }) {
     return `
     <!DOCTYPE html>
     <html lang="ja">

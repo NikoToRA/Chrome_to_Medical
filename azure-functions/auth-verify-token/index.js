@@ -172,28 +172,82 @@ module.exports = async function (context, req) {
 
         // Fallback: Return HTML with the token and attempt to deliver to extension
         const extensionId = process.env.EXTENSION_ID || '';
+        const lpUrl = process.env.LP_URL || 'https://stkarteai1763705952.z11.web.core.windows.net';
         const html = `
         <html>
             <head>
-                <title>Login Successful</title>
+                <title>ログイン成功 - Karte AI+</title>
                 <style>
-                    body { font-family: sans-serif; text-align: center; padding: 50px; }
-                    .token-box { background: #f0f0f0; padding: 20px; margin: 20px auto; max-width: 600px; word-break: break-all; }
-                    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
-                    .hint { color: #666; font-size: 14px; }
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                        text-align: center;
+                        padding: 50px 20px;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        min-height: 100vh;
+                        margin: 0;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .container {
+                        background: white;
+                        border-radius: 16px;
+                        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                        max-width: 600px;
+                        width: 100%;
+                        padding: 48px;
+                    }
+                    h1 { color: #27ae60; margin-bottom: 16px; }
+                    .success-icon { font-size: 64px; margin-bottom: 16px; }
+                    .token-box {
+                        background: #f0f0f0;
+                        padding: 20px;
+                        margin: 20px auto;
+                        max-width: 100%;
+                        word-break: break-all;
+                        border-radius: 8px;
+                        font-size: 12px;
+                    }
+                    button {
+                        padding: 12px 24px;
+                        font-size: 16px;
+                        cursor: pointer;
+                        background: #27ae60;
+                        color: white;
+                        border: none;
+                        border-radius: 8px;
+                        margin: 8px;
+                    }
+                    button:hover { background: #219a52; }
+                    .hint { color: #666; font-size: 14px; margin-top: 16px; }
+                    .home-link {
+                        display: inline-block;
+                        margin-top: 24px;
+                        padding: 12px 24px;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        text-decoration: none;
+                        border-radius: 8px;
+                        font-weight: 600;
+                    }
+                    .home-link:hover { opacity: 0.9; }
                 </style>
             </head>
             <body>
-                <h1>Login Successful!</h1>
-                <p>Please copy the token below and paste it into the extension.</p>
-                <div class="token-box" id="token">${sessionToken}</div>
-                <button onclick="copyToken()">Copy Token</button>
-                <p class="hint">If the extension is installed, we will try to sign you in automatically.</p>
+                <div class="container">
+                    <div class="success-icon">✅</div>
+                    <h1>ログイン成功！</h1>
+                    <p>以下のトークンをコピーして、拡張機能に貼り付けてください。</p>
+                    <div class="token-box" id="token">${sessionToken}</div>
+                    <button onclick="copyToken()">トークンをコピー</button>
+                    <p class="hint">拡張機能がインストールされている場合、自動的にログインを試みます。</p>
+                    <a href="${lpUrl}" class="home-link">トップページに戻る</a>
+                </div>
                 <script>
                     function copyToken() {
                         const token = document.getElementById('token').innerText;
                         navigator.clipboard.writeText(token).then(() => {
-                            alert('Copied!');
+                            alert('トークンをコピーしました！');
                         });
                     }
                     (function(){
