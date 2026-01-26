@@ -5,3 +5,4 @@ local.settings.json
 test-*.js
 manual-test.js
 node_modules
+coverage/
