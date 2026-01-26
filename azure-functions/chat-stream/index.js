@@ -81,7 +81,7 @@ module.exports = async function (context, req) {
         context.log.error('[CHAT-STREAM] Auth verification failed:', authError);
         context.res = {
             status: 401,
-            body: { error: "Unauthorized", details: authError.message }
+            body: { error: "認証エラー", message: "トークンが無効または期限切れです。" }
         };
         return;
     }
@@ -180,7 +180,7 @@ module.exports = async function (context, req) {
         context.log.error('[CHAT-STREAM] Streaming Error:', error);
         // If headers not sent, send 500
         if (!context.res.headers) {
-            context.res = { status: 500, body: JSON.stringify({ error: error.message }) };
+            context.res = { status: 500, body: JSON.stringify({ error: "AI処理エラー", message: "ストリーミング中にエラーが発生しました。" }) };
         }
     }
 };

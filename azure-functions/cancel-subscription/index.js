@@ -102,13 +102,7 @@ module.exports = async function (context, req) {
                 status: 404,
                 headers: { 'Access-Control-Allow-Origin': '*' },
                 body: {
-                    error: "Active subscription not found",
-                    debug: {
-                        email: userEmail,
-                        hasSubscription: !!subscription,
-                        hasSubId: !!subId,
-                        subscriptionKeys: subscription ? Object.keys(subscription) : []
-                    }
+                    error: "有効なサブスクリプションが見つかりません"
                 }
             };
             return;

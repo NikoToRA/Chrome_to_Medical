@@ -48,7 +48,7 @@ module.exports = async function (context, req) {
         context.log.error("Error getting settings:", error);
         context.res = {
             status: 500,
-            body: { error: error.message }
+            body: { error: "設定取得エラー", message: "設定の取得中にエラーが発生しました。" }
         };
     }
 }

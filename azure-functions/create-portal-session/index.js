@@ -68,7 +68,7 @@ module.exports = async function (context, req) {
         context.res = {
             status: 500,
             headers: { 'Access-Control-Allow-Origin': '*' },
-            body: { error: error.message }
+            body: { error: "ポータルセッション作成エラー", message: "顧客ポータルの作成中にエラーが発生しました。" }
         };
     }
 };

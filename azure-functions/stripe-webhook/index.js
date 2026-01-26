@@ -313,6 +313,6 @@ module.exports = async function (context, req) {
         context.res = { body: { received: true } };
     } catch (error) {
         context.log.error("Error processing webhook:", error);
-        context.res = { status: 500, body: { error: error.message } };
+        context.res = { status: 500, body: { error: "Webhook処理エラー" } };
     }
 }

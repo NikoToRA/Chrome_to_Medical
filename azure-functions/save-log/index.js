@@ -71,7 +71,7 @@ module.exports = async function (context, req) {
         context.log.error("Error saving log:", error);
         context.res = {
             status: 500,
-            body: JSON.stringify({ error: error.message })
+            body: JSON.stringify({ error: "ログ保存エラー", message: "ログの保存中にエラーが発生しました。" })
         };
     }
 }

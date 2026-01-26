@@ -205,7 +205,7 @@ async function checkRateLimit(key, type = 'ip', maxRequests = 5, windowSeconds =
     } catch (error) {
         console.error("[RateLimit] Error:", error);
         // On error, allow the request (fail open) but log
-        return { allowed: true, remaining: -1, error: error.message };
+        return { allowed: true, remaining: -1, error: "Rate limit check failed" };
     }
 }
 

@@ -1,7 +1,7 @@
 # メール遅延問題の調査と解決方法
 
 **作成日**: 2026-01-25
-**ステータス**: 対応中（DNS設定待ち）
+**ステータス**: 解決済み（2026-01-26 完了）
 
 ## 問題の概要
 
@@ -84,10 +84,10 @@ Azure Communication Services でカスタムドメインを追加した際に生
 ### 対応状況
 
 - [x] Azure Communication Services にカスタムドメイン追加（2026-01-25）
-- [ ] DNS レコード設定（業者に依頼済み、返答待ち）
-- [ ] ドメイン検証
-- [ ] 送信元メールアドレス作成（`noreply@wonder-drill.com`）
-- [ ] Azure Function の環境変数更新（`SENDER_EMAIL_ADDRESS`）
+- [x] DNS レコード設定（2026-01-26 完了）
+- [x] ドメイン検証（Domain, SPF, DKIM, DKIM2 全て Verified）（2026-01-26 完了）
+- [x] 送信元メールアドレス作成（`noreply@wonder-drill.com`）（2026-01-26 完了）
+- [x] Azure Function の環境変数更新（`SENDER_EMAIL_ADDRESS`）（2026-01-26 完了）
 
 ## DNS 設定完了後の作業
 
@@ -152,7 +152,76 @@ az functionapp config appsettings set \
 - `/azure-functions/lib/email.js` - メール送信処理
 - `/azure-functions/auth-send-magic-link/index.js` - Magic Link 送信 API
 
+## 2026-01-26 追加修正: トークン無効問題
+
+### 症状
+
+メール問題の修正後、新たな問題が発覚：
+- 拡張機能でトークンを送信しても「トークン無効」と表示される
+- コンソールログに `[ApiClient] Empty response body` が出力される
+- サブスクリプションが無効と判定され、認証UIが再表示される
+
+### 原因
+
+APIMのCORSポリシーが Chrome拡張機能のorigin (`chrome-extension://...`) を許可していなかった。
+
+**修正前のCORS設定:**
+```xml
+<cors allow-credentials="true">
+    <allowed-origins>
+        <origin>https://stkarteai1763705952.z11.web.core.windows.net</origin>
+    </allowed-origins>
+</cors>
+```
+
+ランディングページのみ許可されており、拡張機能からのリクエストはCORSエラーとなり、ブラウザがレスポンスボディを読み取れなかった。
+
+### 解決策
+
+APIMのCORSポリシーを更新し、全てのoriginを許可：
+
+```xml
+<cors allow-credentials="false">
+    <allowed-origins>
+        <origin>*</origin>
+    </allowed-origins>
+    <allowed-methods preflight-result-max-age="300">
+        <method>GET</method>
+        <method>POST</method>
+        <method>OPTIONS</method>
+    </allowed-methods>
+    <allowed-headers>
+        <header>*</header>
+    </allowed-headers>
+</cors>
+```
+
+### 修正コマンド
+
+```bash
+az rest --method put \
+  --url "https://management.azure.com/subscriptions/3bbbad68-26b6-460f-bc43-6a01d6bee9dd/resourceGroups/rg-karte-ai/providers/Microsoft.ApiManagement/service/apim-karte-ai-1763705952/apis/karte-ai-api/policies/policy?api-version=2022-08-01" \
+  --body '{"properties": {"format": "xml", "value": "<policies>...</policies>"}}'
+```
+
+### 影響範囲
+
+| ユーザー | 修正前の影響 | 修正後 |
+|---------|-------------|--------|
+| ログイン済み（24時間以内） | キャッシュ使用で影響なし | 影響なし |
+| ログイン済み（24時間以上） | API再コールで認証UI表示 | 正常動作 |
+| 新規/再ログイン | トークン無効表示 | 正常動作 |
+
+## 最終確認結果（2026-01-26）
+
+- ✅ メール送信: `noreply@wonder-drill.com` から即座に到達
+- ✅ ドメイン検証: Domain, SPF, DKIM, DKIM2 全てVerified
+- ✅ トークン認証: 正常動作
+- ✅ 既存ユーザー: 影響なし
+- ✅ 新規ユーザー: 正常動作
+
 ## 参考
 
 - [Azure Communication Services - Email Domains](https://learn.microsoft.com/en-us/azure/communication-services/quickstarts/email/add-custom-verified-domains)
 - [Gmail のメール認証](https://support.google.com/a/answer/174124)
+- [Azure APIM - CORS Policy](https://learn.microsoft.com/en-us/azure/api-management/cors-policy)

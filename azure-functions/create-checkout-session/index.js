@@ -37,6 +37,6 @@ module.exports = async function (context, req) {
         };
     } catch (error) {
         context.log.error("Error creating checkout session:", error);
-        context.res = { status: 500, body: JSON.stringify({ error: error.message }) };
+        context.res = { status: 500, body: JSON.stringify({ error: "決済セッション作成エラー", message: "決済画面の作成中にエラーが発生しました。" }) };
     }
 }

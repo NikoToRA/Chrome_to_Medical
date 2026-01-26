@@ -114,7 +114,7 @@ module.exports = async function (context, req) {
             },
             body: JSON.stringify({
                 active: false,
-                error: error.message
+                error: "サブスクリプション確認中にエラーが発生しました"
             })
         };
     }
