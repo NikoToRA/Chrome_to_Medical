@@ -85,12 +85,6 @@ module.exports = async function (context, req) {
             context.log('[CheckSubscription] No subscription found for:', email);
         }
 
-        // Mock for testing if env var set
-        if (process.env.MOCK_SUBSCRIPTION === 'true') {
-            status = 'active';
-            isActive = true;
-        }
-
         context.res = {
             status: 200, // Always 200 to prevent JSON parse errors on frontend
             headers: {
