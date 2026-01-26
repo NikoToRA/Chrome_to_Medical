@@ -79,7 +79,7 @@ module.exports = async function (context, req) {
         context.log.error('[CHAT] Auth verification failed:', authError);
         context.res = {
             status: 401,
-            body: JSON.stringify({ error: "Unauthorized", details: authError.message })
+            body: JSON.stringify({ error: "認証エラー", message: "トークンが無効または期限切れです。" })
         };
         return;
     }
