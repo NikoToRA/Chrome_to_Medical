@@ -117,12 +117,52 @@ d9898920 fix: セキュリティ高リスク3件の修正
 
 ---
 
+## 追加修正（同日 16:00 JST）
+
+### 6. Stripe Webhookシークレットのドキュメント削除
+
+**問題**: ドキュメントにWebhookシークレット（`whsec_...`）がハードコードされていた
+
+**修正ファイル**: `docs/logs/2025-12-12_メール機能実装と顧客導線分析.md`
+
+**修正内容**: シークレット値を削除し、Azure Portal参照に変更
+
+---
+
+### 7. エラーメッセージ漏洩修正（追加10箇所）
+
+**修正ファイル**:
+- `azure-functions/chat-stream/index.js` (2箇所)
+- `azure-functions/save-log/index.js`
+- `azure-functions/get-settings/index.js`
+- `azure-functions/save-settings/index.js`
+- `azure-functions/create-portal-session/index.js`
+- `azure-functions/create-checkout-session/index.js`
+- `azure-functions/check-subscription/index.js`
+- `azure-functions/stripe-webhook/index.js`
+- `azure-functions/cancel-subscription/index.js` (デバッグ情報削除)
+- `azure-functions/lib/table.js`
+
+---
+
+## 最終コミット履歴（本日分）
+
+```
+1a9ddd3a fix: エラーメッセージ漏洩を全箇所修正 + Webhookシークレット削除
+8af39b7f docs: セキュリティ修正ログを追加
+75147058 fix: MOCK_SUBSCRIPTIONテストフラグを削除
+c86f3340 fix: Chat API認証エラーの詳細漏洩を修正
+d9898920 fix: セキュリティ高リスク3件の修正
+```
+
+---
+
 ## 残タスク（P1以降）
 
 - [ ] Jest導入・ユニットテスト追加
 - [ ] console.log → context.log 統一
 - [ ] API ドキュメント作成
-- [ ] エラーハンドリング統一
+- [ ] 全APIエンドポイントにRate Limiting追加
 
 ---
 
