@@ -2,7 +2,13 @@ const { EmailClient } = require("@azure/communication-email");
 
 // Support both AZURE_COMMUNICATION_CONNECTION_STRING and ACS_CONNECTION_STRING
 const connectionString = process.env.AZURE_COMMUNICATION_CONNECTION_STRING || process.env.ACS_CONNECTION_STRING;
-const senderAddress = process.env.SENDER_EMAIL_ADDRESS || "DoNotReply@56e74c6e-f57a-4dfe-9bfc-b6a2157f6e40.azurecomm.net";
+
+// SENDER_EMAIL_ADDRESS は必須（フォールバックなし）
+// デフォルトドメインへのフォールバックは Gmail での遅延の原因となるため削除
+const senderAddress = process.env.SENDER_EMAIL_ADDRESS;
+if (!senderAddress) {
+    console.error("[Email] CRITICAL: SENDER_EMAIL_ADDRESS is not configured. Email sending will fail.");
+}
 
 let emailClient = null;
 if (connectionString) {
@@ -24,7 +30,12 @@ async function sendEmail({ to, subject, text, html, attachments }) {
         throw new Error("Azure Communication Services Email is not configured");
     }
 
-    console.log(`[Email] Attempting to send email to: ${to}, Subject: ${subject}`);
+    if (!senderAddress) {
+        console.error("[Email] SENDER_EMAIL_ADDRESS is not configured.");
+        throw new Error("SENDER_EMAIL_ADDRESS is not configured. Please set the environment variable.");
+    }
+
+    console.log(`[Email] Attempting to send email to: ${to}, Subject: ${subject}, From: ${senderAddress}`);
 
     const message = {
         senderAddress,

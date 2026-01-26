@@ -276,6 +276,7 @@ Karte AI+
             throw error;
         }
     } catch (criticalError) {
+        // 詳細なエラー情報はログにのみ記録（セキュリティのためクライアントには返さない）
         context.log.error("[auth-send-magic-link] Critical Startup Error:", criticalError);
         context.res = {
             status: 500,
@@ -284,8 +285,8 @@ Karte AI+
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                error: "Critical Server Error",
-                details: criticalError.message
+                error: "サーバーエラーが発生しました",
+                message: "しばらく時間をおいてから再度お試しください。問題が続く場合はサポートにお問い合わせください。"
             })
         };
     }

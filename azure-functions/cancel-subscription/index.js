@@ -62,9 +62,8 @@ module.exports = async function (context, req) {
                 status: 401,
                 headers: { 'Access-Control-Allow-Origin': '*' },
                 body: {
-                    error: "Unauthorized: Invalid token",
-                    details: err.message, // Leak internal error for debugging
-                    secretLength: JWT_SECRET ? JWT_SECRET.length : 0
+                    error: "認証エラー",
+                    message: "トークンが無効または期限切れです。再度ログインしてください。"
                 }
             };
             return;
@@ -162,9 +161,8 @@ module.exports = async function (context, req) {
             status: 500,
             headers: { 'Access-Control-Allow-Origin': '*' },
             body: {
-                error: "Internal Server Error",
-                details: error.message,
-                stack: error.stack
+                error: "サーバーエラー",
+                message: "解約処理中にエラーが発生しました。しばらく時間をおいてから再度お試しください。"
             }
         };
     }

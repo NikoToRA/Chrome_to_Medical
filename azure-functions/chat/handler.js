@@ -138,8 +138,8 @@ module.exports = async function (context, req) {
         context.res = {
             status: 500,
             body: JSON.stringify({
-                error: "OpenAI API Error",
-                details: error.message
+                error: "AI処理エラー",
+                message: "AIの応答生成中にエラーが発生しました。しばらく時間をおいてから再度お試しください。"
             })
         };
     }

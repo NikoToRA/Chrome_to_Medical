@@ -1,12 +1,22 @@
 // JWT検証をテストするスクリプト
+// 使用方法: JWT_SECRET=<secret> node test-jwt-verification.js <token>
 
 const jwt = require('jsonwebtoken');
 
-// テスト用のトークン（実際のトークンを使用）
-const testToken = process.argv[2] || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InN1cGVyMjA2Y2NAZ21haWwuY29tIiwiaWF0IjoxNzY0NDYyNTUwLCJleHAiOjE3NjQ0NjM0NTB9.5Mug6iibdm5X8BdJAyGFEUKP9wffDxuj-JqJraz9MYM";
+// テスト用のトークン（引数から取得）
+const testToken = process.argv[2];
+if (!testToken) {
+    console.error('使用方法: JWT_SECRET=<secret> node test-jwt-verification.js <token>');
+    process.exit(1);
+}
 
-// Azure Function Appに設定されているJWT_SECRET
-const jwtSecret = process.argv[3] || "wgT0+Gp9eJn0wRCJuNakZ9PWhYnGTJ2UPCe63Xbq0aE=";
+// Azure Function Appに設定されているJWT_SECRET（環境変数から取得）
+const jwtSecret = process.env.JWT_SECRET || process.argv[3];
+if (!jwtSecret) {
+    console.error('エラー: JWT_SECRET 環境変数を設定してください');
+    console.error('例: JWT_SECRET=<Azure Portalから取得> node test-jwt-verification.js <token>');
+    process.exit(1);
+}
 
 console.log('=== JWT Verification Test ===');
 console.log('');

@@ -84,7 +84,8 @@ https://func-karte-ai-1763705952.azurewebsites.net/api/auth-verify-token?token=e
 新しいトークンを生成:
 ```bash
 cd /Users/suguruhirayama/Chrome_to_Medical/azure-functions
-node -e "const jwt = require('jsonwebtoken'); const secret = 'wgT0+Gp9eJn0wRCJuNakZ9PWhYnGTJ2UPCe63Xbq0aE='; const email = 'test@example.com'; const token = jwt.sign({ email }, secret, { expiresIn: '15m' }); console.log('https://func-karte-ai-1763705952.azurewebsites.net/api/auth-verify-token?token=' + token);"
+# 環境変数 JWT_SECRET を設定してから実行（Azure Portalから取得）
+JWT_SECRET="<Azure Portalから取得>" node -e "const jwt = require('jsonwebtoken'); const secret = process.env.JWT_SECRET; const email = 'test@example.com'; const token = jwt.sign({ email }, secret, { expiresIn: '15m' }); console.log('https://func-karte-ai-1763705952.azurewebsites.net/api/auth-verify-token?token=' + token);"
 ```
 
 ## 📁 生成されたファイル
